@@ -1,0 +1,16 @@
+{
+    "author": ["mikeshardmind(Sinbad#0001)"],
+    "install_msg": "Welcome to hell.",
+    "name": "Act",
+    "disabled": false,
+    "short": "A very dumb cog.",
+    "description": "Lets you command the bot to perform an action on someone else.",
+    "tags": ["fun"],
+    "hidden": false,
+    "requirements": ["inflect"],
+    "min_python_version": [
+        3,
+        6,
+        0
+    ]
+}

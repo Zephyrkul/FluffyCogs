@@ -28,7 +28,7 @@ class Act:
         action = ctx.invoked_with
         if not self.engine.singular_noun(action):
             action = self.engine.plural_noun(action)
-        await ctx.send("*{} {}*".format(action, target.mention))
+        await ctx.send(f"*{action} {target.mention}*")
 
     async def on_message(self, message):
         if message.author.bot:
