@@ -19,7 +19,7 @@ class Act:
         self.engine = inflect.engine()
 
     @commands.command(hidden=True)
-    async def act(self, ctx, *, target: Union[discord.Member, str]=None):
+    async def act(self, ctx, *, target: Union[discord.Member, str] = None):
         """
         Acts on the specified user.
         """
@@ -39,7 +39,7 @@ class Act:
             return
 
         if ctx.valid and ctx.command and ctx.command.enabled:
-            if (await ctx.command.can_run(ctx)):
+            if await ctx.command.can_run(ctx):
                 return
 
         ctx.command = self.act
