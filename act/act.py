@@ -38,7 +38,7 @@ class Act:
         if ctx.prefix is None:
             return
 
-        if ctx.valid and ctx.command and ctx.command.enabled:
+        if ctx.valid and ctx.command.enabled:
             if await ctx.command.can_run(ctx):
                 return
 
