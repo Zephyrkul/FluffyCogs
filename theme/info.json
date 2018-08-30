@@ -1,0 +1,8 @@
+{
+    "AUTHOR" : "Zephyrkul",
+    "SHORT" : "Allows users to set their own themes",
+    "DESCRIPTION" : "Allows you to set themes to easily play accross all servers.",
+    "NAME" : "Theme",
+    "TAGS" : ["music", "audio", "fun"],
+    "INSTALL_MSG" : "Usage: `[p]theme` or `[p]themes`. Requires the Audio cog to function."
+}

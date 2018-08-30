@@ -1,0 +1,151 @@
+import asyncio
+import discord
+from contextlib import suppress
+from random import choice
+
+from redbot.core import commands, Config
+from redbot.core.utils.chat_formatting import pagify, bold, italics, warning
+from redbot.core.utils.menus import menu
+from redbot.core.i18n import Translator, cog_i18n
+
+
+_ = Translator("Theme", __file__)
+
+
+def theme_strip(argument):
+    return [t.strip().strip('"<>"') for t in argument.split(",")]
+
+
+@cog_i18n(_)
+class Theme:
+    """
+    Allows you to set themes to easily play accross all servers.
+    """
+
+    def __init__(self):
+        self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
+        self.config.register_user(themes=[])
+
+    @commands.group(invoke_without_command=True, aliases=["themes"])
+    @commands.guild_only()
+    async def theme(self, ctx, *, user: discord.User = None):
+        """
+        Play, view, or configure a user's set theme song(s).
+        """
+        if not ctx.invoked_subcommand:
+            await ctx.invoke(self.theme_play, user=user)
+
+    @theme.command(name="play")
+    @commands.guild_only()
+    async def theme_play(self, ctx, *, user: discord.User = None):
+        """
+        Play a user's set theme song(s).
+        """
+        play = ctx.bot.get_command("play")
+        if not play:
+            return await ctx.send(warning(_("Audio cog is not loaded.")))
+        if not user:
+            user = ctx.author
+        themes = await self.maybe_bot_themes(ctx, user)
+        if not themes:
+            return await ctx.send(_("{} has not set any themes.").format(user.name))
+        theme = choice(themes)
+        await ctx.invoke(play, query=theme)
+
+    @theme.command(name="add")
+    async def theme_add(self, ctx, *, new_themes: theme_strip):
+        """
+        Adds the specified themes to your theme list.
+
+        Comma-seperated list.
+        """
+        if not new_themes:
+            return await ctx.send_help()
+        async with self.config.user(ctx.author).themes() as themes:
+            themes[:] = set(themes).union(new_themes)
+        for msg in pagify(self.pretty_themes(bold(_("Themes added:")), new_themes)):
+            await ctx.maybe_send_embed(msg)
+
+    @theme.command(name="remove")
+    async def theme_remove(self, ctx, *, themes_to_remove: theme_strip):
+        """
+        Removes the specified themes from your theme list.
+
+        Comma-seperated list.
+        """
+        if not themes_to_remove:
+            return await ctx.send_help()
+        async with self.config.user(ctx.author).themes() as themes:
+            themes[:] = set(themes).difference(themes_to_remove)
+        for msg in pagify(self.pretty_themes(bold(_("Themes removed:")), themes_to_remove)):
+            await ctx.maybe_send_embed(msg)
+
+    @theme.command(name="clear")
+    async def theme_clear(self, ctx):
+        """
+        Clear your list of themes.
+
+        \N{WARNING SIGN} This action cannot be undone.
+        """
+
+        async def clear(ctx, pages, controls, message, *_):
+            try:
+                await message.clear_reactions()
+            except discord.Forbidden:
+                for key in controls.keys():
+                    await message.remove_reaction(key, ctx.bot.user)
+
+        async def yes(*args):
+            await clear(*args)
+            return True
+
+        async def no(*args):
+            await clear(*args)
+            return False
+
+        reply = await menu(
+            ctx,
+            [_("Are you sure you wish to clear your themes?")],
+            {"\N{WHITE HEAVY CHECK MARK}": yes, "\N{CROSS MARK}": no},
+        )
+        if reply:
+            await self.config.user(ctx.author).clear()
+            await ctx.send("Themes cleared.")
+        else:
+            await ctx.send("Okay, I haven't cleared your themes.")
+
+    @theme.command(name="list")
+    async def theme_list(self, ctx, *, user: discord.User = None):
+        """
+        Lists your currently set themes.
+        """
+        if not user:
+            user = ctx.author
+        themes = await self.maybe_bot_themes(ctx, user)
+        if themes:
+            message = self.pretty_themes(bold(_("{}'s Themes")).format(user.name), themes)
+        else:
+            message = "{}\n\n{}".format(
+                bold(_("{0}'s Themes")), italics(_("{0} has not set any themes."))
+            ).format(user.name)
+        for msg in pagify(message):
+            await ctx.maybe_send_embed(msg)
+
+    async def maybe_bot_themes(self, ctx, user):
+        if user == ctx.bot.user:
+            return (
+                "https://youtu.be/zGTkAVsrfg8",
+                "https://youtu.be/cGMWL8cOeAU",
+                "https://youtu.be/vFrjMq4aL-g",
+                "https://youtu.be/WROI5WYBU_A",
+                "https://youtu.be/41tIUr_ex3g",
+                "https://youtu.be/f9O2Rjn1azc",
+            )
+        elif user.bot:
+            return ("https://youtu.be/nMyoI-Za6z8",)
+        else:
+            return await self.config.user(user).themes()
+
+    def pretty_themes(self, pre, themes):
+        themes = "\n".join(f"<{theme}>" for theme in themes)
+        return f"{pre}\n\n{themes}"
