@@ -59,12 +59,9 @@ class Theme:
 
         Comma-seperated list.
         """
-        if not new_themes:
-            return await ctx.send_help()
         async with self.config.user(ctx.author).themes() as themes:
             themes[:] = set(themes).union(new_themes)
-        for msg in pagify(self.pretty_themes(bold(_("Themes added:")), new_themes)):
-            await ctx.maybe_send_embed(msg)
+        await ctx.send(bold(_("Themes added.")))
 
     @theme.command(name="remove")
     async def theme_remove(self, ctx, *, themes_to_remove: theme_strip):
@@ -73,12 +70,11 @@ class Theme:
 
         Comma-seperated list.
         """
-        if not themes_to_remove:
-            return await ctx.send_help()
         async with self.config.user(ctx.author).themes() as themes:
+            if not themes:
+                return await ctx.send(_("You have no themes to remove."))
             themes[:] = set(themes).difference(themes_to_remove)
-        for msg in pagify(self.pretty_themes(bold(_("Themes removed:")), themes_to_remove)):
-            await ctx.maybe_send_embed(msg)
+        await ctx.send(bold(_("Themes removed.")))
 
     @theme.command(name="clear")
     async def theme_clear(self, ctx):
@@ -87,6 +83,8 @@ class Theme:
 
         \N{WARNING SIGN} This action cannot be undone.
         """
+        if not await self.config.user(ctx.author).themes():
+            return await ctx.send(_("You have no themes to remove."))
 
         async def clear(ctx, pages, controls, message, *_):
             try:
