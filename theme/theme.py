@@ -61,7 +61,7 @@ class Theme:
         """
         async with self.config.user(ctx.author).themes() as themes:
             themes[:] = set(themes).union(new_themes)
-        await ctx.send(bold(_("Themes added.")))
+        await ctx.send(_("Themes added."))
 
     @theme.command(name="remove")
     async def theme_remove(self, ctx, *, themes_to_remove: theme_strip):
@@ -74,7 +74,7 @@ class Theme:
             if not themes:
                 return await ctx.send(_("You have no themes to remove."))
             themes[:] = set(themes).difference(themes_to_remove)
-        await ctx.send(bold(_("Themes removed.")))
+        await ctx.send(_("Themes removed."))
 
     @theme.command(name="clear")
     async def theme_clear(self, ctx):
@@ -108,9 +108,9 @@ class Theme:
         )
         if reply:
             await self.config.user(ctx.author).clear()
-            await ctx.send("Themes cleared.")
+            await ctx.send(_("Themes cleared."))
         else:
-            await ctx.send("Okay, I haven't cleared your themes.")
+            await ctx.send(_("Okay, I haven't cleared your themes."))
 
     @theme.command(name="list")
     async def theme_list(self, ctx, *, user: discord.User = None):
