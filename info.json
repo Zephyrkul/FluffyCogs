@@ -1,0 +1,8 @@
+{
+    "author" : ["Zephyrkul (Zephyrkul#1089)"],
+    "install_msg" : "Thank you and commiserations for installing FluffyCogs.",
+    "name" : "FluffyCogs",
+    "short" : "Only the fluffiest of cogs go here.",
+    "description" : "act: Lets you command the bot to perform an action on someone else.\nskyrim: Say a random line from Skyrim. WARNING: Spoilers for Skyrim.\ntheme: Allows you to set themes to easily play accross all servers.",
+    "tags" : ["fluffy"]
+}
