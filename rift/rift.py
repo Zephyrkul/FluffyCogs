@@ -122,7 +122,7 @@ class Rift:
         )
 
     @rift.command(name="search")
-    async def rift_search(self, ctx, searchby: search_converter(_)=None, *, search=None):
+    async def rift_search(self, ctx, searchby: search_converter(_) = None, *, search=None):
         """
         Searches through open rifts.
 
@@ -180,7 +180,11 @@ class Rift:
         send = message.channel == rift.source
         destination = rift.destination if send else rift.source
         author = message.author
-        me = destination.dm_channel.me if isinstance(destination, discord.User) else destination.guild.me
+        me = (
+            destination.dm_channel.me
+            if isinstance(destination, discord.User)
+            else destination.guild.me
+        )
         is_owner = await self.bot.is_owner(author)
         author_perms = self.permissions(destination, author, is_owner)
         bot_perms = self.permissions(destination, me)
@@ -198,17 +202,30 @@ class Rift:
             if bot_perms.embed_links:
                 if len(attachments) == 1:
                     attach = attachments[0]
-                    if hasattr(destination, "guild") and await self.bot.db.guild(destination.guild).use_bot_color():
+                    if (
+                        hasattr(destination, "guild")
+                        and await self.bot.db.guild(destination.guild).use_bot_color()
+                    ):
                         color = destination.guild.me.color
                     else:
                         color = self.bot.color
-                    embed = discord.Embed(description=f"{self.xbytes(attach.size)}\n**[{attach.filename}]({attach.url})**", colour=color)
+                    embed = discord.Embed(
+                        description=f"{self.xbytes(attach.size)}\n**[{attach.filename}]({attach.url})**",
+                        colour=color,
+                    )
                     embed.set_image(url=attach.url)
                 else:
-                    attach = " | ".join(f"**[{a.filename}]({a.url})** ({self.xbytes(a.size)})" for a in attachments)
+                    attach = " | ".join(
+                        f"**[{a.filename}]({a.url})** ({self.xbytes(a.size)})" for a in attachments
+                    )
                     embed = discord.Embed(description=_("Attachments:") + " " + attach)
             else:
-                content += "\n\n" + _("Attachments:") + "\n" + "\n".join(f"<{a.url}> ({self.xbytes(a.size)})" for a in attachments)
+                content += (
+                    "\n\n"
+                    + _("Attachments:")
+                    + "\n"
+                    + "\n".join(f"<{a.url}> ({self.xbytes(a.size)})" for a in attachments)
+                )
         return await send_coro(content=content, embed=embed)
 
     def xbytes(self, b):
@@ -238,7 +255,9 @@ class Rift:
                         try:
                             record[m] = await self.process_message(rift, m, rift.destination)
                         except discord.HTTPException as e:
-                            await m.channel.send(_("I couldn't send your message due to an error: {}").format(e))
+                            await m.channel.send(
+                                _("I couldn't send your message due to an error: {}").format(e)
+                            )
             elif rift.destination == m.channel:
                 rift_chans = (rift.source, rift.destination)
                 if rift_chans in sent:

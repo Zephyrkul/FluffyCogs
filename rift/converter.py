@@ -16,7 +16,10 @@ def search_converter(translator):
         try:
             return [("author", "source", "destination").index(argument.lower())]
         except ValueError:
-            raise commands.BadArgument(translator("Argument must be one of author, source, or destination."))
+            raise commands.BadArgument(
+                translator("Argument must be one of author, source, or destination.")
+            )
+
     return convert
 
 
