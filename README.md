@@ -25,6 +25,6 @@ You can find me either here on GitHub or on the [Red Discord server](https://dis
 
 # Credits
 
-[Twentysix26](https://github.com/Twentysix26) - Developer of Red
+[Twentysix26](https://github.com/Twentysix26) - Developer of Red and initial creator of [the Rift cog](https://github.com/Twentysix26/26-Cogs/blob/master/rift/)
 
 [Cog-Creators](https://github.com/Cog-Creators) - Other Red core developers
