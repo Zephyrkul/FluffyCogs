@@ -241,24 +241,25 @@ class Rift:
     async def on_message(self, m):
         if m.author.bot:
             return
+        channel = m.author if isinstance(m.channel, discord.DMChannel) else m.channel
         sent = {}
         is_command = (await self.bot.get_context(m)).valid
         for rift, record in self.open_rifts.copy().items():
-            if rift.source == m.channel and rift.author == m.author:
+            if rift.source == channel and rift.author == m.author:
                 if m.content.lower() == "exit":
                     del self.open_rifts[rift]
                     with suppress(discord.HTTPException):
                         await rift.destination.send(_("{} has closed the rift.").format(m.author))
-                    await m.channel.send(_("Rift closed."))
+                    await channel.send(_("Rift closed."))
                 else:
                     if not is_command:
                         try:
                             record[m] = await self.process_message(rift, m, rift.destination)
                         except discord.HTTPException as e:
-                            await m.channel.send(
+                            await channel.send(
                                 _("I couldn't send your message due to an error: {}").format(e)
                             )
-            elif rift.destination == m.channel:
+            elif rift.destination == channel:
                 rift_chans = (rift.source, rift.destination)
                 if rift_chans in sent:
                     record[m] = sent[rift_chans]
