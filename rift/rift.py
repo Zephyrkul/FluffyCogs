@@ -178,7 +178,7 @@ class Rift:
         else:
             send_coro = destination.send
         channel = message.author if isinstance(message.channel, discord.DMChannel) else message.channel
-        send = message.channel == rift.source
+        send = channel == rift.source
         destination = rift.destination if send else rift.source
         author = message.author
         me = (
