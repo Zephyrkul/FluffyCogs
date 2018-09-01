@@ -177,6 +177,7 @@ class Rift:
             send_coro = destination.edit
         else:
             send_coro = destination.send
+        channel = message.author if isinstance(message.channel, discord.DMChannel) else message.channel
         send = message.channel == rift.source
         destination = rift.destination if send else rift.source
         author = message.author
@@ -280,12 +281,13 @@ class Rift:
     async def on_message_edit(self, b, a):
         if a.author.bot:
             return
+        channel = a.author if isinstance(a.channel, discord.DMChannel) else a.channel
         sent = set()
         for rift, record in self.open_rifts.copy().items():
-            if rift.source == a.channel and rift.author == a.author:
+            if rift.source == channel and rift.author == a.author:
                 with suppress(KeyError, discord.NotFound):
                     await self.process_message(rift, a, record[a])
-            elif rift.destination == a.channel:
+            elif rift.destination == channel:
                 rift_chans = (rift.source, rift.destination)
                 if rift_chans not in sent:
                     sent.add(rift_chans)
