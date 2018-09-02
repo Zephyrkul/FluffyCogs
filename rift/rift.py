@@ -169,7 +169,15 @@ class Rift:
         if isinstance(destination, discord.User):
             return destination.dm_channel.permissions_for(user)
         if not is_owner:
-            return destination.permissions_for(user)
+            member = destination.guild.get_member(user.id)
+            if member:
+                return destination.permissions_for(member)
+            else:
+                every = destination.guild.default_role
+                overs = destination.overwrites_for(every)
+                overs.send_messages = True
+                perms = (every.permissions.value & ~overs[1].value) | overs[0].value
+                return discord.Permissions(perms)
         return discord.Permissions.all()
 
     async def process_message(self, rift, message, destination):
