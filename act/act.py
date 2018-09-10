@@ -1,7 +1,6 @@
 import discord
 import inflection
 import itertools
-import re
 from typing import Union
 
 from redbot.core import commands
@@ -26,10 +25,10 @@ class Act:
             return  # no help text
 
         action = inflection.humanize(ctx.invoked_with).split()
-        iverbs = []
+        iverb = -1
 
         for cycle in range(2):
-            if iverbs:
+            if iverb > -1:
                 break
             for i, act in enumerate(action):
                 act = act.lower()
@@ -41,12 +40,11 @@ class Act:
                 ):
                     continue
                 action[i] = inflection.pluralize(action[i])
-                iverbs.append(i)
+                iverb = max(iverb, i)
 
-        if not iverbs:
+        if iverb < 0:
             return
-        i = max(iverbs)
-        action.insert(i + 1, target.mention)
+        action.insert(iverb + 1, target.mention)
         await ctx.send(italics(" ".join(action)))
 
     async def on_message(self, message):
@@ -54,7 +52,7 @@ class Act:
             return
 
         ctx = await self.bot.get_context(message)
-        if ctx.prefix is None or not re.match(r"^\w+$", ctx.invoked_with):
+        if ctx.prefix is None or not ctx.invoked_with.replace("_", "").isalpha():
             return
 
         if ctx.valid and ctx.command.enabled:
