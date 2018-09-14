@@ -98,6 +98,9 @@ class Clocks:
             user = ctx.author
         clocks = await self.config.user(user).clocks()
         try:
-            await ctx.send(", ".join(clocks.keys()) if name else pie(**clocks[name]))
+            result = pie(**clocks[name]) if name else ", ".join(clocks.keys())
         except KeyError:
-            await ctx.send("No such clock.")
+            return await ctx.send("No such clock.")
+        if result:
+            return await ctx.send(result)
+        await ctx.send("No clocks created.")
