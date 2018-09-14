@@ -99,5 +99,5 @@ class Clocks:
         clocks = await self.config.user(user).clocks()
         try:
             await ctx.send(", ".join(clocks.keys()) if name else pie(**clocks[name]))
-        except AttributeError:
+        except KeyError:
             await ctx.send("No such clock.")
