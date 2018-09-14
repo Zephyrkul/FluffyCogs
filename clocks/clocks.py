@@ -11,6 +11,7 @@ def n_or_greater(n):
         if argument < n:
             raise ValueError
         return argument
+
     return bounded_int
 
 
@@ -32,7 +33,9 @@ class Clocks:
         pass
 
     @clocks.command()
-    async def create(self, ctx, name: str.lower, slices: n_or_greater(2), *, start: n_or_greater(0) = 0):
+    async def create(
+        self, ctx, name: str.lower, slices: n_or_greater(2), *, start: n_or_greater(0) = 0
+    ):
         """Create a new clock"""
         async with self.config.user(ctx.author).clocks() as clocks:
             if name in clocks:
@@ -72,7 +75,9 @@ class Clocks:
         await ctx.send(pie(*this_clock))
 
     @clocks.command()
-    async def set(self, ctx, name: str.lower, slices: n_or_greater(0), *, max: n_or_greater(2) = None):
+    async def set(
+        self, ctx, name: str.lower, slices: n_or_greater(0), *, max: n_or_greater(2) = None
+    ):
         """Sets a clock's state."""
         async with self.config.user(ctx.author).clocks() as clocks:
             try:
@@ -85,13 +90,14 @@ class Clocks:
         await ctx.send(pie(*this_clock))
 
     @clocks.command()
-    async def show(self, ctx, name: str.lower, *, user: discord.Member = None):
+    async def show(self, ctx, name: str.lower = None, *, user: discord.Member = None):
         """Show a clock's progress."""
         if user and not ctx.guild:
             return
         if not user:
             user = ctx.author
-        this_clock = await self.config.user(user).get_raw("clocks", name, default=None)
-        if not this_clock:
-            return await ctx.send("No such clock.")
-        await ctx.send(pie(*this_clock))
+        clocks = await self.config.user(user).clocks()
+        try:
+            await ctx.send(", ".join(clocks.keys()) if name else pie(**clocks[name]))
+        except AttributeError:
+            await ctx.send("No such clock.")
