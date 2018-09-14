@@ -1,0 +1,97 @@
+import discord
+
+from redbot.core import commands, Config
+
+from .chart import pie
+
+
+def n_or_greater(n):
+    def bounded_int(argument):
+        argument = int(argument)
+        if argument < n:
+            raise ValueError
+        return argument
+    return bounded_int
+
+
+def nonzero_int(argument):
+    argument = int(argument)
+    if argument == 0:
+        raise ValueError
+    return argument
+
+
+class Clocks:
+    def __init__(self):
+        self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
+        self.config.register_user(clocks={})
+
+    @commands.group(aliases=["clock"])
+    async def clocks(self, ctx):
+        """Track projects with clocks"""
+        pass
+
+    @clocks.command()
+    async def create(self, ctx, name: str.lower, slices: n_or_greater(2), *, start: n_or_greater(0) = 0):
+        """Create a new clock"""
+        async with self.config.user(ctx.author).clocks() as clocks:
+            if name in clocks:
+                return await ctx.send("This clock already exists.")
+            clocks[name] = [start, slices]
+        await ctx.send(pie(start, slices))
+
+    @clocks.command()
+    async def delete(self, ctx, *, name: str.lower):
+        """Delete a clock"""
+        async with self.config.user(ctx.author).clocks() as clocks:
+            clocks.pop(name, None)
+        await ctx.send("Clock deleted.")
+
+    @clocks.command()
+    async def extend(self, ctx, name: str.lower, *, slices: nonzero_int):
+        """Modify a clock's maximum slices."""
+        async with self.config.user(ctx.author).clocks() as clocks:
+            try:
+                this_clock = clocks[name]
+            except KeyError:
+                return await ctx.send("No such clock.")
+            this_clock[1] = max(2, this_clock[1] + slices)
+            this_clock[0] = sorted((0, this_clock[0], this_clock[1]))[1]
+        await ctx.send(pie(*this_clock))
+
+    @clocks.command(aliases=["add", "modify"])
+    async def mod(self, ctx, name: str.lower, *, slices: nonzero_int):
+        """Modify a clock's progress."""
+        async with self.config.user(ctx.author).clocks() as clocks:
+            try:
+                this_clock = clocks[name]
+            except KeyError:
+                return await ctx.send("No such clock.")
+            this_clock[0] += slices
+            this_clock[0] = sorted((0, this_clock[0], this_clock[1]))[1]
+        await ctx.send(pie(*this_clock))
+
+    @clocks.command()
+    async def set(self, ctx, name: str.lower, slices: n_or_greater(0), *, max: n_or_greater(2) = None):
+        """Sets a clock's state."""
+        async with self.config.user(ctx.author).clocks() as clocks:
+            try:
+                this_clock = clocks[name]
+            except KeyError:
+                return await ctx.send("No such clock.")
+            if max:
+                this_clock[1] = max
+            this_clock[0] = sorted((0, slices, this_clock[1]))[1]
+        await ctx.send(pie(*this_clock))
+
+    @clocks.command()
+    async def show(self, ctx, name: str.lower, *, user: discord.Member = None):
+        """Show a clock's progress."""
+        if user and not ctx.guild:
+            return
+        if not user:
+            user = ctx.author
+        this_clock = await self.config.user(user).get_raw("clocks", name, default=None)
+        if not this_clock:
+            return await ctx.send("No such clock.")
+        await ctx.send(pie(*this_clock))
