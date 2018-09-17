@@ -16,6 +16,9 @@ from .converter import RiftConverter, search_converter
 _ = Translator("Rift", __file__)
 
 
+max_size = 8000000  # can be 1 << 23 but some unknowns also add to the size
+
+
 async def close_check(ctx):
     """Admin / manage channel OR private channel"""
     if isinstance(ctx.channel, discord.DMChannel):
@@ -26,6 +29,10 @@ async def close_check(ctx):
     return await checks.check_permissions(
         ctx, {"manage_channels": True}
     ) or await checks.is_admin_or_superior(ctx)
+
+
+class RiftError(Exception):
+    pass
 
 
 class Rift:
@@ -172,6 +179,23 @@ class Rift:
         if noclose:
             await ctx.send(_("No rifts were found that connect to here."))
 
+    async def get_embed(self, destination, attachments):
+        attach = attachments[0]
+        if (
+            hasattr(destination, "guild")
+            and await self.bot.db.guild(destination.guild).use_bot_color()
+        ):
+            color = destination.guild.me.colour
+        else:
+            color = self.bot.color
+        description = "\n\n".join(
+            f"{self.xbytes(attach.size)}\n**[{attach.filename}]({attach.url})**"
+            for a in attachments
+        )
+        embed = discord.Embed(colour=color, description=description)
+        embed.set_image(url=attach.url)
+        return embed
+
     def permissions(self, destination, user, is_owner=False):
         if isinstance(destination, discord.User):
             return destination.dm_channel.permissions_for(user)
@@ -213,18 +237,45 @@ class Rift:
                 content = filters.filter_invites(content)
             if not author_perms.mention_everyone:
                 content = filters.filter_mass_mentions(content)
+        attachments = message.attachments
+        files = []
+        embed = None
+        if attachments and author_perms.attach_files and bot_perms.attach_files:
+            overs = await asyncio.gather(*(self.save_attach(file, files) for file in attachments))
+            overs = list(filter(bool, overs))
+            if overs:
+                if bot_perms.embed_links:
+                    embed = await self.get_embed(destination, overs)
+                else:
+                    content += (
+                        "\n\n"
+                        + _("Attachments:")
+                        + "\n"
+                        + "\n".join(f"({self.xbytes(a.size)}) {a.url}" for a in attachments)
+                    )
+        if not any((content, files, embed)):
+            raise RiftError(_("No content to send."))
         if not is_owner or not send:
             content = f"{author}: {content}"
-        attachments = message.attachments
-        files = None
-        if attachments and author_perms.attach_files and bot_perms.attach_files:
-            files = await asyncio.gather(*(self.save_attach(file) for file in attachments))
-        return await send_coro(content=content, files=files)
+        return await send_coro(content=content, files=files, embed=embed)
 
-    async def save_attach(self, file: discord.Attachment) -> BytesIO:
+    async def save_attach(self, file: discord.Attachment, files) -> discord.File:
+        if file.size > max_size:
+            return file
         buffer = BytesIO()
         await file.save(buffer, seek_begin=True)
-        return discord.File(buffer, file.filename)
+        files.append(discord.File(buffer, file.filename))
+        return None
+
+    def xbytes(self, b):
+        blist = ("B", "KB", "MB")
+        index = 0
+        while True:
+            if b > 900:
+                b = b / 1024.0
+                index += 1
+            else:
+                return "{:.3g} {}".format(b, blist[index])
 
     # EVENTS
 
