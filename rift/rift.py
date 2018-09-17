@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import suppress
 from copy import copy
-from urllib.request import urlopen
+from io import BytesIO
 
 import discord
 
@@ -218,8 +218,13 @@ class Rift:
         attachments = message.attachments
         files = None
         if attachments and author_perms.attach_files and bot_perms.attach_files:
-            files = [discord.File(urlopen(file.url)) for file in attachments]
+            files = await asyncio.gather(*(self.save_attach(file) for file in attachments))
         return await send_coro(content=content, files=files)
+
+    async def save_attach(self, file: discord.Attachment) -> BytesIO:
+        buffer = BytesIO()
+        await file.save(buffer, seek_begin=True)
+        return discord.File(buffer, file.filename)
 
     # EVENTS
 
