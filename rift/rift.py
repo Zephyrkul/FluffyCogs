@@ -1,6 +1,9 @@
-import discord
+import asyncio
 from contextlib import suppress
 from copy import copy
+from io import BytesIO
+
+import discord
 
 from redbot.core import commands, checks, Config
 from redbot.core.utils import common_filters as filters
@@ -38,6 +41,8 @@ class Rift:
         self.config.register_channel(blacklisted=False)
         self.config.register_guild(blacklisted=False)
         self.config.register_user(blacklisted=False)
+
+    # COMMANDS
 
     @commands.group()
     async def rift(self, ctx):
@@ -148,6 +153,8 @@ class Rift:
         for page in pagify(message):
             await ctx.maybe_send_embed(page)
 
+    # UTILITIES
+
     async def close_rifts(self, ctx, closer, destination):
         if isinstance(destination, discord.Guild):
             check = lambda rift: rift.destination in destination.channels
@@ -175,6 +182,7 @@ class Rift:
             else:
                 every = destination.guild.default_role
                 overs = destination.overwrites_for(every)
+                overs.read_messages = True
                 overs.send_messages = True
                 perms = (every.permissions.value & ~overs[1].value) | overs[0].value
                 return discord.Permissions(perms)
@@ -185,7 +193,9 @@ class Rift:
             send_coro = destination.edit
         else:
             send_coro = destination.send
-        channel = message.author if isinstance(message.channel, discord.DMChannel) else message.channel
+        channel = (
+            message.author if isinstance(message.channel, discord.DMChannel) else message.channel
+        )
         send = channel == rift.source
         destination = rift.destination if send else rift.source
         author = message.author
@@ -205,47 +215,18 @@ class Rift:
                 content = filters.filter_mass_mentions(content)
         if not is_owner or not send:
             content = f"{author}: {content}"
-        embed = None
         attachments = message.attachments
-        if attachments and author_perms.attach_files:
-            if bot_perms.embed_links:
-                if len(attachments) == 1:
-                    attach = attachments[0]
-                    if (
-                        hasattr(destination, "guild")
-                        and await self.bot.db.guild(destination.guild).use_bot_color()
-                    ):
-                        color = destination.guild.me.color
-                    else:
-                        color = self.bot.color
-                    embed = discord.Embed(
-                        description=f"{self.xbytes(attach.size)}\n**[{attach.filename}]({attach.url})**",
-                        colour=color,
-                    )
-                    embed.set_image(url=attach.url)
-                else:
-                    attach = " | ".join(
-                        f"**[{a.filename}]({a.url})** ({self.xbytes(a.size)})" for a in attachments
-                    )
-                    embed = discord.Embed(description=_("Attachments:") + " " + attach)
-            else:
-                content += (
-                    "\n\n"
-                    + _("Attachments:")
-                    + "\n"
-                    + "\n".join(f"<{a.url}> ({self.xbytes(a.size)})" for a in attachments)
-                )
-        return await send_coro(content=content, embed=embed)
+        files = None
+        if attachments and author_perms.attach_files and bot_perms.attach_files:
+            files = await asyncio.gather(*(self.save_attach(file) for file in attachments))
+        return await send_coro(content=content, files=files)
 
-    def xbytes(self, b):
-        blist = ("B", "KB", "MB")
-        index = 0
-        while True:
-            if b > 900:
-                b = b / 1024.0
-                index += 1
-            else:
-                return "{:.3g} {}".format(b, blist[index])
+    async def save_attach(self, file: discord.Attachment) -> BytesIO:
+        buffer = BytesIO()
+        await file.save(buffer, seek_begin=True)
+        return discord.File(buffer, file.filename)
+
+    # EVENTS
 
     async def on_message(self, m):
         if m.author.bot:
