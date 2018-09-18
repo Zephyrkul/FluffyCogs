@@ -3,7 +3,7 @@
 [![Red](https://img.shields.io/badge/Red-DiscordBot-red.svg)](https://github.com/Cog-Creators/Red-DiscordBot/tree/V3/develop)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
-Fun cogs that I've made for Red V3.
+The fluffiest of cogs for utility, requests, or proof-of-concepts. Or memes, as is the case with the Skyrim cog.
 
 # Installation
 
@@ -21,7 +21,7 @@ To install:
 
 # Contact
 
-You can find me either here on GitHub or on the [Red Discord server](https://discord.gg/red). My Discord is [Zephyrkul#1089](https://discordapp.com/channels/@me/215640856839979008).
+You can find me either [here on GitHub](https://github.com/zephyrkul/FluffyCogs/issues) or on in [#support-othercogs](https://discordapp.com/channels/240154543684321280/240212783503900673) at the [Red cog support server](https://discord.gg/GET4DVk). My Discord is [Zephyrkul#1089](https://discordapp.com/channels/@me/215640856839979008).
 
 # Credits
 
