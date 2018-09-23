@@ -15,13 +15,22 @@ _ = Translator("LogsFrom", __file__)
 MHeaders = collections.namedtuple("MHeaders", ("author", "created"), defaults=("", ""))
 
 
+def positive_int(argument):
+    i = int(argument)
+    if i <= 0:
+        raise ValueError
+    return i
+
+
 @cog_i18n(_)
 class LogsFrom:
     def __init__(self):
         self.active = set()
 
     @commands.group(invoke_without_command=True)
-    async def logsfrom(self, ctx, limit: int = 100, *, channel: discord.TextChannel = None):
+    async def logsfrom(
+        self, ctx, limit: positive_int = 100, *, channel: discord.TextChannel = None
+    ):
         """Logs the channel into a file, then uploads the file.
 
         The limit may be the number of messages to log or the ID of the message to start after, exclusive.
@@ -36,22 +45,19 @@ class LogsFrom:
         if channel in self.active:
             return await ctx.send(
                 _(
-                    "I am already logging messages in this channel. Use `[p]logsfrom cancel` to cancel."
+                    "I am already logging messages in this channel. "
+                    "Use `[p]logsfrom cancel` to cancel."
                 )
             )
         self.active.add(channel)
         self.active.add((ctx.author, channel))
-        kwargs = {"reverse": True}
-        if channel == ctx.channel:
-            kwargs["before"] = ctx.message
-        try:
-            kwargs["after"] = await channel.get_message(limit)
-            kwargs["limit"] = None
-        except discord.NotFound:
-            kwargs["limit"] = limit
         async with ctx.typing():
+            kwargs = {"after": discord.Object(id=limit), "limit": limit, "reverse": True}
+            if channel == ctx.channel:
+                kwargs["before"] = ctx.message
             stream = io.BytesIO()
             last_h = MHeaders()
+            processed = 0
             async for m in channel.history(**kwargs):
                 if channel not in self.active:
                     break
@@ -82,11 +88,14 @@ class LogsFrom:
                         )
                     )
                 stream.write(b"\n\n")
+                processed += 1
             self.active.discard(channel)
             self.active.discard((ctx.author, channel))
             stream.seek(0)
-            await ctx.send(
-                file=discord.File(stream, filename=f"{channel.name}.md"), delete_after=300
+            return await ctx.send(
+                content=_("{} messages logged.").format(processed),
+                file=discord.File(stream, filename=f"{channel.name}.md"),
+                delete_after=300,
             )
 
     @logsfrom.command()
