@@ -9,6 +9,9 @@ from redbot.core import commands
 from redbot.core.i18n import Translator, cog_i18n
 
 
+Cog = getattr(commands, "Cog", object)
+
+
 _ = Translator("LogsFrom", __file__)
 
 
@@ -23,7 +26,7 @@ def positive_int(argument):
 
 
 @cog_i18n(_)
-class LogsFrom:
+class LogsFrom(Cog):
     def __init__(self):
         self.active = set()
 

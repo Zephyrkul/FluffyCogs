@@ -13,6 +13,9 @@ from redbot.core.i18n import Translator, cog_i18n
 from .converter import RiftConverter, search_converter
 
 
+Cog = getattr(commands, "Cog", object)
+
+
 _ = Translator("Rift", __file__)
 
 
@@ -35,7 +38,7 @@ class RiftError(Exception):
     pass
 
 
-class Rift:
+class Rift(Cog):
     """
     Communicate with other servers/channels.
     """

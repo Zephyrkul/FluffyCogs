@@ -5,6 +5,9 @@ from redbot.core import commands, Config
 from .chart import pie
 
 
+Cog = getattr(commands, "Cog", object)
+
+
 def n_or_greater(n):
     def bounded_int(argument):
         argument = int(argument)
@@ -22,7 +25,7 @@ def nonzero_int(argument):
     return argument
 
 
-class Clocks:
+class Clocks(Cog):
     def __init__(self):
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
         self.config.register_user(clocks={})

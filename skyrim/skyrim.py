@@ -5,7 +5,10 @@ from redbot.core import commands
 from redbot.core.data_manager import bundled_data_path
 
 
-class Skyrim:
+Cog = getattr(commands, "Cog", object)
+
+
+class Skyrim(Cog):
     """
     Says a random line from Skyrim.
     """

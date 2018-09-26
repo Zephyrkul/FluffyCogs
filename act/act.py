@@ -9,7 +9,10 @@ from redbot.core.utils.chat_formatting import italics
 from .helpers import *
 
 
-class Act:
+Cog = getattr(commands, "Cog", object)
+
+
+class Act(Cog):
 
     __author__ = "Zephyrkul"
 
