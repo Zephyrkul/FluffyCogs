@@ -97,10 +97,12 @@ class Theme(Cog):
                     await message.remove_reaction(key, ctx.bot.user)
 
         async def yes(*args):
+            # pylint: disable=E1120
             await clear(*args)
             return True
 
         async def no(*args):
+            # pylint: disable=E1120
             await clear(*args)
             return False
 
