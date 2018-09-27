@@ -22,10 +22,10 @@ def standstr(argument):
     return "_".join(argument.lower().split())
 
 
-def positive_int(argument):
+def nonnegative_int(argument):
     i = int(argument)
-    if i < 1:
-        raise ValueError
+    if i < 0:
+        raise commands.BadArgument("Argument must not be negative.")
     return i
 
 
@@ -94,6 +94,17 @@ class Turn(Cog):
     @turn.command()
     @checks.mod()
     @commands.guild_only()
+    @skipcheck()
+    async def pause(self, ctx):
+        """Pauses the timer.
+        
+        The bot will wait indefinitely for the current member, rather than skipping when time is up."""
+        self.games[ctx.guild].paused = True
+        await ctx.tick()
+
+    @turn.command()
+    @checks.mod()
+    @commands.guild_only()
     async def remove(self, ctx, all: typing.Optional[bool] = False, *, member: discord.Member):
         """Completely remove a member from the queue."""
         with contextlib.suppress(ValueError):
@@ -145,10 +156,11 @@ class Turn(Cog):
     @turn_set.command()
     @checks.mod()
     @commands.guild_only()
-    async def time(self, ctx, *, time: positive_int):
+    async def time(self, ctx, *, time: nonnegative_int):
         """Change how long the bot will wait for a message.
         
-        The bot will reset the timer on seeing a typing indicator."""
+        The bot will reset the timer on seeing a typing indicator.
+        A time of 0 will cause the bot to wait indefinitely."""
         self.default(ctx).time = time
         await ctx.tick()
 
@@ -210,7 +222,7 @@ class Turn(Cog):
                         await self.bot.wait_for(
                             "typing",
                             check=typing_check,
-                            timeout=None if g().paused else g().time // 5,
+                            timeout=None if g().paused or not g().time else g().time // 5,
                         )
                     except asyncio.TimeoutError:
                         if g().paused:
