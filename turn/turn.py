@@ -29,6 +29,12 @@ def nonnegative_int(argument):
     return i
 
 
+def is_all(argument):
+    if argument.lower() == "all":
+        return True
+    raise commands.BadArgument()
+
+
 def skipcheck():
     async def predicate(ctx):
         if ctx.cog.get(ctx).queue[0] == ctx.author:
@@ -97,7 +103,7 @@ class Turn(Cog):
     @skipcheck()
     async def pause(self, ctx):
         """Pauses the timer.
-        
+
         The bot will wait indefinitely for the current member, rather than skipping when time is up."""
         self.games[ctx.guild].paused = True
         await ctx.tick()
@@ -105,8 +111,11 @@ class Turn(Cog):
     @turn.command()
     @checks.mod()
     @commands.guild_only()
-    async def remove(self, ctx, all: typing.Optional[bool] = False, *, member: discord.Member):
-        """Completely remove a member from the queue."""
+    async def remove(self, ctx, all: typing.Optional[is_all] = False, *, member: discord.Member):
+        """Remove a member from the queue.
+
+        If `remove all` is used, the member is removed completely.
+        Otherwise, only the member's next turn is removed."""
         with contextlib.suppress(ValueError):
             if all:
                 while True:
@@ -158,7 +167,7 @@ class Turn(Cog):
     @commands.guild_only()
     async def time(self, ctx, *, time: nonnegative_int):
         """Change how long the bot will wait for a message.
-        
+
         The bot will reset the timer on seeing a typing indicator.
         A time of 0 will cause the bot to wait indefinitely."""
         self.default(ctx).time = time
