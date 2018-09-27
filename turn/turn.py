@@ -2,6 +2,7 @@ import asyncio
 import collections
 import contextlib
 import functools
+import typing
 
 import discord
 
@@ -57,50 +58,35 @@ class Turn(Cog):
     def get(self, ctx):
         return self.games.get(ctx.guild, Game(collections.deque()))
 
+    def serialize(self, ctx):
+        with contextlib.suppress(KeyError):
+            g = list(self.games[ctx.guild])[:4]
+            g[0] = list(g[0])
+            return g
+        return None
+
     @commands.group(aliases=["turns"])
     @commands.guild_only()
     async def turn(self, ctx):
         """Manage turns in a channel."""
         pass
 
-    @turn.command(aliases=["add"])
-    @commands.guild_only()
-    async def append(self, ctx, *, member: discord.Member = None):
-        member = member or ctx.author
-        if member != ctx.author and not await checks.is_mod_or_superior(ctx):
-            return
-        self.default(ctx).queue.append(member)
-        await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
-
     @turn.command()
     @checks.mod()
     @commands.guild_only()
-    async def extend(self, ctx, *members: discord.Member):
+    async def add(self, ctx, *members: discord.Member):
+        """Add members to the queue."""
         self.default(ctx).queue.extend(members)
         await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
 
     @turn.command()
     @checks.mod()
     @commands.guild_only()
-    async def destination(self, ctx, *, channel: discord.TextChannel = None):
-        channel = channel or ctx.channel
-        g = self.default(ctx)
-        g.destination = channel
-        g.source = g.source or channel
-        await ctx.tick()
-
-    @turn.command()
-    @checks.mod()
-    @commands.guild_only()
-    async def insert(self, ctx, index: int, *, member: discord.Member):
-        self.default(ctx).queue.insert(index, member)
-        await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
-
-    @turn.command()
-    @checks.mod()
-    @commands.guild_only()
+    @gamecheck(False)
     async def load(self, ctx, *, name: standstr):
+        """Load a previously saved turn set."""
         l = await self.config.guild(ctx.guild).get_raw("games", name)
+        l[0] = collections.deque(l[0])
         g = Game(*l)
         self.games[ctx.guild] = g
         await ctx.tick()
@@ -108,17 +94,62 @@ class Turn(Cog):
     @turn.command()
     @checks.mod()
     @commands.guild_only()
-    async def remove(self, ctx, *, member: discord.Member):
+    async def remove(self, ctx, all: typing.Optional[bool] = False, *, member: discord.Member):
+        """Completely remove a member from the queue."""
         with contextlib.suppress(ValueError):
-            while True:
+            if all:
+                while True:
+                    self.default(ctx).queue.remove(member)
+            else:
                 self.default(ctx).queue.remove(member)
         await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
 
     @turn.command()
     @checks.mod()
     @commands.guild_only()
+    @gamecheck(False)
     async def save(self, ctx, *, name: standstr):
-        await self.config.guild(ctx.guild).set_raw("game", name, value=list(self.get(ctx)))
+        """Save the current turn settings to disk."""
+        await self.config.guild(ctx.guild).set_raw("game", name, value=self.serialize(ctx))
+        await ctx.tick()
+
+    @turn.group(name="set")
+    @checks.mod()
+    @commands.guild_only()
+    async def turn_set(self, ctx):
+        """Configure turn settings."""
+        pass
+
+    @turn_set.command()
+    @checks.mod()
+    @commands.guild_only()
+    async def destination(self, ctx, *, channel: discord.TextChannel = None):
+        """Change where the bot announces turns."""
+        channel = channel or ctx.channel
+        g = self.default(ctx)
+        g.destination = channel
+        g.source = g.source or channel
+        await ctx.tick()
+
+    @turn_set.command()
+    @checks.mod()
+    @commands.guild_only()
+    async def source(self, ctx, *, channel: discord.TextChannel = None):
+        """Change where the bot will look for messages."""
+        channel = channel or ctx.channel
+        g = self.default(ctx)
+        g.source = channel
+        g.destination = g.destination or channel
+        await ctx.tick()
+
+    @turn_set.command()
+    @checks.mod()
+    @commands.guild_only()
+    async def time(self, ctx, *, time: positive_int):
+        """Change how long the bot will wait for a message.
+        
+        The bot will reset the timer on seeing a typing indicator."""
+        self.default(ctx).time = time
         await ctx.tick()
 
     @turn.command(aliases=["next"])
@@ -126,30 +157,26 @@ class Turn(Cog):
     @gamecheck()
     @skipcheck()
     async def skip(self, ctx, *, amount: int = 1):
+        """Skip the specified amount of people.
+
+        Specify a negative number to rewind the queue."""
         self.games[ctx.guild].queue.rotate(-amount)
         self.games[ctx.guild].task.cancel()
         await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
-
-    @turn.command()
-    @commands.guild_only()
-    async def source(self, ctx, *, channel: discord.TextChannel = None):
-        channel = channel or ctx.channel
-        g = self.default(ctx)
-        g.source = channel
-        g.destination = g.destination or channel
-        await ctx.tick()
 
     @turn.command()
     @checks.mod()
     @commands.guild_only()
     @gamecheck(False)
     async def start(self, ctx):
+        """Begin detecting and announcing the turn order."""
         g = self.games[ctx.guild]
         if not g.queue:
             return await ctx.send("Not yet setup.")
         g.source = g.source or ctx.channel
         g.destination = g.destination or ctx.channel
         g.time = g.time or 600
+        g.paused = False
         g.task = self.bot.loop.create_task(self.task(ctx.guild))
         await ctx.tick()
 
@@ -158,14 +185,8 @@ class Turn(Cog):
     @commands.guild_only()
     @gamecheck()
     async def stop(self, ctx):
+        """Stop detecting and announcing the turn order."""
         self.games.pop(ctx.guild).task.cancel()
-        await ctx.tick()
-
-    @turn.command()
-    @checks.mod()
-    @commands.guild_only()
-    async def time(self, ctx, *, time: positive_int):
-        self.default(ctx).time = time
         await ctx.tick()
 
     async def task(self, guild: discord.Guild):
