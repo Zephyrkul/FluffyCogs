@@ -27,6 +27,7 @@ def nonzero_int(argument):
 
 class Clocks(Cog):
     def __init__(self):
+        super().__init__()
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
         self.config.register_user(clocks={})
 

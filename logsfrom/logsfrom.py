@@ -28,6 +28,7 @@ def positive_int(argument):
 @cog_i18n(_)
 class LogsFrom(Cog):
     def __init__(self):
+        super().__init__()
         self.active = set()
 
     @commands.group(invoke_without_command=True)

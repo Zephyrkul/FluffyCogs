@@ -44,6 +44,7 @@ class Rift(Cog):
     """
 
     def __init__(self, bot):
+        super().__init__()
         self.bot = bot
         self.open_rifts = {}
 

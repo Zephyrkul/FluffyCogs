@@ -17,6 +17,7 @@ class Act(Cog):
     __author__ = "Zephyrkul"
 
     def __init__(self, bot):
+        super().__init__()
         self.bot = bot
 
     @commands.command(hidden=True)
