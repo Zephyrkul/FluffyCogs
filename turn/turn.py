@@ -37,7 +37,10 @@ def is_all(argument):
 
 def skipcheck():
     async def predicate(ctx):
-        if ctx.cog.get(ctx).queue[0] == ctx.author:
+        cog = ctx.bot.get_cog("Turn")
+        if not cog:
+            return False
+        if ctx.bot.get_cog("Turn").get(ctx).queue[0] == ctx.author:
             return True
         return await checks.is_mod_or_superior(ctx)
 
@@ -46,7 +49,10 @@ def skipcheck():
 
 def gamecheck(is_running=True):
     def predicate(ctx):
-        return is_running == bool(ctx.cog.get(ctx).task)
+        cog = ctx.bot.get_cog("Turn")
+        if not cog:
+            return False
+        return is_running == bool(cog.get(ctx).task)
 
     return commands.check(predicate)
 
@@ -68,7 +74,7 @@ class Turn(Cog):
     def serialize(self, ctx):
         with contextlib.suppress(KeyError):
             g = list(self.games[ctx.guild])[:4]
-            g[0] = list(g[0])
+            g[0] = list(map(lambda m: m.id, g[0]))
             return g
         return None
 
@@ -93,7 +99,7 @@ class Turn(Cog):
     async def load(self, ctx, *, name: standstr):
         """Load a previously saved turn set."""
         l = await self.config.guild(ctx.guild).get_raw("games", name)
-        l[0] = collections.deque(l[0])
+        l[0] = collections.deque(map(ctx.guild.get_member, l[0]))
         g = Game(*l)
         self.games[ctx.guild] = g
         await ctx.tick()
@@ -197,7 +203,7 @@ class Turn(Cog):
             return await ctx.send("Not yet setup.")
         g.source = g.source or ctx.channel
         g.destination = g.destination or ctx.channel
-        g.time = g.time or 600
+        g.time = 600 if g.time is None else g.time
         g.paused = False
         g.task = self.bot.loop.create_task(self.task(ctx.guild))
         await ctx.tick()
@@ -211,12 +217,21 @@ class Turn(Cog):
         self.games.pop(ctx.guild).task.cancel()
         await ctx.tick()
 
+    def __unload(self):
+        for v in self.games.values():
+            t = v.task
+            if t:
+                t.cancel()
+
+    __del__ = __unload
+
     async def task(self, guild: discord.Guild):
         # force a KeyError as soon as possible
         g = functools.partial(self.games.__getitem__, guild)
         # block the bot until waiting
         t = self.bot.loop.create_task
         pings = 1
+        m = g().queue[0]
 
         def typing_check(channel, author, _):
             return channel == g().source and author == g().queue[0]
@@ -225,26 +240,33 @@ class Turn(Cog):
             return msg.channel == g().source and msg.author == g().queue[0]
 
         with contextlib.suppress(KeyError):
-            t(g().destination.send(f"{g().queue[0].mention}, you're up."))
             while self is self.bot.get_cog(self.__class__.__name__):
                 with contextlib.suppress(asyncio.CancelledError, asyncio.TimeoutError):
-                    try:
-                        await self.bot.wait_for(
-                            "typing",
-                            check=typing_check,
-                            timeout=None if g().paused or not g().time else g().time // 5,
+                    if m != g().queue[0]:
+                        m = g().queue[0]
+                        pings = 1
+                    if not g().paused:
+                        t(
+                            g().destination.send(
+                                f"{g().queue[0].mention}, you're up. Ping #{pings}."
+                            )
                         )
+                    try:
+                        if g().paused:
+                            timeout = None
+                        elif g().time:
+                            timeout = g().time // 5
+                        else:
+                            timeout = 300
+                        await self.bot.wait_for("typing", check=typing_check, timeout=timeout)
                     except asyncio.TimeoutError:
                         if g().paused:
                             continue
-                        if pings < 5:
+                        if not g().time or pings < 5:
                             pings += 1
-                            t(g().destination.send(f"{g().queue[0].mention}, ping #{pings}."))
                             continue
                         t(g().destination.send(f"No reply from {g().queue[0]}. Skipping..."))
                     else:
                         await self.bot.wait_for("message", check=msg_check, timeout=g().time)
                     g().paused = False
-                    pings = 1
                     g().queue.rotate(-1)
-                    t(g().destination.send(f"{g().queue[0].mention}, you're up."))
