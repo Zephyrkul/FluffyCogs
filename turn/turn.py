@@ -40,7 +40,8 @@ def skipcheck():
         cog = ctx.bot.get_cog("Turn")
         if not cog:
             return False
-        if ctx.bot.get_cog("Turn").get(ctx).queue[0] == ctx.author:
+        queue = cog.get(ctx).queue
+        if queue and queue[0] == ctx.author:
             return True
         return await checks.is_mod_or_superior(ctx)
 
@@ -72,11 +73,13 @@ class Turn(Cog):
         return self.games.get(ctx.guild, Game(collections.deque()))
 
     def serialize(self, ctx):
-        with contextlib.suppress(KeyError):
+        try:
             g = list(self.games[ctx.guild])[:4]
             g[0] = list(map(lambda m: m.id, g[0]))
+            g[1], g[2] = g[1].id if g[1] else None, g[2].id if g[2] else None
             return g
-        return None
+        except KeyError:
+            return None
 
     @commands.group(aliases=["turns"])
     @commands.guild_only()
@@ -100,9 +103,11 @@ class Turn(Cog):
         """Load a previously saved turn set."""
         l = await self.config.guild(ctx.guild).get_raw("games", name)
         l[0] = collections.deque(map(ctx.guild.get_member, l[0]))
+        gc = ctx.guild.get_channel
+        l[1], l[2] = gc(l[1]), gc(l[2])
         g = Game(*l)
         self.games[ctx.guild] = g
-        await ctx.tick()
+        await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
 
     @turn.command()
     @checks.mod()
@@ -205,7 +210,7 @@ class Turn(Cog):
         g.destination = g.destination or ctx.channel
         g.time = 600 if g.time is None else g.time
         g.paused = False
-        g.task = self.bot.loop.create_task(self.task(ctx.guild))
+        g.task = ctx.bot.loop.create_task(self.task(ctx.guild))
         await ctx.tick()
 
     @turn.command()
@@ -218,7 +223,8 @@ class Turn(Cog):
         await ctx.tick()
 
     def __unload(self):
-        for v in self.games.values():
+        for k in self.games.copy():
+            v = self.games.pop(k)
             t = v.task
             if t:
                 t.cancel()
@@ -230,8 +236,9 @@ class Turn(Cog):
         g = functools.partial(self.games.__getitem__, guild)
         # block the bot until waiting
         t = self.bot.loop.create_task
-        pings = 1
+
         m = g().queue[0]
+        pings = 1
 
         def typing_check(channel, author, _):
             return channel == g().source and author == g().queue[0]
@@ -246,11 +253,7 @@ class Turn(Cog):
                         m = g().queue[0]
                         pings = 1
                     if not g().paused:
-                        t(
-                            g().destination.send(
-                                f"{g().queue[0].mention}, you're up. Ping #{pings}."
-                            )
-                        )
+                        t(g().destination.send(f"{m.mention}, you're up. Ping #{pings}."))
                     try:
                         if g().paused:
                             timeout = None
@@ -260,12 +263,12 @@ class Turn(Cog):
                             timeout = 300
                         await self.bot.wait_for("typing", check=typing_check, timeout=timeout)
                     except asyncio.TimeoutError:
-                        if g().paused:
+                        if g().paused or m != g().queue[0]:
                             continue
                         if not g().time or pings < 5:
                             pings += 1
                             continue
-                        t(g().destination.send(f"No reply from {g().queue[0]}. Skipping..."))
+                        t(g().destination.send(f"No reply from {m.display_name}. Skipping..."))
                     else:
                         await self.bot.wait_for("message", check=msg_check, timeout=g().time)
                     g().paused = False
