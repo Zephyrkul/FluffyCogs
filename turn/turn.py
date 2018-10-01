@@ -134,6 +134,9 @@ class Turn(Cog):
                     self.default(ctx).queue.remove(member)
             else:
                 self.default(ctx).queue.remove(member)
+        task = self.get(ctx).task
+        if task:
+            task.cancel()
         await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
 
     @turn.command()
@@ -195,7 +198,7 @@ class Turn(Cog):
         Specify a negative number to rewind the queue."""
         self.games[ctx.guild].queue.rotate(-amount)
         self.games[ctx.guild].task.cancel()
-        await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
+        await ctx.tick()
 
     @turn.command()
     @checks.mod()
@@ -233,44 +236,69 @@ class Turn(Cog):
 
     async def task(self, guild: discord.Guild):
         # force a KeyError as soon as possible
-        g = functools.partial(self.games.__getitem__, guild)
+        get = functools.partial(self.games.__getitem__, guild)
         # block the bot until waiting
-        t = self.bot.loop.create_task
+        schedule = self.bot.loop.create_task
 
-        m = g().queue[0]
+        member = get().queue[0]
         pings = 1
 
         def typing_check(channel, author, _):
-            return channel == g().source and author == g().queue[0]
+            return channel == get().source and author == get().queue[0]
 
         def msg_check(msg):
-            return msg.channel == g().source and msg.author == g().queue[0]
+            return msg.channel == get().source and msg.author == get().queue[0]
+
+        typing_coro = functools.partial(self.bot.wait_for, "typing", check=typing_check)
+        message_coro = functools.partial(self.bot.wait_for, "message", check=msg_check)
 
         with contextlib.suppress(KeyError):
             while self is self.bot.get_cog(self.__class__.__name__):
                 with contextlib.suppress(asyncio.CancelledError, asyncio.TimeoutError):
-                    if m != g().queue[0]:
-                        m = g().queue[0]
+                    if member != get().queue[0]:
+                        member = get().queue[0]
                         pings = 1
-                    if not g().paused:
-                        t(g().destination.send(f"{m.mention}, you're up. Ping #{pings}."))
+                    if not get().paused:
+                        schedule(
+                            get().destination.send(f"{member.mention}, you're up. Ping #{pings}.")
+                        )
                     try:
-                        if g().paused:
+                        if get().paused:
                             timeout = None
-                        elif g().time:
-                            timeout = g().time // 5
+                        elif get().time:
+                            timeout = get().time // 5
                         else:
                             timeout = 300
-                        await self.bot.wait_for("typing", check=typing_check, timeout=timeout)
-                    except asyncio.TimeoutError:
-                        if g().paused or m != g().queue[0]:
+                        tasks = (
+                            schedule(typing_coro(timeout=timeout)),
+                            schedule(message_coro(timeout=timeout)),
+                        )
+                        done, pending = await asyncio.wait(
+                            tasks, return_when=asyncio.FIRST_COMPLETED
+                        )
+                        for d in done:
+                            d.result()  # propagate any errors
+                        for p in pending:
+                            p.cancel()
+                        if not done:
+                            raise asyncio.TimeoutError()
+                        if tasks[1] in done:
+                            get().paused = False
+                            get().queue.rotate(-1)
                             continue
-                        if not g().time or pings < 5:
+                    except asyncio.TimeoutError:
+                        if get().paused or member != get().queue[0]:
+                            continue
+                        if not get().time or pings < 5:
                             pings += 1
                             continue
-                        t(g().destination.send(f"No reply from {m.display_name}. Skipping..."))
+                        schedule(
+                            get().destination.send(
+                                f"No reply from {member.display_name}. Skipping..."
+                            )
+                        )
                     else:
-                        timeout = g().time or None
-                        await self.bot.wait_for("message", check=msg_check, timeout=timeout)
-                    g().paused = False
-                    g().queue.rotate(-1)
+                        timeout = get().time or None
+                        await message_coro(timeout=timeout)
+                    get().paused = False
+                    get().queue.rotate(-1)
