@@ -142,7 +142,7 @@ class Turn(Cog):
     @gamecheck(False)
     async def save(self, ctx, *, name: standstr):
         """Save the current turn settings to disk."""
-        await self.config.guild(ctx.guild).set_raw("game", name, value=self.serialize(ctx))
+        await self.config.guild(ctx.guild).set_raw("games", name, value=self.serialize(ctx))
         await ctx.tick()
 
     @turn.group(name="set")
@@ -270,6 +270,7 @@ class Turn(Cog):
                             continue
                         t(g().destination.send(f"No reply from {m.display_name}. Skipping..."))
                     else:
-                        await self.bot.wait_for("message", check=msg_check, timeout=g().time)
+                        timeout = g().time or None
+                        await self.bot.wait_for("message", check=msg_check, timeout=timeout)
                     g().paused = False
                     g().queue.rotate(-1)
