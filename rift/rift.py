@@ -6,9 +6,11 @@ from io import BytesIO
 import discord
 
 from redbot.core import commands, checks, Config
-from redbot.core.utils import common_filters as filters
+from redbot.core.utils import common_filters, mod
 from redbot.core.utils.chat_formatting import pagify
 from redbot.core.i18n import Translator, cog_i18n
+
+check_permissions = getattr(mod, "check_permissions", checks.check_permissions)
 
 from .converter import RiftConverter, search_converter
 
@@ -26,12 +28,9 @@ async def close_check(ctx):
     """Admin / manage channel OR private channel"""
     if isinstance(ctx.channel, discord.DMChannel):
         return True
-    override = await checks.check_overrides(ctx, level="admin")
-    if override is not None:
-        return override
-    return await checks.check_permissions(
+    return await mod.is_admin_or_superior(ctx.bot, ctx.author) or await check_permissions(
         ctx, {"manage_channels": True}
-    ) or await checks.is_admin_or_superior(ctx)
+    )
 
 
 class RiftError(Exception):
@@ -97,7 +96,7 @@ class Rift(Cog):
 
     @blacklist.command(name="server")
     @commands.guild_only()
-    @checks.guildowner_or_permissions(administrator=True)
+    @checks.admin_or_permissions(manage_guild=True)
     async def blacklist_server(self, ctx):
         """
         Blacklists the current server.
@@ -238,9 +237,9 @@ class Rift(Cog):
         content = message.content
         if not is_owner:
             if not author_perms.administrator:
-                content = filters.filter_invites(content)
+                content = common_filters.filter_invites(content)
             if not author_perms.mention_everyone:
-                content = filters.filter_mass_mentions(content)
+                content = common_filters.filter_mass_mentions(content)
         attachments = message.attachments
         files = []
         embed = None

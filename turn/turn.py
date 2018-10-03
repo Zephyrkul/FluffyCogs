@@ -7,6 +7,7 @@ import typing
 import discord
 
 from redbot.core import commands, checks, Config
+from redbot.core.utils import mod
 
 from .namedlist import NamedList
 
@@ -43,7 +44,7 @@ def skipcheck():
         queue = cog.get(ctx).queue
         if queue and queue[0] == ctx.author:
             return True
-        return await checks.is_mod_or_superior(ctx)
+        return await mod.is_mod_or_superior(ctx.bot, ctx.author)
 
     return commands.check(predicate)
 
@@ -92,6 +93,8 @@ class Turn(Cog):
     @commands.guild_only()
     async def add(self, ctx, *members: discord.Member):
         """Add members to the queue."""
+        if not members:
+            members = [ctx.author]
         self.default(ctx).queue.extend(members)
         await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
 
@@ -196,6 +199,8 @@ class Turn(Cog):
         """Skip the specified amount of people.
 
         Specify a negative number to rewind the queue."""
+        if not amount or (amount != 1 and not await mod.is_mod_or_superior(ctx.bot, ctx.author)):
+            return
         self.games[ctx.guild].queue.rotate(-amount)
         self.games[ctx.guild].task.cancel()
         await ctx.tick()
