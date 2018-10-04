@@ -242,11 +242,12 @@ class Turn(Cog):
     async def task(self, guild: discord.Guild):
         # force a KeyError as soon as possible
         get = functools.partial(self.games.__getitem__, guild)
-        # block the bot until waiting
+        # block the bot until waiting; handle task logic
         schedule = self.bot.loop.create_task
 
         member = get().queue[0]
         pings = 1
+        last = None
 
         def typing_check(channel, author, _):
             return channel == get().source and author == get().queue[0]
@@ -264,8 +265,10 @@ class Turn(Cog):
                         member = get().queue[0]
                         pings = 1
                     if not get().paused:
-                        schedule(
-                            get().destination.send(f"{member.mention}, you're up. Ping #{pings}.")
+                        if last:
+                            schedule(last.delete())
+                        last = await get().destination.send(
+                            f"{member.mention}, you're up. Ping #{pings}."
                         )
                     try:
                         if get().paused:
@@ -281,10 +284,10 @@ class Turn(Cog):
                         done, pending = await asyncio.wait(
                             tasks, return_when=asyncio.FIRST_COMPLETED
                         )
-                        for d in done:
-                            d.result()  # propagate any errors
                         for p in pending:
                             p.cancel()
+                        for d in done:
+                            d.result()  # propagate any errors
                         if not done:
                             raise asyncio.TimeoutError()
                         if tasks[1] in done:
@@ -299,7 +302,8 @@ class Turn(Cog):
                             continue
                         schedule(
                             get().destination.send(
-                                f"No reply from {member.display_name}. Skipping..."
+                                f"No reply from {member.display_name}. Skipping...",
+                                delete_after=get().time or 300,
                             )
                         )
                     else:
