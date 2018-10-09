@@ -25,12 +25,12 @@ def search_converter(translator):
 
 class RiftConverter(commands.Converter):
     def __init__(self, translator, *, globally=False):
-        self.translator = translator
         self.globally = globally
+        self.translator = translator
 
     async def convert(self, ctx, argument):
         _ = self.translator
-        destination = await self.search(ctx, argument)
+        destination = await self.search(ctx, argument, self.globally, _)
         if len(destination) > 1:
 
             def check(message):
@@ -64,38 +64,41 @@ class RiftConverter(commands.Converter):
         ctx.cog.open_rifts[rift] = {}
         return rift
 
-    async def search(self, ctx, argument):
+    @classmethod
+    async def search(cls, ctx, argument, globally, _):
         is_owner = await ctx.bot.is_owner(ctx.author)
         config = ctx.cog.config
-        guilds = ctx.bot.guilds.copy() if is_owner or self.globally else [ctx.guild]
+        guilds = ctx.bot.guilds.copy() if is_owner or globally else [ctx.guild]
         result = set()
         for guild in guilds:
-            if not await self.guild_filter(ctx, is_owner, guild):
+            if not await cls.guild_filter(ctx, is_owner, guild):
                 continue
             for channel in guild.text_channels.copy():
-                if self.channel_filter(ctx, is_owner, channel, argument):
+                if cls.channel_filter(ctx, is_owner, channel, argument):
                     if not await config.channel(channel).blacklisted():
                         result.add(channel)
             for member in guild.members.copy():
-                if member not in result and self.user_filter(ctx, is_owner, member, argument):
+                if member not in result and cls.user_filter(ctx, is_owner, member, argument):
                     if not await config.user(member).blacklisted():
                         result.add(member)
         if not result:
             raise commands.BadArgument(
-                self.translator(
+                _(
                     "Destination {!r} not found. Either I don't have access or it has been blacklisted."
                 ).format(argument)
             )
         return list(result)
 
-    async def guild_filter(self, ctx, is_owner, guild):
+    @staticmethod
+    async def guild_filter(ctx, is_owner, guild):
         if await ctx.cog.config.guild(guild).blacklisted():
             return False
         if guild == ctx.guild:
             return True
         return is_owner or guild.get_member(ctx.author.id)
 
-    def channel_filter(self, ctx, is_owner, channel, argument):
+    @staticmethod
+    def channel_filter(ctx, is_owner, channel, argument):
         if ctx.channel == channel:
             return False
         bot = channel.guild.me
@@ -113,7 +116,8 @@ class RiftConverter(commands.Converter):
             return True
         return False
 
-    def user_filter(self, ctx, is_owner, member, argument):
+    @staticmethod
+    def user_filter(ctx, is_owner, member, argument):
         if ctx.author.id == member.id and isinstance(ctx.channel, discord.DMChannel):
             return False
         if member.bot:

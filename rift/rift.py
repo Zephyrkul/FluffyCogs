@@ -150,7 +150,7 @@ class Rift(Cog):
         if search is None:
             search = [ctx.author, ctx.channel, ctx.author]
         else:
-            search = await RiftConverter(_).search(ctx, search)
+            search = await RiftConverter.search(ctx, search, False, _)
         results = set()
         for rift in self.open_rifts:
             for i in searchby:
