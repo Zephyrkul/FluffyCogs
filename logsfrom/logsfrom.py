@@ -66,20 +66,20 @@ class LogsFrom(Cog):
                 if channel not in self.active:
                     break
                 author_h = m.author.display_name + (" [BOT]" if m.author.bot else "")
-                author_h = "" if last_h.author == author_h else author_h
+                author = "" if last_h.author == author_h else author_h
                 created_h = m.created_at.strftime("%X %x")
                 edited_h = m.edited_at.strftime("%X %x") if m.edited_at else ""
                 i = 0
                 for i in range(min(len(created_h), len(edited_h))):
                     if created_h[i] != edited_h[i]:
                         break
-                edited_h = f"(edited: {edited_h[i:]})" if edited_h[i:] else ""
+                edited = f"(edited: {edited_h[i:]})" if edited_h[i:] else ""
                 for i in range(min(len(last_h.created), len(created_h))):
                     if last_h.created[i] != created_h[i]:
                         break
-                created_h = created_h[i:]
+                created = created_h[i:]
                 last_h = MHeaders(author_h, created_h)
-                headers = " ".join(filter(bool, (author_h, created_h, edited_h)))
+                headers = " ".join(filter(bool, (author, created, edited)))
                 if headers:
                     stream.write(headers.encode("utf-8"))
                     stream.write(b"\n")
