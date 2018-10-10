@@ -104,12 +104,14 @@ class _NSResponse(aiohttp.ClientResponse):
 
 class _NSElement(etree.ElementBase):
     def __getitem__(self, item):
-        if isinstance(item, str):
-            e = self.find(item)
-            if e is None or e.attrib or len(e):
-                return e
-            return e.text
-        return super().__getitem__(item)
+        try:
+            return super().__getitem__(item)
+        except TypeError:
+            pass
+        e = self.find(item)
+        if e is None or e.attrib or len(e):
+            return e
+        return e.text
 
     def __setitem__(self, item, value):
         if isinstance(item, str):
@@ -182,7 +184,7 @@ class _Api(metaclass=_ApiMeta):
             if key and key in kwargs:
                 self.value = kwargs.pop(key)
             self._kw.update(
-                (k.lower(), " ".join(sorted(str(v).lower().split())) if v else None)
+                (k.lower(), " ".join(sorted(set(str(v).lower().split()))) if v else None)
                 for k, v in kwargs.items()
             )
             self._kw = {k: v for k, v in self._kw.items() if v}
