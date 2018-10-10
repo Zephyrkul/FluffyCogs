@@ -134,7 +134,7 @@ class _ApiMeta(type):
 
 class _Api(metaclass=_ApiMeta):
     def __init__(self, value: str = None, **kwargs: str):
-        self._q = []
+        self._q = set()
         self._kw = {}
         self._request = None
         if not value:
@@ -192,9 +192,7 @@ class _Api(metaclass=_ApiMeta):
         return str(self) == other
 
     def __getattr__(self, *names: str) -> "_Api":
-        for name in names:
-            for n in str(name).lower().split():
-                insort(self._q, n)
+        self._q.update(" ".join(names).split())
         return self
 
     getattr = __getattr__
@@ -203,7 +201,7 @@ class _Api(metaclass=_ApiMeta):
         argument = repr(self.value) if self.key else None
         kwargs = ", ".join(f"{k}={v!r}" for k, v in sorted(self._kw.items()))
         args = ", ".join(filter(bool, (argument, kwargs)))
-        attrs = ".".join(self._q)
+        attrs = ".".join(sorted(self._q))
         name = type(self).__name__
         if args:
             name += f"({args})"
@@ -214,7 +212,7 @@ class _Api(metaclass=_ApiMeta):
     def __str__(self) -> str:
         key, value = self.key, self.value
         params = [(key, value)] if all((key, value)) else []
-        params.append(("q", " ".join(self._q)))
+        params.append(("q", " ".join(sorted(self._q))))
         params.extend(sorted(self._kw.items()))
         return urlunparse((*API_URL, None, urlencode(params), None))
 
