@@ -64,7 +64,7 @@ class Turn(Cog):
         super().__init__()
         self.bot = bot
         self.games = {}
-        self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
+        self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_guild(games={})
 
     def default(self, ctx):

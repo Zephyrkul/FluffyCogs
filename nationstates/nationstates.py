@@ -1,15 +1,20 @@
+import aiohttp
 import contextlib
 import discord
-from aiohttp import ClientResponseError
+import re
 from datetime import datetime
 from html import unescape
 from lxml import etree
 
-from redbot.core import checks, commands, Config
+from redbot.core import checks, commands, Config, version_info as red_version
 from redbot.core.utils.chat_formatting import box, pagify
 
 from . import api
 from .api import Nation, Region, World, WA
+from .nsautorole import task
+
+
+Cog = getattr(commands, "Cog", object)
 
 
 def valid_api(argument):
@@ -21,31 +26,46 @@ def valid_api(argument):
         "w": World,
         "world": World,
         "wa": WA,
-    }[argument]()
+    }[argument.lower()]()
 
 
-class NationStates(commands.Cog):
+def task_running():
+    def predicate(ctx):
+        ns = ctx.bot.get_cog(NationStates.__name__)
+        return ns and ns.nsartask
+
+    return commands.check(predicate)
+
+
+class NationStates(Cog):
     def __init__(self, bot):
         api.start(bot.loop)
         self.bot = bot
-        self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
-        self.config.register_global(agent=None)
+        self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
+        self.config.register_global(agent=None, data_cache=None, data_updated=None)
+        self.config.register_guild(
+            region=None,
+            roles=dict.fromkeys(("ex_nations", "residents", "visitors", "wa_residents"), None),
+        )
+        self.nsartask = None
 
     async def initialize(self):
         agent = await self.config.agent()
         if not agent:
-            await self.bot.wait_until_ready()
+            if not self.bot.owner_id:
+                # always False but forces owner_id to be filled
+                await self.bot.is_owner(discord.Object(id=None))
             owner_id = self.bot.owner_id
             # only make the user_info request if necessary
             agent = str(self.bot.get_user(owner_id) or await self.bot.get_user_info(owner_id))
-        api.agent(agent)
+        api.agent(f"{agent} redbot/{red_version}")
 
     @staticmethod
     async def _maybe_embed(dest, embed):
         try:
             return await dest.send(embed=embed)
-        except discord.Forbidden:
-            return await dest.send("I need the `Embed Links` permission to send this.")
+        except discord.Forbidden as e:
+            raise commands.BotMissingPermissions([("embed_links", True)]) from e
 
     @staticmethod
     def _illion(num):
@@ -61,7 +81,7 @@ class NationStates(commands.Cog):
     @commands.cooldown(2, 3600)
     @checks.is_owner()
     async def agent(self, ctx, *, agent: str):
-        new_agent = api.agent(agent)
+        new_agent = api.agent(f"{agent} redbot/{red_version}")
         await self.config.agent.set(agent)
         await ctx.send(f"Agent set: {new_agent}")
 
@@ -77,7 +97,7 @@ class NationStates(commands.Cog):
     ):
         try:
             root = await nation
-        except ClientResponseError as e:
+        except aiohttp.ClientResponseError as e:
             if e.status != 404:
                 return await ctx.send(f"{e.status}: {e.message}")
             nation = nation.value
@@ -142,7 +162,7 @@ class NationStates(commands.Cog):
     ):
         try:
             root = await region
-        except ClientResponseError as e:
+        except aiohttp.ClientResponseError as e:
             if e.status != 404:
                 return await ctx.send(f"{e.status}: {e.message}")
             region = region.value
@@ -154,7 +174,11 @@ class NationStates(commands.Cog):
         if root["DELEGATE"] == "0":
             root["DELEGATE"] = "No Delegate"
         else:
-            delroot = await Nation(root["DELEGATE"]).census(scale="65 66", mode="score").fullname
+            delroot = (
+                await Nation(root["DELEGATE"])
+                .census(scale="65 66", mode="score")
+                .fullname.influence
+            )
             endo = int(float(delroot[".//SCALE[@id='66']/SCORE"]))
             if endo == 1:
                 endo = "{:d} endorsement".format(endo)
@@ -183,7 +207,7 @@ class NationStates(commands.Cog):
                 root["FOUNDER"] = "[{}](https://www.nationstates.net/" "nation={})".format(
                     (await Nation(root["FOUNDER"]).fullname)["FULLNAME"], root["FOUNDER"]
                 )
-            except ClientResponseError as e:
+            except aiohttp.ClientResponseError as e:
                 if e.status != 404:
                     return await ctx.send(f"{e.status}: {e.message}")
                 root["FOUNDER"] = "{} (Ceased to Exist)".format(
@@ -209,13 +233,13 @@ class NationStates(commands.Cog):
         embed.set_footer(text="Last Updated")
         await self._maybe_embed(ctx, embed)
 
-    @commands.command(aliases=["sc"])
+    @commands.command(aliases=["ga", "sc"])
     @commands.bot_has_permissions(embed_links=True)
-    async def ga(self, ctx):
+    async def wa(self, ctx):
         wa = WA(ctx.invoked_with).resolution.delvotes.lastresolution
         try:
             root = await wa
-        except ClientResponseError as e:
+        except aiohttp.ClientResponseError as e:
             return await ctx.send(f"{e.status}: {e.message}")
         img = "4dHt6si" if wa.value == "2" else "7EMYsJ6"
         if root["RESOLUTION"] is None:
@@ -302,15 +326,22 @@ class NationStates(commands.Cog):
         except TypeError:
             shards = (target, *shards)
         try:
-            root = await ns.getattr(*shards)
-        except ClientResponseError as e:
+            print(ns + shards)
+            root = await (ns + shards)
+        except aiohttp.ClientResponseError as e:
             return await ctx.send(f"{e.status}: {e.message}")
-        root.remove(root.find("HEADERS"))
         await ctx.send_interactive(
             pagify(etree.tostring(root, encoding=str, pretty_print=True), shorten_by=11), "xml"
         )
 
+    @commands.command()
+    async def testdumps(self, ctx):
+        async for element in Region().dumps:
+            print(etree.tostring(element, encoding=str, pretty_print=True))
+        await ctx.tick()
+
     def __unload(self):
-        api.close()
+        with contextlib.suppress(Exception):
+            api.close()
 
     __del__ = __unload

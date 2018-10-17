@@ -1,8 +1,6 @@
 import math
 import itertools
 
-from redbot.core.utils.chat_formatting import bold, box
-
 
 ch = r"•-\|/ "
 
@@ -28,9 +26,9 @@ def pie(fil, tot):
         for x in range(-2 * r, 2 * r + 1):
             x /= -2
             i = round((x * x + y * y) / (r * r) - 1, 1)
-            a = math.atan2(x, y) / math.pi / 2 + .5
+            a = math.atan2(x, y) / math.pi / 2 + 0.5
             if i < 0:
-                a = math.atan2(x, y) / math.pi / 2 + .5
+                a = math.atan2(x, y) / math.pi / 2 + 0.5
                 n = cch(fil, per, a)
             elif i > 0:
                 n = ch[-1]
@@ -38,4 +36,4 @@ def pie(fil, tot):
                 n = ch[round(a * 8) % 4 + 1]
             final += n
         final = final.rstrip() + "\n"
-    return bold(box(f"{final.rstrip()}"))
+    return f"**```{final.rstrip()}```**"

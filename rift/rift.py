@@ -21,7 +21,7 @@ Cog = getattr(commands, "Cog", object)
 _ = Translator("Rift", __file__)
 
 
-max_size = 8000000  # can be 1 << 23 but some unknowns also add to the size
+max_size = 8_000_000  # can be 1 << 23 but some unknowns also add to the size
 
 
 async def close_check(ctx):
@@ -47,7 +47,7 @@ class Rift(Cog):
         self.bot = bot
         self.open_rifts = {}
 
-        self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
+        self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_channel(blacklisted=False)
         self.config.register_guild(blacklisted=False)
         self.config.register_user(blacklisted=False)

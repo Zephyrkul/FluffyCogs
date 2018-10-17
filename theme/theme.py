@@ -27,7 +27,7 @@ class Theme(Cog):
 
     def __init__(self):
         super().__init__()
-        self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
+        self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_user(themes=[])
 
     @commands.group(invoke_without_command=True, aliases=["themes"])
