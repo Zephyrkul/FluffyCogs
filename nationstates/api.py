@@ -7,6 +7,7 @@ import sys
 import zlib
 from collections.abc import Iterable, Mapping
 from io import BytesIO
+from itertools import repeat
 from lxml import etree
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -97,8 +98,9 @@ class _NSSemaphore(asyncio.BoundedSemaphore):
                 super_release()
 
         if time > 0:
+            when = self._loop.time() + time
             handle = self._loop.call_later(time, delayed)
-            self.next_available.extend([handle.when()] * amount)
+            self.next_available.extend(repeat(when, amount))
             return handle
         return delayed()
 
