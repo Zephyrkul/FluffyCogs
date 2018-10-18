@@ -334,12 +334,6 @@ class NationStates(Cog):
             pagify(etree.tostring(root, encoding=str, pretty_print=True), shorten_by=11), "xml"
         )
 
-    @commands.command()
-    async def testdumps(self, ctx):
-        async for element in Region().dumps:
-            print(etree.tostring(element, encoding=str, pretty_print=True))
-        await ctx.tick()
-
     def __unload(self):
         with contextlib.suppress(Exception):
             api.close()
