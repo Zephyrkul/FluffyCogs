@@ -7,7 +7,7 @@ import discord
 
 from redbot.core import commands, checks, Config
 from redbot.core.utils import common_filters, mod
-from redbot.core.utils.chat_formatting import pagify
+from redbot.core.utils.chat_formatting import pagify, humanize_list
 from redbot.core.i18n import Translator, cog_i18n
 
 check_permissions = getattr(mod, "check_permissions", checks.check_permissions)
@@ -123,17 +123,24 @@ class Rift(Cog):
         await self.close_rifts(ctx, ctx.author, channel)
 
     @rift.command(name="open")
-    async def rift_open(self, ctx, *, rift: RiftConverter(_, globally=True)):
+    async def rift_open(self, ctx, *rifts: RiftConverter(_, globally=True)):
         """
         Opens a rift to the specified destination.
 
         The destination may be any channel or user that both you and the bot are connected to, even across servers.
         """
-        await rift.destination.send(_("{} has opened a rift to here.").format(rift.author))
-        await rift.source.send(
+        if not rifts:
+            return await ctx.send_help()
+        rifts = set(rifts)
+        self.open_rifts.update(((rift, {}) for rift in rifts))
+        for rift in rifts:
+            ctx.bot.loop.create_task(
+                rift.destination.send(_("{} has opened a rift to here.").format(rift.author))
+            )
+        await ctx.send(
             _(
                 "A rift has been opened to {}! Everything you say will be relayed there.\nResponses will be relayed here.\nType `exit` to quit."
-            ).format(rift.destination)
+            ).format(humanize_list([str(rift.destination) for rift in rifts]))
         )
 
     @rift.command(name="search")

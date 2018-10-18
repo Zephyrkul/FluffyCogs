@@ -61,7 +61,6 @@ class RiftConverter(commands.Converter):
         rift = Rift(author=ctx.author, source=source, destination=destination)
         if rift in ctx.cog.open_rifts:
             raise commands.BadArgument(_("This rift already exists."))
-        ctx.cog.open_rifts[rift] = {}
         return rift
 
     @classmethod
