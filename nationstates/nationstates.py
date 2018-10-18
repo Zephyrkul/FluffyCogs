@@ -326,7 +326,6 @@ class NationStates(Cog):
         except TypeError:
             shards = (target, *shards)
         try:
-            print(ns + shards)
             root = await (ns + shards)
         except aiohttp.ClientResponseError as e:
             return await ctx.send(f"{e.status}: {e.message}")
