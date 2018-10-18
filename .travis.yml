@@ -12,4 +12,4 @@ install:
   - pip install black==18.9b0
 script:
   - python -m compileall .
-  - black --check -N `git ls-files "*.py"`
+  - black --check -l 99 -N `git ls-files "*.py"`

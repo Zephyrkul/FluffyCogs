@@ -2,6 +2,7 @@
 
 [![Red](https://img.shields.io/badge/Red-DiscordBot-red.svg)](https://github.com/Cog-Creators/Red-DiscordBot/tree/V3/develop)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
+[![Build Status](https://travis-ci.com/zephyrkul/FluffyCogs.svg?branch=master)](https://travis-ci.com/zephyrkul/FluffyCogs)
 
 The fluffiest of cogs for utility, requests, or proof-of-concepts. Or memes, as is the case with the Skyrim cog.
 
