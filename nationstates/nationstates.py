@@ -11,7 +11,6 @@ from redbot.core.utils.chat_formatting import box, pagify
 
 from . import api
 from .api import Nation, Region, World, WA
-from .nsautorole import task
 
 
 Cog = getattr(commands, "Cog", object)
@@ -29,25 +28,12 @@ def valid_api(argument):
     }[argument.lower()]()
 
 
-def task_running():
-    def predicate(ctx):
-        ns = ctx.bot.get_cog(NationStates.__name__)
-        return ns and ns.nsartask
-
-    return commands.check(predicate)
-
-
 class NationStates(Cog):
     def __init__(self, bot):
         api.start(bot.loop)
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
-        self.config.register_global(agent=None, data_cache=None, data_updated=None)
-        self.config.register_guild(
-            region=None,
-            roles=dict.fromkeys(("ex_nations", "residents", "visitors", "wa_residents"), None),
-        )
-        self.nsartask = None
+        self.config.register_global(agent=None)
 
     async def initialize(self):
         agent = await self.config.agent()
