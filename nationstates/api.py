@@ -5,55 +5,51 @@ import contextlib
 import re
 import sys
 import zlib
-from collections.abc import Iterable, Mapping
+from abc import ABCMeta
+from collections.abc import Iterable, Mapping, MutableMapping
+from enum import Enum
 from io import BytesIO
 from itertools import repeat
 from lxml import etree
-from types import SimpleNamespace
-from typing import Any, Optional
-from urllib.parse import urlencode, urlparse, urlunparse
+from types import MappingProxyType, SimpleNamespace
+from typing import (
+    Any as _Any,
+    Optional as _Optional,
+    Mapping as _Mapping,
+    Sequence as _Sequence,
+    Tuple as _Tuple,
+    Union as _Union,
+)
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 
 API_URL = ("https", "www.nationstates.net", "/cgi-bin/api.cgi")
+LINK_RE = re.compile(
+    r"\b(?:(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?)?([-\w\s]+)\b", re.I
+)
 RATE = collections.namedtuple("RateLimit", ("requests", "per", "pad", "retry"))(50, 30, 2, 900)
 
 
-_NS = SimpleNamespace()
 _versions = (
     "Python/" + ".".join(map(str, sys.version_info[:2])),
     "aiohttp/" + aiohttp.__version__,
 )
-_nvalid = re.compile(r"[-\w]+")
-_nsplit = lambda s: (m.group(0) for m in _nvalid.finditer(s) if m.group(0).strip())
+_nvalid = re.compile(r"[a-zA-Z\d-]+")
+_nsplit = lambda s: (m.group(0) for m in _nvalid.finditer(s))
 
 
-def start(loop: asyncio.AbstractEventLoop = None) -> None:
-    if any(a in dir(_NS) for a in ("loop", "semaphore", "session")):
-        raise RuntimeError("API session is already started")
-    loop = loop or asyncio.get_event_loop()
-    _NS.loop = loop
-    _NS.semaphore = _NSSemaphore(loop=loop)
-    _NS.session = aiohttp.ClientSession(
-        loop=loop, raise_for_status=True, response_class=_NSResponse
-    )
+def link_extract(link: str) -> _Optional[_Tuple[str, str]]:
+    match = LINK_RE.match(link)
+    if not match:
+        return None
+    match = match.group(1, 2)
+    if match[0]:
+        return match
+    return ("nation", *match[1:])
 
 
-def close() -> asyncio.Task:
-    t = _NS.loop.create_task(_NS.session.close())
-    for attr in dir(_NS):
-        if not attr.startswith("_") and attr != "agent":
-            delattr(_NS, attr)
-    return t
-
-
-def agent(new_agent: str = None) -> str:
-    if new_agent:
-        _NS.agent = " ".join((str(new_agent), *_versions))
-    return _NS.agent
-
-
-def wait_if(coro, *, timeout: float, wait_for=False):
-    sem = _NS.semaphore
+def wait_if(coro, timeout: float, *, wait_for=False):
+    sem = Api.semaphore
     loop = sem._loop
     if sem.locked():
         to_wait = sem.next_available[0] - (loop.time() + timeout)
@@ -62,6 +58,61 @@ def wait_if(coro, *, timeout: float, wait_for=False):
     if wait_for:
         return asyncio.wait_for(coro, timeout=timeout)
     return coro
+
+
+class _fset(frozenset):
+    def __str__(self):
+        return super().__str__()[len(type(self).__name__) + 1 : -1]
+
+
+class _Specials:
+    @staticmethod
+    def _default(v):
+        return set(_nsplit(v.lower()))
+
+    @staticmethod
+    def a(v):
+        return v.lower()
+
+    @staticmethod
+    def nation(v):
+        return "_".join(_nsplit(v.lower()))
+
+    region = nation
+
+    @classmethod
+    def view(cls, v):
+        v = v.lower().split(".")
+        v[1] = ",".join(sorted(map(cls.nation, v[1].split(","))))
+        return ".".join(map(str.strip, v))
+
+    dispatchauthor = nation
+
+    @staticmethod
+    def dispatchcategory(v):
+        v = v.split(":")
+        return ":".join(filter(bool, (s.strip().title() for s in v)))
+
+
+def _normalize_dicts(*dicts: _Mapping[str, str]):
+    final = {}
+    for d in dicts:
+        for k, v in d.items():
+            if not k or not v:
+                continue
+            k = "".join(_nsplit(str(k).lower()))
+            v = getattr(_Specials, k, _Specials._default)(str(v))
+            if k and v:
+                if isinstance(v, str):
+                    final[k] = v
+                    continue
+                fv = final.setdefault(k, type(v)())
+                if hasattr(fv, "extend"):
+                    fv.extend(v)
+                else:
+                    fv.update(v)
+    convert = {list: tuple, set: _fset, str: str}
+    return {k: convert[type(v)](v) for k, v in final.items()}
 
 
 class _NSSemaphore(asyncio.BoundedSemaphore):
@@ -89,12 +140,12 @@ class _NSSemaphore(asyncio.BoundedSemaphore):
     def release(self, amount: int = 1, *, time: float = RATE.per):
         if amount <= 0:
             return
-
         super_release = super().release
 
         def delayed():
             for _ in range(amount):
-                self.next_available.popleft()
+                with contextlib.suppress(IndexError):
+                    self.next_available.popleft()
                 super_release()
 
         if time > 0:
@@ -114,7 +165,8 @@ class _NSResponse(aiohttp.ClientResponse):
             return await super().start(conn)
         response = None
         try:
-            async with _NS.semaphore:
+            # pylint: disable=E1701
+            async with Api.semaphore:
                 response = await super().start(conn)
                 return response
         except aiohttp.ClientResponseError as e:
@@ -124,73 +176,133 @@ class _NSResponse(aiohttp.ClientResponse):
             if response:
                 if response.status == 429:
                     xra = response.headers["X-Retry-After"]
-                    _NS.semaphore.tmr(int(xra))
+                    Api.semaphore.tmr(int(xra))
                 else:
                     xrlrs = response.headers.get("X-ratelimit-requests-seen", 0)
-                    _NS.semaphore.sync(int(xrlrs))
+                    Api.semaphore.sync(int(xrlrs))
 
 
-class _NSElement(etree.ElementBase):
+class _NSElement(etree.ElementBase, MutableMapping):
     __slots__ = ()
 
-    def __getitem__(self, item):
+    def __delitem__(self, key):
+        element = self[key]
+        element.getparent().remove(element)
+
+    def __getitem__(self, key):
         with contextlib.suppress(TypeError):
-            return super().__getitem__(item)
-        e = self.find(item)
+            return super().__getitem__(key)
+        e = self.find(key)
         if e is None:
-            raise KeyError(item)
+            raise KeyError(key)
         if e.attrib or len(e):
             return e
         return e.text
 
-    def __setitem__(self, item, value):
+    def __iter__(self):
+        return self.iter()
+
+    # __len__ implemented by ElementBase
+
+    def __setitem__(self, key, value):
         with contextlib.suppress(TypeError):
-            return super().__setitem__(item, value)
-        e = self.find(item)
+            return super().__setitem__(key, value)
+        e = self.find(key)
         if e is None:
-            raise KeyError(item)
+            raise KeyError(key)
         if isinstance(value, collections.abc.Mapping):
             e.attrib = value
         else:
             e.text = str(value)
 
 
-class _NSXmlIter:
-    __slots__ = "url", "__clear"
+class Dumps(Enum):
+    __slots__ = ()
 
-    def __init__(self, api: "_Api"):
-        if not api:
-            raise ValueError("Bad request")
-        self.url = str(api)
-        self.__clear = True
+    NATIONS = urlunparse((*API_URL[:2], "/pages/nations.xml.gz", None, None, None))
+    NATION = NATIONS
+    REGIONS = urlunparse((*API_URL[:2], "/pages/regions.xml.gz", None, None, None))
+    REGION = REGIONS
+
+    async def __aiter__(self):
+        url = self.value
+
+        parser = etree.XMLPullParser(["end"], base_url=url, remove_blank_text=True)
+        parser.set_element_class_lookup(etree.ElementDefaultClassLookup(element=_NSElement))
+        events = parser.read_events()
+        dobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+
+        async with Api.session.request("GET", url, headers={"User-Agent": Api.agent}) as response:
+            yield parser.makeelement("HEADERS", attrib=response.headers)
+            async for data, _ in response.content.iter_chunks():
+                parser.feed(dobj.decompress(data))
+                for _, element in events:
+                    yield element
+                    element.clear()
 
 
 class _ApiMeta(type):
-    def __getattr__(cls, name: str) -> "_Api":
-        instance = cls()
-        return getattr(instance, name)
+    def __init__(cls, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cls._agent, cls._loop, cls._semaphore, cls._session = None, None, None, None
 
-
-class _DumpsMeta(_ApiMeta):
     @property
-    def dumps(cls):
-        url = urlunparse(
-            (*API_URL[:2], f"/pages/{cls.__name__.lower()}s.xml.gz", None, None, None)
+    def agent(cls):
+        return cls._agent
+
+    @agent.setter
+    def agent(cls, value):
+        if value:
+            cls._agent = " ".join((str(value), *_versions))
+
+    def close(cls) -> _Optional[asyncio.Task]:
+        t = None
+        with contextlib.suppress(TypeError):
+            t = cls._loop.create_task(cls._session.close())
+        cls._loop, cls._semaphore, cls._session = None, None, None
+        return t
+
+    @property
+    def closed(cls):
+        return bool(cls._agent and cls._loop)
+
+    def start(cls, loop: asyncio.AbstractEventLoop = None) -> None:
+        if cls._loop:
+            raise RuntimeError("API session is already started!")
+        loop = loop or asyncio.get_event_loop()
+        cls._loop = loop
+        cls._semaphore = _NSSemaphore(loop=loop)
+        cls._session = aiohttp.ClientSession(
+            loop=loop, raise_for_status=True, response_class=_NSResponse
         )
-        return cls.__aiter__(None, url=url)
+
+    @property
+    def loop(cls):
+        return cls._loop
+
+    @property
+    def semaphore(cls):
+        return cls._semaphore
+
+    @property
+    def session(cls):
+        return cls._session
 
 
-class _Api(metaclass=_ApiMeta):
-    __slots__ = "_q", "_kw", "_value"
+class Api(metaclass=_ApiMeta):
+    __slots__ = ("__dict",)
 
-    def __init__(self, value: Optional[str] = None, **kwargs: str):
-        self._q = set()
-        self._kw = {}
-        if not value:
-            self.value = None
-        self(value, **kwargs)
+    def __init__(self, *shards: _Union[str, _Mapping[str, str]], **kwargs: str):
+        dicts = [kwargs] if kwargs else []
+        for shard in shards:
+            if isinstance(shard, Mapping) and shard:
+                dicts.append(shard)
+            elif shard:
+                dicts.append({"q": shard})
+        self.__dict = MappingProxyType(_normalize_dicts(*dicts))
 
     async def __await(self):
+        # pylint: disable=E1133
         async for element in self.__aiter__(clear=False):
             pass
         return element
@@ -198,145 +310,78 @@ class _Api(metaclass=_ApiMeta):
     def __await__(self):
         return self.__await().__await__()
 
-    async def __aiter__(self, *, url: str = None, clear: bool = True):
-        if not self and not url:
+    async def __aiter__(self, *, clear: bool = True):
+        if not self:
             raise ValueError("Bad request")
-        url = url or str(self)
+        url = str(self)
 
         parser = etree.XMLPullParser(["end"], base_url=url, remove_blank_text=True)
         parser.set_element_class_lookup(etree.ElementDefaultClassLookup(element=_NSElement))
         events = parser.read_events()
 
-        async with _NS.session.request("GET", url, headers={"User-Agent": _NS.agent}) as response:
+        async with type(self).session.request(
+            "GET", url, headers={"User-Agent": type(self).agent}
+        ) as response:
             yield parser.makeelement("HEADERS", attrib=response.headers)
-            if "application/x-gzip" in response.headers["Content-Type"]:
-                dobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
-            else:
-                dobj = None
+            encoding = response.headers["Content-Type"].split("charset=")[1].split(",")[0]
             async for data, _ in response.content.iter_chunks():
-                if dobj:
-                    data = dobj.decompress(data)
-                parser.feed(data)
+                parser.feed(data.decode(encoding))
                 for _, element in events:
                     yield element
                     if clear:
                         element.clear()
 
-    def __bool__(self):
-        return bool(self.value)
-
-    def __call__(self, value: Optional[str] = None, **kwargs: str) -> "_Api":
-        if value:
-            self.value = value
-        if kwargs:
-            if "q" in kwargs:
-                self._q.update(_nsplit(str(kwargs.pop("q")).lower()))
-            key = self.key
-            if key and key in kwargs:
-                self.value = kwargs.pop(key)
-            for k, v in kwargs.items():
-                if not v:
-                    continue
-                v = " ".join(_nsplit(str(v).lower()))
-                if v:
-                    self._kw[k] = v
-        return self
-
-    def __iadd__(self, other):
-        if isinstance(other, type(self)):
-            self._q |= other._q
-            self._kw.update(other._kw)
-            return self
-        if isinstance(other, str):
-            return self(other)
-        if isinstance(other, Iterable):
-            self._q.update(_nsplit(" ".join(other).lower()))
-            return self
-        if isinstance(other, Mapping):
-            return self(**other)
+    def __add__(self, other: _Any) -> "Api":
+        with contextlib.suppress(Exception):
+            return type(self)(self, other)
         return NotImplemented
 
-    __add__ = __iadd__
+    def __bool__(self):
+        return any(a in self for a in ("a", "nation", "region", "q", "wa"))
 
-    def __getattr__(self, name: str) -> "_Api":
-        if name.startswith("_"):
-            raise AttributeError
-        self._q.update(_nsplit(name.lower()))
-        return self
+    def __contains__(self, key):
+        return key in self.__dict
+
+    def __dir__(self):
+        return set(super().__dir__()).union(dir(self.__dict))
+
+    def __getattribute__(self, name):
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            with contextlib.suppress(AttributeError):
+                return getattr(self.__dict, name)
+            raise
+
+    def __getitem__(self, key):
+        return self.__dict[str(key).lower()]
+
+    def __iter__(self):
+        return iter(self.__dict)
+
+    def __len__(self):
+        return len(self.__dict)
 
     def __repr__(self) -> str:
-        argument = repr(self.value) if self.key else None
-        kwargs = ", ".join(f"{k}={v!r}" for k, v in self._kw.items())
-        args = ", ".join(filter(bool, (argument, kwargs)))
-        attrs = ".".join(self._q)
-        name = type(self).__name__
-        if args:
-            name += f"({args})"
-        if attrs:
-            name += f".{attrs}"
-        return name
+        return "{}({})".format(
+            type(self).__name__,
+            ", ".join(
+                "{}={!r}".format(k, v if isinstance(v, str) else " ".join(v))
+                for k, v in self.__dict.items()
+            ),
+        )
 
     def __str__(self) -> str:
-        main = self.key, self.value
-        params = [main] if all(main) else []
-        if self._q:
-            params.append(("q", " ".join(self._q)))
-        if self._kw:
-            params.extend(self._kw.items())
+        params = [(k, v if isinstance(v, str) else " ".join(v)) for k, v in self.items()]
         return urlunparse((*API_URL, None, urlencode(params), None))
 
-    @property
-    def key(self) -> str:
-        return type(self).__name__.lower()
+    def copy(self):
+        return type(self)(**self.__dict)
 
-    @property
-    def value(self) -> Optional[str]:
-        return self._value
-
-    @value.setter
-    def value(self, value: str) -> None:
-        self._value = "_".join(_nsplit(str(value).lower())) if value else None
-
-
-class Nation(_Api, metaclass=_DumpsMeta):
-    __slots__ = ()
-
-
-class Region(_Api, metaclass=_DumpsMeta):
-    __slots__ = ()
-
-
-class World(_Api):
-    __slots__ = ()
-
-    @property
-    def key(self) -> None:
-        return None
-
-    # pylint: disable=E1101
-    @_Api.value.setter
-    def value(self, value: None) -> None:
-        if value is not None:
-            raise TypeError(value)
-        _Api.value.fset(value)
-
-    def __bool__(self):
-        return bool(self._q)
-
-
-class WA(_Api):
-    __slots__ = ()
-
-    # pylint: disable=E1101
-    @_Api.value.setter
-    def value(self, value: str) -> None:
-        if not value:
-            _Api.value.fset(self, None)
-            return
-        value = str(value).lower()
-        if value in ("wa", "ga", "1"):
-            _Api.value.fset(self, "1")
-        elif value in ("sc", "2"):
-            _Api.value.fset(self, "2")
-        else:
-            raise ValueError(value)
+    @classmethod
+    def from_url(cls, url: str, *args, **kwargs):
+        parsed_url = urlparse(str(url))
+        url = parsed_url[: len(API_URL)]
+        if any(url) and url != API_URL:
+            raise ValueError("URL must be solely query parameters or an API url")
+        return cls(*args, dict(parse_qsl(parsed_url.query)), kwargs)

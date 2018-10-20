@@ -9,28 +9,21 @@ from lxml import etree
 from redbot.core import checks, commands, Config, version_info as red_version
 from redbot.core.utils.chat_formatting import box, pagify
 
-from . import api
-from .api import Nation, Region, World, WA
+from .api import Api, link_extract, wait_if
 
 
 Cog = getattr(commands, "Cog", object)
+eq = re.compile(r"\s*=\s*")
 
 
-def valid_api(argument):
-    return {
-        "n": Nation,
-        "nation": Nation,
-        "r": Region,
-        "region": Region,
-        "w": World,
-        "world": World,
-        "wa": WA,
-    }[argument.lower()]()
+def maybe_link(link: str):
+    match = link_extract(link)
+    return match[1] if match else link
 
 
 class NationStates(Cog):
     def __init__(self, bot):
-        api.start(bot.loop)
+        Api.start(bot.loop)
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_global(agent=None)
@@ -44,7 +37,7 @@ class NationStates(Cog):
             owner_id = self.bot.owner_id
             # only make the user_info request if necessary
             agent = str(self.bot.get_user(owner_id) or await self.bot.get_user_info(owner_id))
-        api.agent(f"{agent} redbot/{red_version}")
+        Api.agent = f"{agent} redbot/{red_version}"
 
     @staticmethod
     async def _maybe_embed(dest, embed):
@@ -60,33 +53,39 @@ class NationStates(Cog):
         index = 0
         while num >= 1000:
             index += 1
-            num = num / 1e3
+            num /= 1000
         return "{} {}".format(round(num, 3), illion[index])
 
     @commands.command()
     @commands.cooldown(2, 3600)
     @checks.is_owner()
     async def agent(self, ctx, *, agent: str):
-        new_agent = api.agent(f"{agent} redbot/{red_version}")
+        """
+        Sets the user agent.
+        
+        Recommendations: https://www.nationstates.net/pages/api.html#terms
+        Defaults to your username#hash
+        """
+        Api.agent = f"{agent} redbot/{red_version}"
         await self.config.agent.set(agent)
-        await ctx.send(f"Agent set: {new_agent}")
+        await ctx.send(f"Agent set: {Api.agent}")
 
     @commands.command()
     @commands.bot_has_permissions(embed_links=True)
-    async def nation(
-        self,
-        ctx,
-        *,
-        nation: Nation.category.census(
-            mode="score", scale="65 66"
-        ).demonym2plural.flag.founded.freedom.fullname.influence.lastlogin.motto.population.region.wa,
-    ):
+    async def nation(self, ctx, *, nation: maybe_link):
+        """Retrieves general info about a specified NationStates nation"""
+        nation = Api(
+            "census category demonym2plural flag founded freedom fullname influence lastlogin motto population region wa",
+            nation=nation,
+            mode="score",
+            scale="65 66",
+        )
         try:
             root = await nation
         except aiohttp.ClientResponseError as e:
             if e.status != 404:
                 return await ctx.send(f"{e.status}: {e.message}")
-            nation = nation.value
+            nation = nation["nation"]
             embed = discord.Embed(
                 title=nation.replace("_", " ").title(),
                 url="https://www.nationstates.net/page="
@@ -109,7 +108,7 @@ class NationStates(Cog):
             description="[{}](https://www.nationstates.net/region={})"
             " | {} {} | Founded {}".format(
                 root["REGION"],
-                Region(root["REGION"]).value,
+                "_".join(root["REGION"].lower().split()),
                 self._illion(root["POPULATION"]),
                 root["DEMONYM2PLURAL"],
                 root["FOUNDED"],
@@ -140,18 +139,18 @@ class NationStates(Cog):
 
     @commands.command()
     @commands.bot_has_permissions(embed_links=True)
-    async def region(
-        self,
-        ctx,
-        *,
-        region: Region.delegate.delegateauth.flag.founded.founder.lastupdate.name.numnations.power,
-    ):
+    async def region(self, ctx, *, region: maybe_link):
+        """Retrieves general info about a specified NationStates region"""
+        region = Api(
+            "delegate delegateauth flag founded founder lastupdate name numnations power",
+            region=region,
+        )
         try:
             root = await region
         except aiohttp.ClientResponseError as e:
             if e.status != 404:
                 return await ctx.send(f"{e.status}: {e.message}")
-            region = region.value
+            region = region["region"]
             embed = discord.Embed(
                 title=region.replace("_", " ").title(), description="This region does not exist."
             )
@@ -160,10 +159,8 @@ class NationStates(Cog):
         if root["DELEGATE"] == "0":
             root["DELEGATE"] = "No Delegate"
         else:
-            delroot = (
-                await Nation(root["DELEGATE"])
-                .census(scale="65 66", mode="score")
-                .fullname.influence
+            delroot = await Api(
+                "census fullname influence", nation=root["DELEGATE"], scale="65 66", mode="score"
             )
             endo = int(float(delroot[".//SCALE[@id='66']/SCORE"]))
             if endo == 1:
@@ -191,7 +188,7 @@ class NationStates(Cog):
         else:
             try:
                 root["FOUNDER"] = "[{}](https://www.nationstates.net/" "nation={})".format(
-                    (await Nation(root["FOUNDER"]).fullname)["FULLNAME"], root["FOUNDER"]
+                    (await Api("fullname", nation=root["FOUNDER"]))["FULLNAME"], root["FOUNDER"]
                 )
             except aiohttp.ClientResponseError as e:
                 if e.status != 404:
@@ -222,12 +219,17 @@ class NationStates(Cog):
     @commands.command(aliases=["ga", "sc"])
     @commands.bot_has_permissions(embed_links=True)
     async def wa(self, ctx):
-        wa = WA(ctx.invoked_with).resolution.delvotes.lastresolution
+        """
+        Retrieves general info about the World Assembly
+        
+        Defaults to the General Assembly. Use [p]sc to get info about the Security Council.
+        """
+        is_sc = ctx.invoked_with == "sc"
         try:
-            root = await wa
+            root = await Api("resolution delvotes lastresolution", wa="2" if is_sc else "1")
         except aiohttp.ClientResponseError as e:
             return await ctx.send(f"{e.status}: {e.message}")
-        img = "4dHt6si" if wa.value == "2" else "7EMYsJ6"
+        img = "4dHt6si" if is_sc else "7EMYsJ6"
         if root["RESOLUTION"] is None:
             out = (
                 unescape(root["LASTRESOLUTION"])
@@ -262,7 +264,7 @@ class NationStates(Cog):
             timestamp=datetime.utcfromtimestamp(float(root["PROMOTED"])),
             colour=await ctx.embed_colour(),
         )
-        authroot = await Nation(root["PROPOSED_BY"]).fullname.flag
+        authroot = await Api("fullname flag", nation=root["PROPOSED_BY"])
         embed.set_author(
             name=authroot["FULLNAME"],
             url="https://www.nationstates.net/nation={}".format(root["PROPOSED_BY"]),
@@ -306,13 +308,25 @@ class NationStates(Cog):
         await self._maybe_embed(ctx, embed)
 
     @commands.command()
-    async def shard(self, ctx, ns: valid_api, target: str, *shards: str):
+    async def shard(self, ctx, *shards: str):
+        """
+        Retrieves the specified info from NationStates
+
+        Uses UNIX-style arguments. Arguments will be shards, while flags will be keywords.
+        Examples:
+            [p]shard --nation Darcania census --scale "65 66" --mode score
+            [p]shard numnations lastupdate delegate --region "10000 Islands"
+        """
+        request = {}
+        key = "q"
+        for shard in shards:
+            if shard.startswith("--"):
+                key = shard[2:]
+            else:
+                request.setdefault(key, []).append(shard)
+                key = "q"
         try:
-            ns(target)
-        except TypeError:
-            shards = (target, *shards)
-        try:
-            root = await (ns + shards)
+            root = await Api(**request)
         except aiohttp.ClientResponseError as e:
             return await ctx.send(f"{e.status}: {e.message}")
         await ctx.send_interactive(
@@ -321,6 +335,6 @@ class NationStates(Cog):
 
     def __unload(self):
         with contextlib.suppress(Exception):
-            api.close()
+            Api.close()
 
     __del__ = __unload
