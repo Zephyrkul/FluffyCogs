@@ -80,7 +80,7 @@ class Act(Cog):
                 json = {}
             else:
                 json = await response.json()
-        if "results" not in json:
+        if "results" not in json or not json["results"]:
             return await ctx.send(message)
         message += "\n\n"
         message += random.choice(json["results"])["url"]
@@ -96,16 +96,22 @@ class Act(Cog):
 
     @actset.command()
     @checks.is_owner()
-    async def tenorkey(self, ctx, *, key: str = None):
+    async def tenorkey(self, ctx, *, key: str):
         """
         Sets a Tenor GIF API key to enable reaction gifs with act commands.
 
         You can obtain a key from here: https://tenor.com/developer/dashboard
         """
-        if not key:
-            return await ctx.author.send(await self.config.tenorkey())
+        if not isinstance(ctx.channel, discord.DMChannel):
+            try:
+                await ctx.message.delete()
+            except discord.Forbidden:
+                pass
+            return await ctx.send(
+                "Please use that command in DM. Since users probably saw your key, it is recommended to reset it right now."
+            )
         await self.config.tenorkey.set(key)
-        await ctx.tick()
+        await ctx.author.send("Key set.")
 
     async def on_message(self, message):
         if message.author.bot:
