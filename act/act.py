@@ -1,9 +1,11 @@
+import aiohttp
 import discord
 import inflection
 import itertools
+import random
 from typing import Union
 
-from redbot.core import commands
+from redbot.core import commands, checks, Config
 from redbot.core.utils.chat_formatting import italics
 
 from .helpers import *
@@ -19,6 +21,8 @@ class Act(Cog):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
+        self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
+        self.config.register_global(tenorkey=None)
 
     @commands.command(hidden=True)
     async def act(self, ctx, *, target: Union[discord.Member, str] = None):
@@ -28,6 +32,7 @@ class Act(Cog):
         if not target or isinstance(target, str):
             return  # no help text
 
+        # humanize action text
         action = inflection.humanize(ctx.invoked_with).split()
         iverb = -1
 
@@ -49,7 +54,58 @@ class Act(Cog):
         if iverb < 0:
             return
         action.insert(iverb + 1, target.mention)
-        await ctx.send(italics(" ".join(action)))
+        message = italics(" ".join(action))
+
+        # add reaction gif
+        if not ctx.channel.permissions_for(ctx.me).embed_links:
+            return await ctx.send(message)
+        key = await self.config.tenorkey()
+        if not key:
+            return await ctx.send(message)
+        async with aiohttp.request(
+            "GET",
+            "https://api.tenor.com/v1/search",
+            params={
+                "q": ctx.invoked_with,
+                "key": key,
+                "limit": 8,
+                "anon_id": ctx.author.id ^ ctx.me.id,
+                "media_filter": "minimal",
+                "contentfilter": "low",
+                "ar_range": "wide",
+                "locale": await ctx.bot.db.locale(),
+            },
+        ) as response:
+            if response.status >= 400:
+                json = {}
+            else:
+                json = await response.json()
+        if "results" not in json:
+            return await ctx.send(message)
+        message += "\n\n"
+        message += random.choice(json["results"])["url"]
+        await ctx.send(message)
+
+    @commands.group()
+    @checks.is_owner()
+    async def actset(self, ctx):
+        """
+        Configure various settings for the act cog.
+        """
+        pass
+
+    @actset.command()
+    @checks.is_owner()
+    async def tenorkey(self, ctx, *, key: str = None):
+        """
+        Sets a Tenor GIF API key to enable reaction gifs with act commands.
+
+        You can obtain a key from here: https://tenor.com/developer/dashboard
+        """
+        if not key:
+            return await ctx.author.send(await self.config.tenorkey())
+        await self.config.tenorkey.set(key)
+        await ctx.tick()
 
     async def on_message(self, message):
         if message.author.bot:
