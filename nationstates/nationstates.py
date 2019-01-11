@@ -5,25 +5,29 @@ import re
 from datetime import datetime
 from html import unescape
 from lxml import etree
+from sans import Api
 
 from redbot.core import checks, commands, Config, version_info as red_version
 from redbot.core.utils.chat_formatting import box, pagify
 
-from .api import Api, link_extract, wait_if
-
-
 Cog = getattr(commands, "Cog", object)
-eq = re.compile(r"\s*=\s*")
 
 
-def maybe_link(link: str):
-    match = link_extract(link)
-    return match[1] if match else link
+LINK_RE = re.compile(
+    r"\b(?:(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?)?([-\w\s]+)\b", re.I
+)
+
+
+def link_extract(link: str):
+    match = LINK_RE.match(link)
+    if not match:
+        return link
+    return match.group(2)
 
 
 class NationStates(Cog):
     def __init__(self, bot):
-        Api.start(bot.loop)
+        Api.loop = bot.loop
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_global(agent=None)
@@ -37,7 +41,7 @@ class NationStates(Cog):
             owner_id = self.bot.owner_id
             # only make the user_info request if necessary
             agent = str(self.bot.get_user(owner_id) or await self.bot.get_user_info(owner_id))
-        Api.agent = f"{agent} redbot/{red_version}"
+        Api.agent = f"{agent} Red-DiscordBot/{red_version}"
 
     @staticmethod
     async def _maybe_embed(dest, embed):
@@ -72,7 +76,7 @@ class NationStates(Cog):
 
     @commands.command()
     @commands.bot_has_permissions(embed_links=True)
-    async def nation(self, ctx, *, nation: maybe_link):
+    async def nation(self, ctx, *, nation: link_extract):
         """Retrieves general info about a specified NationStates nation"""
         nation = Api(
             "census category demonym2plural flag founded freedom fullname influence lastlogin motto population region wa",
@@ -139,7 +143,7 @@ class NationStates(Cog):
 
     @commands.command()
     @commands.bot_has_permissions(embed_links=True)
-    async def region(self, ctx, *, region: maybe_link):
+    async def region(self, ctx, *, region: link_extract):
         """Retrieves general info about a specified NationStates region"""
         region = Api(
             "delegate delegateauth flag founded founder lastupdate name numnations power",
@@ -313,28 +317,30 @@ class NationStates(Cog):
         Retrieves the specified info from NationStates
 
         Uses UNIX-style arguments. Arguments will be shards, while flags will be keywords.
+        An asterisk may be used to consume the rest of the arguments at once.
+
         Examples:
             [p]shard --nation Darcania census --scale "65 66" --mode score
-            [p]shard numnations lastupdate delegate --region "10000 Islands"
+            [p]shard numnations lastupdate delegate --region * 10000 Islands
         """
         request = {}
         key = "q"
-        for shard in shards:
+        for i, shard in enumerate(shards):
             if shard.startswith("--"):
                 key = shard[2:]
+            elif shard.startswith("*"):
+                request.setdefault(key, []).append(" ".join((shard[1:], *shards[i + 1 :])).strip())
+                break
             else:
                 request.setdefault(key, []).append(shard)
                 key = "q"
+        request = Api(request)
+        if not request:
+            return await ctx.send("400: Bad Request")
         try:
-            root = await Api(**request)
+            root = await request
         except aiohttp.ClientResponseError as e:
             return await ctx.send(f"{e.status}: {e.message}")
         await ctx.send_interactive(
             pagify(etree.tostring(root, encoding=str, pretty_print=True), shorten_by=11), "xml"
         )
-
-    def __unload(self):
-        with contextlib.suppress(Exception):
-            Api.close()
-
-    __del__ = __unload

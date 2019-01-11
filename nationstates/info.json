@@ -3,7 +3,7 @@
     "install_msg" : "Usage: `[p]help NationStates`.",
     "name" : "NationStates",
     "short" : "Access information from NationStates.net.",
-    "requirements" : ["lxml"],
+    "requirements" : ["sans"],
     "description" : "Access information from NationStates.net.",
     "tags" : ["utility"]
 }
