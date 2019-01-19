@@ -15,7 +15,7 @@ Cog = getattr(commands, "Cog", object)
 _ = Translator("LogsFrom", __file__)
 
 
-MHeaders = collections.namedtuple("MHeaders", ("author", "created"), defaults=("", ""))
+MHeaders = collections.namedtuple("MHeaders", ("author", "created"))
 
 
 def positive_int(argument):
@@ -60,7 +60,7 @@ class LogsFrom(Cog):
             if channel == ctx.channel:
                 kwargs["before"] = ctx.message
             stream = io.BytesIO()
-            last_h = MHeaders()
+            last_h = MHeaders("", "")
             processed = 0
             async for m in channel.history(**kwargs):
                 if channel not in self.active:
