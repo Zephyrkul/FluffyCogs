@@ -70,7 +70,7 @@ class NationStates(Cog):
         Recommendations: https://www.nationstates.net/pages/api.html#terms
         Defaults to your username#hash
         """
-        Api.agent = f"{agent} redbot/{red_version}"
+        Api.agent = f"{agent} Red-DiscordBot/{red_version}"
         await self.config.agent.set(agent)
         await ctx.send(f"Agent set: {Api.agent}")
 
@@ -79,7 +79,10 @@ class NationStates(Cog):
     async def nation(self, ctx, *, nation: link_extract):
         """Retrieves general info about a specified NationStates nation"""
         nation = Api(
-            "census category demonym2plural flag founded freedom fullname influence lastlogin motto population region wa",
+            "census category dbid demonym2plural",
+            "flag founded freedom fullname",
+            "influence lastlogin motto name",
+            "population region wa",
             nation=nation,
             mode="score",
             scale="65 66",
@@ -137,6 +140,15 @@ class NationStates(Cog):
                 endo, int(float(root[".//SCALE[@id='65']/SCORE"])), root["INFLUENCE"]
             ),
             inline=False,
+        )
+        embed.add_field(
+            name="Cards",
+            value=(
+                "[{0}'s Deck](https://www.nationstates.net/page=deck/nation={1})\t|"
+                "\t[{0}'s Card](https://www.nationstates.net/page=deck/card={2})".format(
+                    root["NAME"], root.get("id"), root["DBID"]
+                )
+            ),
         )
         embed.set_footer(text="Last Active")
         return await self._maybe_embed(ctx, embed)
