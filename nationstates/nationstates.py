@@ -5,6 +5,7 @@ import re
 from datetime import datetime
 from html import unescape
 from lxml import etree
+from io import BytesIO
 from sans import Api
 
 from redbot.core import checks, commands, Config, version_info as red_version
@@ -26,6 +27,9 @@ def link_extract(link: str):
 
 
 class NationStates(Cog):
+
+    # __________ INIT __________
+
     def __init__(self, bot):
         Api.loop = bot.loop
         self.bot = bot
@@ -43,6 +47,8 @@ class NationStates(Cog):
             agent = str(self.bot.get_user(owner_id) or await self.bot.get_user_info(owner_id))
         Api.agent = f"{agent} Red-DiscordBot/{red_version}"
 
+    # __________ UTILS __________
+
     @staticmethod
     async def _maybe_embed(dest, embed):
         try:
@@ -59,6 +65,8 @@ class NationStates(Cog):
             index += 1
             num /= 1000
         return "{} {}".format(round(num, 3), illion[index])
+
+    # __________ STANDARD __________
 
     @commands.command()
     @commands.cooldown(2, 3600)
@@ -232,6 +240,8 @@ class NationStates(Cog):
         embed.set_footer(text="Last Updated")
         await self._maybe_embed(ctx, embed)
 
+    # __________ ASSEMBLY __________
+
     @commands.command(aliases=["ga", "sc"])
     @commands.bot_has_permissions(embed_links=True)
     async def wa(self, ctx):
@@ -323,6 +333,8 @@ class NationStates(Cog):
         embed.set_footer(text="Voting Began")
         await self._maybe_embed(ctx, embed)
 
+    # __________ SHARD __________
+
     @commands.command()
     async def shard(self, ctx, *shards: str):
         """
@@ -356,3 +368,72 @@ class NationStates(Cog):
         await ctx.send_interactive(
             pagify(etree.tostring(root, encoding=str, pretty_print=True), shorten_by=11), "xml"
         )
+
+    # __________ ENDORSE __________
+
+    @commands.command()
+    async def ne(self, ctx, *, wa_nation: str):
+        """Nations Endorsing (NE) the specified WA nation"""
+        try:
+            root = await Api("endorsements name wa", nation=wa_nation)
+        except aiohttp.ClientResponseError as e:
+            return await ctx.send(f"{e.status}: {e.message}")
+        if root["UNSTATUS"].lower() == "non-member":
+            return await ctx.send(f"{root['NAME']} is not a WA member.")
+        await ctx.send(file=discord.File(BytesIO(root["ENDORSEMENTS"].encode()), "ne.txt"))
+
+    @commands.command()
+    async def nec(self, ctx, *, wa_nation: str):
+        """Nations Endorsing [Count] (NEC) the specified WA nation"""
+        try:
+            root = await Api("census name wa", nation=wa_nation, scale="66", mode="score")
+        except aiohttp.ClientResponseError as e:
+            return await ctx.send(f"{e.status}: {e.message}")
+        if root["UNSTATUS"].lower() == "non-member":
+            return await ctx.send(f"{root['NAME']} is not a WA member.")
+        await ctx.send(root[".//SCALE[@id='66']/SCORE"])
+
+    @commands.command()
+    async def spdr(self, ctx, *, nation: str):
+        """Soft Power Disbursement Rating (SPDR, aka numerical Influence) of the specified nation"""
+        try:
+            root = await Api("census", nation=nation, scale="65", mode="score")
+        except aiohttp.ClientResponseError as e:
+            return await ctx.send(f"{e.status}: {e.message}")
+        await ctx.send(root[".//SCALE[@id='65']/SCORE"])
+
+    @commands.command()
+    async def nne(self, ctx, *, wa_nation: str):
+        """Nations Not Endorsing (NNE) the specified WA nation"""
+        try:
+            nation_root = await Api("endorsements region wa", nation=wa_nation)
+        except aiohttp.ClientResponseError as e:
+            return await ctx.send(f"{e.status}: {e.message}")
+        if nation_root["UNSTATUS"].lower() == "non-member":
+            return await ctx.send(f"{nation_root['NAME']} is not a WA member.")
+        wa_root = await Api("members", wa="1")
+        region_root = await Api("nations", region=nation_root["REGION"])
+        final = (
+            set(region_root["NATIONS"].split(":"))
+            .intersection(wa_root["MEMBERS"].split(","))
+            .difference(nation_root["ENDORSEMENTS"].split(","))
+        )
+        await ctx.send(file=discord.File(BytesIO(",".join(final).encode()), "nne.txt"))
+
+    @commands.command()
+    async def nnec(self, ctx, *, wa_nation: str):
+        """Nations Not Endorsing [Count] (NNEC) the specified WA nation"""
+        try:
+            nation_root = await Api("endorsements region wa", nation=wa_nation)
+        except aiohttp.ClientResponseError as e:
+            return await ctx.send(f"{e.status}: {e.message}")
+        if nation_root["UNSTATUS"].lower() == "non-member":
+            return await ctx.send(f"{nation_root['NAME']} is not a WA member.")
+        wa_root = await Api("members", wa="1")
+        region_root = await Api("nations", region=nation_root["REGION"])
+        final = (
+            set(region_root["NATIONS"].split(":"))
+            .intersection(wa_root["MEMBERS"].split(","))
+            .difference(nation_root["ENDORSEMENTS"].split(","))
+        )
+        await ctx.send(f"{len(final):.2f}")
