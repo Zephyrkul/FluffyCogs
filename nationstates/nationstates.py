@@ -347,6 +347,8 @@ class NationStates(Cog):
             [p]shard --nation Darcania census --scale "65 66" --mode score
             [p]shard numnations lastupdate delegate --region * 10000 Islands
         """
+        if not shards:
+            return await ctx.send_help()
         request = {}
         key = "q"
         for i, shard in enumerate(shards):
