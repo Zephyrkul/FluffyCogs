@@ -353,7 +353,7 @@ class NationStates(Cog):
             url="https://www.nationstates.net/page={}".format("sc" if is_sc else "ga")
             if not resolution_id
             else "https://www.nationstates.net/page=WA_past_resolution/id={}/council={}".format(
-                resolution_id, "sc" if is_sc else "ga"
+                resolution_id, "2" if is_sc else "1"
             ),
             description=description,
             timestamp=datetime.utcfromtimestamp(
