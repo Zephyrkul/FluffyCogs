@@ -15,7 +15,7 @@ from sans.errors import HTTPException, NotFound
 from sans.api import Api
 
 from redbot.core import checks, commands, Config, version_info as red_version
-from redbot.core.utils.chat_formatting import box, pagify
+from redbot.core.utils.chat_formatting import box, pagify, escape
 
 
 LINK_RE = re.compile(
@@ -344,11 +344,22 @@ class NationStates(commands.Cog):
             return await self._maybe_embed(ctx, embed)
         root = root["RESOLUTION"]
         if options & WAOptions.TEXT:
-            description = "**Category: {}**\n\n{}".format(root["CATEGORY"], root["DESC"])
+            description = "**Category: {}**\n\n{}".format(
+                root["CATEGORY"], escape(root["DESC"], formatting=True)
+            )
+            short = next(
+                pagify(
+                    description,
+                    delims=("\n", " ", "]"),
+                    escape_mass_mentions=False,
+                    page_length=2047,
+                    priority=True,
+                )
+            )
+            if len(short) < len(description):
+                description = short + "\N{HORIZONTAL ELLIPSIS}"
         else:
             description = "Category: {}".format(root["CATEGORY"])
-        if len(description) > 2048:
-            description = description[:2047] + "\N{HORIZONTAL ELLIPSIS}"
         if resolution_id:
             impl = root["IMPLEMENTED"]
         else:
