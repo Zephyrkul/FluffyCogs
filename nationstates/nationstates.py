@@ -4,24 +4,22 @@ import discord
 import re
 from datetime import datetime
 from enum import Flag, auto
-from functools import reduce
+from functools import reduce, partial
 from html import unescape
 from io import BytesIO
 from typing import Optional
 
 # pylint: disable=E0611
 import sans
-from sans.errors import *
+from sans.errors import HTTPException, NotFound
 from sans.api import Api
 
 from redbot.core import checks, commands, Config, version_info as red_version
 from redbot.core.utils.chat_formatting import box, pagify
 
-Cog = getattr(commands, "Cog", object)
-
 
 LINK_RE = re.compile(
-    r"(?i)\b(?:(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?)?([-\w\s]+)\b"
+    r"(?i)\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b"
 )
 WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
 
@@ -42,18 +40,21 @@ class WAOptions(Flag):
             raise commands.BadArgument() from ke
 
 
-def link_extract(link: str):
+def link_extract(link: str, *, expected):
     match = LINK_RE.match(link)
     if not match:
         return link
+    if (match.group(1) or "nation").lower() != expected.lower():
+        raise commands.BadArgument()
     return match.group(2)
 
 
-class NationStates(Cog):
+class NationStates(commands.Cog):
 
     # __________ INIT __________
 
     def __init__(self, bot):
+        super().__init__()
         Api.loop = bot.loop
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
@@ -131,7 +132,7 @@ class NationStates(Cog):
 
     @commands.command()
     @commands.bot_has_permissions(embed_links=True)
-    async def nation(self, ctx, *, nation: link_extract):
+    async def nation(self, ctx, *, nation: partial(link_extract, expected="nation")):
         """Retrieves general info about a specified NationStates nation"""
         nation = Api(
             "census category dbid demonym2plural",
@@ -162,7 +163,7 @@ class NationStates(Cog):
             endo = "{:d} endorsement".format(endo)
         else:
             endo = "{:d} endorsements".format(endo)
-        if root["FOUNDED"] == "0":
+        if root["FOUNDED"] == 0:
             root["FOUNDED"] = "in Antiquity"
         embed = discord.Embed(
             title=root["FULLNAME"],
@@ -210,7 +211,7 @@ class NationStates(Cog):
 
     @commands.command()
     @commands.bot_has_permissions(embed_links=True)
-    async def region(self, ctx, *, region: link_extract):
+    async def region(self, ctx, *, region: partial(link_extract, expected="region")):
         """Retrieves general info about a specified NationStates region"""
         region = Api(
             "delegate delegateauth flag founded founder lastupdate name numnations power",
@@ -227,7 +228,7 @@ class NationStates(Cog):
             )
             embed.set_author(name="NationStates", url="https://www.nationstates.net/")
             return await self._maybe_embed(ctx, embed)
-        if root["DELEGATE"] == "0":
+        if root["DELEGATE"] == 0:
             root["DELEGATE"] = "No Delegate"
         else:
             delroot = await Api(
@@ -252,9 +253,9 @@ class NationStates(Cog):
             root["DELEGATEAUTH"] = ""
         else:
             root["DELEGATEAUTH"] = " (Non-Executive)"
-        if root["FOUNDED"] == "0":
+        if root["FOUNDED"] == 0:
             root["FOUNDED"] = "in Antiquity"
-        if root["FOUNDER"] == "0":
+        if root["FOUNDER"] == 0:
             root["FOUNDER"] = "No Founder"
         else:
             try:
@@ -348,6 +349,10 @@ class NationStates(Cog):
             description = "Category: {}".format(root["CATEGORY"])
         if len(description) > 2048:
             description = description[:2047] + "\N{HORIZONTAL ELLIPSIS}"
+        if resolution_id:
+            impl = root["IMPLEMENTED"]
+        else:
+            impl = root["PROMOTED"] + (4 * 24 * 60 * 60)  # 4 Days
         embed = discord.Embed(
             title=root["NAME"],
             url="https://www.nationstates.net/page={}".format("sc" if is_sc else "ga")
@@ -356,9 +361,7 @@ class NationStates(Cog):
                 resolution_id, "2" if is_sc else "1"
             ),
             description=description,
-            timestamp=datetime.utcfromtimestamp(
-                root["IMPLEMENTED" if resolution_id else "PROMOTED"]
-            ),
+            timestamp=datetime.utcfromtimestamp(impl),
             colour=await ctx.embed_colour(),
         )
         try:
@@ -387,26 +390,28 @@ class NationStates(Cog):
             against_del_votes = sorted(
                 root.iterfind("DELVOTES_AGAINST/DELEGATE"), key=lambda e: e["VOTES"], reverse=True
             )[:10]
-            embed.add_field(
-                name="Top Delegates For",
-                value="\t|\t".join(
-                    "[{}](https://www.nationstates.net/nation={}) ({})".format(
-                        e["NATION"].replace("_", " ").title(), e["NATION"], e["VOTES"]
-                    )
-                    for e in for_del_votes
-                ),
-                inline=False,
-            )
-            embed.add_field(
-                name="Top Delegates Against",
-                value="\t|\t".join(
-                    "[{}](https://www.nationstates.net/nation={}) ({})".format(
-                        e["NATION"].replace("_", " ").title(), e["NATION"], e["VOTES"]
-                    )
-                    for e in against_del_votes
-                ),
-                inline=False,
-            )
+            if for_del_votes:
+                embed.add_field(
+                    name="Top Delegates For",
+                    value="\t|\t".join(
+                        "[{}](https://www.nationstates.net/nation={}) ({})".format(
+                            e["NATION"].replace("_", " ").title(), e["NATION"], e["VOTES"]
+                        )
+                        for e in for_del_votes
+                    ),
+                    inline=False,
+                )
+            if against_del_votes:
+                embed.add_field(
+                    name="Top Delegates Against",
+                    value="\t|\t".join(
+                        "[{}](https://www.nationstates.net/nation={}) ({})".format(
+                            e["NATION"].replace("_", " ").title(), e["NATION"], e["VOTES"]
+                        )
+                        for e in against_del_votes
+                    ),
+                    inline=False,
+                )
         if options & WAOptions.VOTE:
             percent = (
                 100
@@ -435,7 +440,7 @@ class NationStates(Cog):
                     root["TOTAL_NATIONS_AGAINST"],
                 ),
             )
-        embed.set_footer(text="Implemented On" if resolution_id else "Voting Began")
+        embed.set_footer(text="Passed" if resolution_id else "Voting Closes")
         await self._maybe_embed(ctx, embed)
 
     # __________ SHARD __________
@@ -463,6 +468,7 @@ class NationStates(Cog):
                 key = shard[2:]
             elif shard.startswith("*"):
                 request.setdefault(key, []).append(" ".join((shard[1:], *shards[i + 1 :])).strip())
+                key = "q"
                 break
             else:
                 request.setdefault(key, []).append(shard)
