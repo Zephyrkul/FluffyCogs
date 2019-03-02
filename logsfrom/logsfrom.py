@@ -2,6 +2,9 @@ import collections
 import io
 import itertools
 import sys
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime, date, time
 
 import discord
 
@@ -12,25 +15,48 @@ from redbot.core.i18n import Translator, cog_i18n
 Cog = getattr(commands, "Cog", object)
 
 
-_ = Translator("LogsFrom", __file__)
+_T = Translator("LogsFrom", __file__)
 
 
-MHeaders = collections.namedtuple("MHeaders", ("author", "created"))
+@dataclass
+class MHeaders:
+    author: discord.User
+    created: datetime
+    edited: datetime = None
+
+    def to_str(self, other: "MHeaders") -> str:
+        final = [""] if other.author else []
+        if self.author != other.author:
+            auth = self.author.display_name
+            if self.author.bot:
+                auth += " [BOT]"
+            final.append(auth)
+        if self.edited:
+            if self.edited.date() == self.created.date():
+                ed = ", edited {:%X}".format(self.edited.time())
+            else:
+                ed = ", edited {:%c}".format(self.edited)
+        else:
+            ed = ""
+        if other.created and self.created.date() == other.created.date():
+            final.append("[{:%X}{}] ".format(self.created.time(), ed))
+        else:
+            final.append("[{:%c}{}] ".format(self.created, ed))
+        return "\n".join(final)
 
 
 def positive_int(argument):
-    i = int(argument)
+    try:
+        i = int(argument)
+    except ValueError as e:
+        raise commands.BadArgument(_T("Please use a positive number.")) from e
     if i <= 0:
-        raise ValueError
+        raise commands.BadArgument(_T("Please use a positive number."))
     return i
 
 
-@cog_i18n(_)
+@cog_i18n(_T)
 class LogsFrom(Cog):
-    def __init__(self):
-        super().__init__()
-        self.active = set()
-
     @commands.group(invoke_without_command=True)
     async def logsfrom(
         self, ctx, limit: positive_int = 100, *, channel: discord.TextChannel = None
@@ -41,48 +67,24 @@ class LogsFrom(Cog):
         All timestamps are in UTC."""
         channel = channel or ctx.channel
         if not channel.permissions_for(ctx.author).read_message_history:
-            return
+            raise commands.MissingPermissions(["read_message_history"])
         if not channel.permissions_for(ctx.me).read_message_history:
-            return await ctx.send(
-                _("I don't have permission to read the history of {}.").format(channel)
-            )
-        if channel in self.active:
-            return await ctx.send(
-                _(
-                    "I am already logging messages in this channel. "
-                    "Use `[p]logsfrom cancel` to cancel."
-                )
-            )
-        self.active.add(channel)
-        self.active.add((ctx.author, channel))
+            raise commands.BotMissingPermissions(["read_message_history"])
         async with ctx.typing():
-            kwargs = {"after": discord.Object(id=limit), "limit": limit, "reverse": True}
+            kwargs = {"after": discord.Object(id=limit), "limit": limit, "reverse": False}
             if channel == ctx.channel:
                 kwargs["before"] = ctx.message
             stream = io.BytesIO()
-            last_h = MHeaders("", "")
-            processed = 0
-            async for m in channel.history(**kwargs):
-                if channel not in self.active:
-                    break
-                author_h = m.author.display_name + (" [BOT]" if m.author.bot else "")
-                author = "" if last_h.author == author_h else author_h
-                created_h = m.created_at.strftime("%X %x")
-                edited_h = m.edited_at.strftime("%X %x") if m.edited_at else ""
-                i = 0
-                for i in range(min(len(created_h), len(edited_h))):
-                    if created_h[i] != edited_h[i]:
-                        break
-                edited = f"(edited: {edited_h[i:]})" if edited_h[i:] else ""
-                for i in range(min(len(last_h.created), len(created_h))):
-                    if last_h.created[i] != created_h[i]:
-                        break
-                created = created_h[i:]
-                last_h = MHeaders(author_h, created_h)
-                headers = " ".join(filter(bool, (author, created, edited)))
+            last_h = MHeaders(None, None)
+            messages = await channel.history(**kwargs).flatten()
+            processed = len(messages)
+            for _ in range(processed):
+                m = messages.pop()
+                now_h = MHeaders(m.author, m.created_at, m.edited_at)
+                headers = now_h.to_str(last_h)
+                last_h = now_h
                 if headers:
                     stream.write(headers.encode("utf-8"))
-                    stream.write(b"\n")
                 stream.write(m.clean_content.encode("utf-8"))
                 if m.attachments:
                     stream.write(b"\n")
@@ -91,27 +93,10 @@ class LogsFrom(Cog):
                             "utf-8"
                         )
                     )
-                stream.write(b"\n\n")
-                processed += 1
-            self.active.discard(channel)
-            self.active.discard((ctx.author, channel))
+                stream.write(b"\n")
             stream.seek(0)
             return await ctx.send(
-                content=_("{} messages logged.").format(processed),
+                content=_T("{} messages logged.").format(processed),
                 file=discord.File(stream, filename=f"{channel.name}.md"),
                 delete_after=300,
             )
-
-    @logsfrom.command()
-    async def cancel(self, ctx, *, channel: discord.TextChannel = None):
-        """Cancels logging in the specified channel.
-
-        Any progress made is returned."""
-        channel = channel or ctx.channel
-        if channel not in self.active:
-            return await ctx.send(_("I am not currently logging that channel."))
-        if (ctx.author, channel) not in self.active:
-            return await ctx.send(_("You can't cancel another member's logging."))
-        self.active.discard(channel)
-        self.active.discard((ctx.author, channel))
-        await ctx.send("Logging cancelled. Sending unfinished log...")
