@@ -25,8 +25,10 @@ class MHeaders:
     edited: datetime = None
 
     def to_str(self, other: "MHeaders") -> str:
-        final = [""] if other.author else []
+        final = []
         if self.author != other.author:
+            if other.author:
+                final.append("")
             auth = self.author.display_name
             if self.author.bot:
                 auth += " [BOT]"
