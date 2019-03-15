@@ -51,6 +51,7 @@ class Rift(Cog):
         self.config.register_channel(blacklisted=False)
         self.config.register_guild(blacklisted=False)
         self.config.register_user(blacklisted=False)
+        self.config.register_global(notify=True)
 
     # COMMANDS
 
@@ -122,6 +123,26 @@ class Rift(Cog):
         channel = ctx.author if isinstance(ctx.channel, discord.DMChannel) else ctx.channel
         await self.close_rifts(ctx, ctx.author, channel)
 
+    @rift.command(name="notify")
+    @checks.is_owner()
+    async def rift_notify(self, ctx, *, notify: bool = None):
+        """
+        Toggle whether the bot notifies the destination of an open rift.
+
+        The notification is only disabled for bot owners, and
+        will still notify channels the bot owner doesn't have direct access to.
+        """
+        if notify is None:
+            notify = not await self.config.notify()
+        await self.config.notify.set(notify)
+        await ctx.send(
+            _(
+                "I will {} notify destinations when you open new rifts.".format(
+                    "now" if notify else "no longer"
+                )
+            )
+        )
+
     @rift.command(name="open")
     async def rift_open(self, ctx, *rifts: RiftConverter(_, globally=True)):
         """
@@ -132,11 +153,21 @@ class Rift(Cog):
         if not rifts:
             return await ctx.send_help()
         rifts = set(rifts)
+        no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
         self.open_rifts.update(((rift, {}) for rift in rifts))
         for rift in rifts:
-            ctx.bot.loop.create_task(
-                rift.destination.send(_("{} has opened a rift to here.").format(rift.author))
-            )
+            if no_notify and isinstance(rift.destination, discord.abc.GuildChannel):
+                mem = rift.destination.guild.get_member(ctx.author.id)
+                if mem and rift.destination.permissions_for(mem).send_messages:
+                    notify = False
+                else:
+                    notify = True
+            else:
+                notify = True
+            if notify:
+                ctx.bot.loop.create_task(
+                    rift.destination.send(_("{} has opened a rift to here.").format(rift.author))
+                )
         await ctx.send(
             _(
                 "A rift has been opened to {}! Everything you say will be relayed there.\nResponses will be relayed here.\nType `exit` to quit."
