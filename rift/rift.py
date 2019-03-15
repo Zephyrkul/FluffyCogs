@@ -154,7 +154,6 @@ class Rift(Cog):
             return await ctx.send_help()
         rifts = set(rifts)
         no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
-        self.open_rifts.update(((rift, {}) for rift in rifts))
         for rift in rifts:
             if no_notify and isinstance(rift.destination, discord.abc.GuildChannel):
                 mem = rift.destination.guild.get_member(ctx.author.id)
@@ -164,6 +163,7 @@ class Rift(Cog):
                     notify = True
             else:
                 notify = True
+            self.open_rifts[rift] = {"notify": notify}
             if notify:
                 ctx.bot.loop.create_task(
                     rift.destination.send(_("{} has opened a rift to here.").format(rift.author))
@@ -329,9 +329,12 @@ class Rift(Cog):
         for rift, record in self.open_rifts.copy().items():
             if rift.source == channel and rift.author == m.author:
                 if m.content.lower() == "exit":
-                    del self.open_rifts[rift]
-                    with suppress(discord.HTTPException):
-                        await rift.destination.send(_("{} has closed the rift.").format(m.author))
+                    processed = self.open_rifts.pop(rift)
+                    if processed["notify"]:
+                        with suppress(discord.HTTPException):
+                            await rift.destination.send(
+                                _("{} has closed the rift.").format(m.author)
+                            )
                     await channel.send(_("Rift closed."))
                 else:
                     if not is_command:
