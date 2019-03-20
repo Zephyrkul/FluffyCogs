@@ -6,7 +6,7 @@
     "name": "HeartAttack",
     "short": "Injects a stack tracer on heartbeat failure.",
     "description": "Injects a stack tracer on heartbeat failure.",
-    "hidde": true,
+    "hidden": true,
     "tags": [
         "dev",
         "utils",
