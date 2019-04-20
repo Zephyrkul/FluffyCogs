@@ -157,7 +157,7 @@ class Rift(Cog):
         for rift in rifts:
             if no_notify and isinstance(rift.destination, discord.abc.GuildChannel):
                 mem = rift.destination.guild.get_member(ctx.author.id)
-                if mem and rift.destination.permissions_for(mem).send_messages:
+                if mem and rift.destination.permissions_for(mem).read_messages:
                     notify = False
                 else:
                     notify = True
