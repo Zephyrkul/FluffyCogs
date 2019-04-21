@@ -249,6 +249,7 @@ class Rift(Cog):
                 overs = destination.overwrites_for(every)
                 overs.read_messages = True
                 overs.send_messages = True
+                overs = overs.pair()
                 perms = (every.permissions.value & ~overs[1].value) | overs[0].value
                 return discord.Permissions(perms)
         return discord.Permissions.all()
