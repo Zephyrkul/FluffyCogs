@@ -17,7 +17,7 @@ class AutoDisconnect(commands.Cog):
     @commands.mod_or_permissions(manage_guild=True)
     async def afkdisconnect(self, ctx, *, time: int):
         """
-        Sets how long to wait before disconnecting an AFK member.
+        Sets how long to wait before disconnecting an AFK member, in seconds.
 
         Set to -1 to disable.
         """
@@ -40,7 +40,7 @@ class AutoDisconnect(commands.Cog):
         b_channel = before.voice.channel if before.voice else None
         if b_channel == after.voice.channel:
             return
-        time = await self.config.guild(after.guild).time()
+        time = await self.config.guild(after.guild).timeout()
         if time < 0:
             return
         if time > 0:
