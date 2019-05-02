@@ -14,8 +14,7 @@ class AutoDisconnect(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    @commands.bot_has_permissions(move_members=True)
-    @commands.mod_or_permissions(move_members=True)
+    @commands.mod_or_permissions(manage_guild=True)
     async def afkdisconnect(self, ctx, *, time: int):
         """
         Sets how long to wait before disconnecting an AFK member.
