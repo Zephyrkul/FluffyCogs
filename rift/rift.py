@@ -321,6 +321,7 @@ class Rift(Cog):
 
     # EVENTS
 
+    @commands.Cog.listener()
     async def on_message(self, m):
         if m.author.bot:
             return

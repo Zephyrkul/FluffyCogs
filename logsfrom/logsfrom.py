@@ -5,6 +5,7 @@ import sys
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, date, time
+from typing import Optional
 
 import discord
 
@@ -22,7 +23,7 @@ _T = Translator("LogsFrom", __file__)
 class MHeaders:
     author: discord.User
     created: datetime
-    edited: datetime = None
+    edited: Optional[datetime] = None
 
     def to_str(self, other: "MHeaders") -> str:
         final = []
@@ -73,12 +74,15 @@ class LogsFrom(Cog):
         if not channel.permissions_for(ctx.me).read_message_history:
             raise commands.BotMissingPermissions(["read_message_history"])
         async with ctx.typing():
-            kwargs = {"after": discord.Object(id=limit), "limit": limit, "reverse": False}
+            kwargs = {"after": discord.Object(id=limit), "limit": limit}
             if channel == ctx.channel:
                 kwargs["before"] = ctx.message
             stream = io.BytesIO()
             last_h = MHeaders(None, None)
-            messages = await channel.history(**kwargs).flatten()
+            try:
+                messages = await channel.history(**kwargs, oldest_first=False).flatten()
+            except TypeError:
+                messages = await channel.history(**kwargs, reverse=False).flatten()
             processed = len(messages)
             for _ in range(processed):
                 m = messages.pop()

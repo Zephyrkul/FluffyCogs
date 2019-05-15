@@ -239,6 +239,8 @@ class Turn(Cog):
 
     __del__ = __unload
 
+    cog_unload = __unload
+
     async def task(self, guild: discord.Guild):
         # force a KeyError as soon as possible
         get = functools.partial(self.games.__getitem__, guild)

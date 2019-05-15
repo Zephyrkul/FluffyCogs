@@ -2,9 +2,11 @@ import asyncio
 import discord
 from collections import deque, namedtuple
 from contextlib import suppress
+from dataclasses import dataclass, field
+from typing import List
 
 from redbot.core import commands
-from redbot.core.utils.chat_formatting import pagify
+from redbot.core.utils.chat_formatting import pagify, humanize_list
 
 
 Rift = namedtuple("Rift", ["author", "source", "destination"])

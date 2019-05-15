@@ -7,7 +7,8 @@ from enum import Flag, auto
 from functools import reduce, partial
 from html import unescape
 from io import BytesIO
-from typing import Optional
+from operator import or_
+from typing import Optional, Union
 
 # pylint: disable=E0611
 import sans
@@ -39,6 +40,12 @@ class WAOptions(Flag):
         except KeyError as ke:
             raise commands.BadArgument() from ke
 
+    @classmethod
+    def collapse(cls, *args: "WAOptions", default: Union["WAOptions", int] = 0):
+        if not args:
+            return cls(default)
+        return cls(reduce(or_, args))
+
 
 def link_extract(link: str, *, expected):
     match = LINK_RE.match(link)
@@ -68,7 +75,7 @@ class NationStates(commands.Cog):
                 await self.bot.is_owner(discord.Object(id=None))
             owner_id = self.bot.owner_id
             # only make the user_info request if necessary
-            agent = str(self.bot.get_user(owner_id) or await self.bot.get_user_info(owner_id))
+            agent = str(self.bot.get_user(owner_id) or await self.bot.fetch_user(owner_id))
         Api.agent = f"{agent} Red-DiscordBot/{red_version}"
 
     # __________ UTILS __________
@@ -92,6 +99,7 @@ class NationStates(commands.Cog):
 
     # __________ LISTENERS __________
 
+    @commands.Cog.listener()
     async def on_message(self, message):
         ctx = await self.bot.get_context(message)
         if ctx.valid:

@@ -78,8 +78,8 @@ class Clocks(Cog):
             this_clock[0] = sorted((0, this_clock[0], this_clock[1]))[1]
         await ctx.send(pie(*this_clock))
 
-    @clocks.command()
-    async def set(
+    @clocks.command(name="set")
+    async def _set(
         self, ctx, name: str.lower, slices: n_or_greater(0), *, max: n_or_greater(2) = None
     ):
         """Sets a clock's state."""

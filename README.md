@@ -22,7 +22,7 @@ To install:
 
 # Contact
 
-You can find me either [here on GitHub](https://github.com/zephyrkul/FluffyCogs/issues) or on in [#support-othercogs](https://discordapp.com/channels/240154543684321280/240212783503900673) at the [Red cog support server](https://discord.gg/GET4DVk). My Discord is [Zephyrkul#1089](https://discordapp.com/channels/@me/215640856839979008).
+You can find me either [here on GitHub](https://github.com/zephyrkul/FluffyCogs/issues) or on in [#support-othercogs](https://discordapp.com/channels/240154543684321280/240212783503900673) at the [Red cog support server](https://discord.gg/GET4DVk). My Discord is Zephyrkul#1089.
 
 # Credits
 

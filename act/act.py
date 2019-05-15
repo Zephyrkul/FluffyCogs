@@ -12,6 +12,7 @@ from .helpers import *
 
 
 Cog = getattr(commands, "Cog", object)
+listener = getattr(Cog, "listener", lambda: lambda x: x)
 
 
 class Act(Cog):
@@ -22,7 +23,8 @@ class Act(Cog):
         super().__init__()
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
-        self.config.register_global(tenorkey=None)
+        self.config.register_global(custom={}, tenorkey=None)
+        self.config.register_guild(custom={})
 
     @commands.command(hidden=True)
     async def act(self, ctx, *, target: Union[discord.Member, str] = None):
@@ -32,29 +34,44 @@ class Act(Cog):
         if not target or isinstance(target, str):
             return  # no help text
 
-        # humanize action text
-        action = inflection.humanize(ctx.invoked_with).split()
-        iverb = -1
+        try:
+            if not ctx.guild:
+                raise KeyError()
+            message = await self.config.guild(ctx.guild).get_raw("custom", ctx.invoked_with)
+        except KeyError:
+            try:
+                message = await self.config.get_raw("custom", ctx.invoked_with)
+            except KeyError:
+                message = NotImplemented
 
-        for cycle in range(2):
-            if iverb > -1:
-                break
-            for i, act in enumerate(action):
-                act = act.lower()
-                if (
-                    act in NOLY_ADV
-                    or act in CONJ
-                    or (act.endswith("ly") and act not in LY_VERBS)
-                    or (not cycle and act in SOFT_VERBS)
-                ):
-                    continue
-                action[i] = inflection.pluralize(action[i])
-                iverb = max(iverb, i)
-
-        if iverb < 0:
+        if message is None:  # ignored command
             return
-        action.insert(iverb + 1, target.mention)
-        message = italics(" ".join(action))
+        elif message is NotImplemented:  # default
+            # humanize action text
+            action = inflection.humanize(ctx.invoked_with).split()
+            iverb = -1
+
+            for cycle in range(2):
+                if iverb > -1:
+                    break
+                for i, act in enumerate(action):
+                    act = act.lower()
+                    if (
+                        act in NOLY_ADV
+                        or act in CONJ
+                        or (act.endswith("ly") and act not in LY_VERBS)
+                        or (not cycle and act in SOFT_VERBS)
+                    ):
+                        continue
+                    action[i] = inflection.pluralize(action[i])
+                    iverb = max(iverb, i)
+
+            if iverb < 0:
+                return
+            action.insert(iverb + 1, target.mention)
+            message = italics(" ".join(action))
+        else:
+            message = message.format(target, user=target)
 
         # add reaction gif
         if not ctx.channel.permissions_for(ctx.me).embed_links:
@@ -68,8 +85,8 @@ class Act(Cog):
             params={
                 "q": ctx.invoked_with,
                 "key": key,
-                "limit": 8,
-                "anon_id": ctx.author.id ^ ctx.me.id,
+                "limit": "8",
+                "anon_id": str(ctx.author.id ^ ctx.me.id),
                 "media_filter": "minimal",
                 "contentfilter": "low",
                 "ar_range": "wide",
@@ -77,13 +94,12 @@ class Act(Cog):
             },
         ) as response:
             if response.status >= 400:
-                json = {}
+                json: dict = {}
             else:
                 json = await response.json()
-        if "results" not in json or not json["results"]:
+        if not json.get("results"):
             return await ctx.send(message)
-        message += "\n\n"
-        message += random.choice(json["results"])["url"]
+        message = f"{message}\n\n{random.choice(json['results'])['url']}"
         await ctx.send(message)
 
     @commands.group()
@@ -93,6 +109,48 @@ class Act(Cog):
         Configure various settings for the act cog.
         """
         pass
+
+    @actset.group(aliases=["custom"], invoke_without_command=True)
+    @checks.admin_or_permissions(manage_guild=True)
+    @commands.guild_only()
+    async def customize(self, ctx, command: str.lower, *, response: str = None):
+        if not response:
+            await self.config.guild(ctx.guild).clear_raw("custom", command)
+        else:
+            await self.config.guild(ctx.guild).set_raw("custom", command, value=response)
+        await ctx.tick()
+
+    @customize.command(name="global")
+    @checks.is_owner()
+    async def customize_global(self, ctx, command: str.lower, *, response: str = None):
+        if not response:
+            await self.config.clear_raw("custom", command)
+        else:
+            await self.config.set_raw("custom", command, value=response)
+        await ctx.tick()
+
+    @actset.group(invoke_without_command=True)
+    @checks.admin_or_permissions(manage_guild=True)
+    @commands.guild_only()
+    async def ignore(self, ctx, command: str.lower):
+        try:
+            await self.config.guild(ctx.guild).get_raw("custom", command)
+        except KeyError:
+            await self.config.guild(ctx.guild).set_raw("custom", command, value=None)
+        else:
+            await self.config.guild(ctx.guild).clear_raw("custom", command)
+        await ctx.tick()
+
+    @ignore.command(name="global")
+    @checks.is_owner()
+    async def ignore_global(self, ctx, command: str.lower):
+        try:
+            await self.config.get_raw("custom", command)
+        except KeyError:
+            await self.config.set_raw("custom", command, value=None)
+        else:
+            await self.config.clear_raw("custom", command)
+        await ctx.tick()
 
     @actset.command()
     @checks.is_owner()
@@ -113,6 +171,7 @@ class Act(Cog):
         await self.config.tenorkey.set(key)
         await ctx.author.send("Key set.")
 
+    @listener()
     async def on_message(self, message):
         if message.author.bot:
             return

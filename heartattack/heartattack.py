@@ -42,3 +42,5 @@ class HeartAttack(commands.Cog):
         dpy_log.removeHandler(self.handler)
 
     __del__ = __unload
+
+    cog_unload = __unload
