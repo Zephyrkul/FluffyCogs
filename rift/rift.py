@@ -16,6 +16,7 @@ from .converter import RiftConverter, search_converter
 
 
 Cog = getattr(commands, "Cog", object)
+listener = getattr(Cog, "listener", lambda: lambda x: x)
 
 
 _ = Translator("Rift", __file__)
@@ -321,7 +322,7 @@ class Rift(Cog):
 
     # EVENTS
 
-    @commands.Cog.listener()
+    @listener()
     async def on_message(self, m):
         if m.author.bot:
             return

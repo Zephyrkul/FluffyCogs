@@ -18,6 +18,8 @@ from sans.api import Api
 from redbot.core import checks, commands, Config, version_info as red_version
 from redbot.core.utils.chat_formatting import box, pagify, escape
 
+listener = getattr(Cog, "listener", lambda: lambda x: x)
+
 
 LINK_RE = re.compile(
     r"(?i)\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b"
@@ -99,7 +101,7 @@ class NationStates(commands.Cog):
 
     # __________ LISTENERS __________
 
-    @commands.Cog.listener()
+    @listener()
     async def on_message(self, message):
         ctx = await self.bot.get_context(message)
         if ctx.valid:
