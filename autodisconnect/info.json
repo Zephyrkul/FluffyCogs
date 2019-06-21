@@ -6,7 +6,6 @@
     "name": "AutoDisconnect",
     "short": "Automatically disconnect inactive VC users. Requires a set AFK channel.",
     "description": "Automatically disconnect inactive VC users. Requires a set AFK channel.",
-    "hidden": true,
     "tags": [
         "voice",
         "utility"

@@ -25,32 +25,31 @@ class AutoDisconnect(commands.Cog):
         await ctx.tick()
 
     @listener()
-    async def on_member_update(self, before, after):
-        def check(b, a):
-            if not a.voice:
-                return True
-            if a.voice.channel != a.guild.afk_channel:
+    async def on_voice_state_update(self, member, before, after):
+        def check(m, b, a):
+            if a.channel != m.guild.afk_channel:
                 return True
             return False
 
-        if not after.voice:
+        if not after.channel:
             return
-        if not after.guild.afk_channel:
+        if not member.guild.afk_channel:
             return
-        b_channel = before.voice.channel if before.voice else None
-        if b_channel == after.voice.channel:
+        if before.channel == after.channel:
             return
-        time = await self.config.guild(after.guild).timeout()
+        if after.channel != member.guild.afk_channel:
+            return
+        time = await self.config.guild(member.guild).timeout()
         if time < 0:
             return
         if time > 0:
             try:
-                await self.bot.wait_for("on_member_update", check=check, timeout=time)
+                await self.bot.wait_for("on_voice_state_update", check=check, timeout=time)
             except asyncio.TimeoutError:
                 pass  # we want this to happen
             else:
                 return  # the member moved on their own
         try:
-            await after.move_to(discord.Object(id=None))
+            await member.move_to(discord.Object(id=None))
         except discord.HTTPException:
             return
