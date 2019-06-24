@@ -44,7 +44,7 @@ class AutoDisconnect(commands.Cog):
             return
         if time > 0:
             try:
-                await self.bot.wait_for("on_voice_state_update", check=check, timeout=time)
+                await self.bot.wait_for("voice_state_update", check=check, timeout=time)
             except asyncio.TimeoutError:
                 pass  # we want this to happen
             else:
