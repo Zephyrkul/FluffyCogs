@@ -12,7 +12,7 @@ class AutoDisconnect(commands.Cog):
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
         self.config.register_guild(timeout=-1)
 
-    @commands.command()
+    @commands.command(aliases=["autodisconnect"])
     @commands.guild_only()
     @commands.mod_or_permissions(manage_guild=True)
     async def afkdisconnect(self, ctx, *, time: int):
@@ -27,6 +27,8 @@ class AutoDisconnect(commands.Cog):
     @listener()
     async def on_voice_state_update(self, member, before, after):
         def check(m, b, a):
+            if m != member:
+                return False
             if a.channel != m.guild.afk_channel:
                 return True
             return False

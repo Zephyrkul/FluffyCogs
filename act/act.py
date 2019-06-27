@@ -99,7 +99,7 @@ class Act(Cog):
                 json = await response.json()
         if not json.get("results"):
             return await ctx.send(message)
-        message = f"{message}\n\n{random.choice(json['results'])['url']}"
+        message = f"{message}\n\n{random.choice(json['results'])['itemurl']}"
         await ctx.send(message)
 
     @commands.group()
@@ -114,6 +114,12 @@ class Act(Cog):
     @checks.admin_or_permissions(manage_guild=True)
     @commands.guild_only()
     async def customize(self, ctx, command: str.lower, *, response: str = None):
+        """
+        Customize the response to an action.
+
+        You can use {0} or {user} to dynamically replace with the specified target of the action.
+        Formats like {0.name} or {0.mention} can also be used.
+        """
         if not response:
             await self.config.guild(ctx.guild).clear_raw("custom", command)
         else:
@@ -123,6 +129,12 @@ class Act(Cog):
     @customize.command(name="global")
     @checks.is_owner()
     async def customize_global(self, ctx, command: str.lower, *, response: str = None):
+        """
+        Globally customize the response to an action.
+
+        You can use {0} or {user} to dynamically replace with the specified target of the action.
+        Formats like {0.name} or {0.mention} can also be used.
+        """
         if not response:
             await self.config.clear_raw("custom", command)
         else:
@@ -133,17 +145,30 @@ class Act(Cog):
     @checks.admin_or_permissions(manage_guild=True)
     @commands.guild_only()
     async def ignore(self, ctx, command: str.lower):
+        """
+        Ignore or unignore the specified action.
+
+        The bot will no longer respond to these actions.
+        """
         try:
-            await self.config.guild(ctx.guild).get_raw("custom", command)
+            custom = await self.config.guild(ctx.guild).get_raw("custom", command)
         except KeyError:
-            await self.config.guild(ctx.guild).set_raw("custom", command, value=None)
-        else:
+            custom = NotImplemented
+        if custom is None:
             await self.config.guild(ctx.guild).clear_raw("custom", command)
-        await ctx.tick()
+            await ctx.send("I will no longer ignore the {command} action".format(command=command))
+        else:
+            await self.config.guild(ctx.guild).set_raw("custom", command, value=None)
+            await ctx.send("I will now ignore the {command} action".format(command=command))
 
     @ignore.command(name="global")
     @checks.is_owner()
     async def ignore_global(self, ctx, command: str.lower):
+        """
+        Globally ignore or unignore the specified action.
+
+        The bot will no longer respond to these actions.
+        """
         try:
             await self.config.get_raw("custom", command)
         except KeyError:
