@@ -137,7 +137,7 @@ class InVoice(commands.Cog):
             role = m.guild.get_role(await self.config.channel(b.channel).role())
             if role and role in m.roles:
                 to_remove.append(role)
-            if not a.channel and guild_role and guild_role in m.roles:
+            if (not a.channel or a.afk) and guild_role and guild_role in m.roles:
                 to_remove.append(guild_role)
             if to_remove:
                 await m.remove_roles(*to_remove, reason=reason)
@@ -150,7 +150,7 @@ class InVoice(commands.Cog):
             role = m.guild.get_role(await self.config.channel(b.channel).role())
             if role and role not in m.roles:
                 to_add.append(role)
-            if guild_role and guild_role not in m.roles:
+            if guild_role and guild_role not in m.roles and not a.afk:
                 to_add.append(role)
             if to_add:
                 await m.add_roles(*to_add, reason=reason)
