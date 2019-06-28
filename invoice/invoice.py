@@ -25,22 +25,30 @@ class InVoice(commands.Cog):
         """
         if ctx.invoked_subcommand:
             return
+        color = await ctx.embed_colour()
+
+        embed = discord.Embed(title=f"Guild {ctx.guild} settings:\n", color=color)
         g_settings = await self.config.guild(ctx.guild).all()
-        g_msg = f"Guild {ctx.guild} settings:\n"
         for key, value in g_settings.items():
+            if value is not None and key == "role":
+                value = f"<@&{value}>"
             key = key.replace("_", " ").title()
-            g_msg += f"\t{key}: {value}\n"
+            embed.add_field(name=key, value=value)
+        await ctx.send(embed=embed)
 
         vc = ctx.author.voice.channel if ctx.author.voice else None
         if vc:
+            embed = discord.Embed(title=f"Channel {vc} settings:\n", color=color)
             c_settings = await self.config.channel(vc).all()
-            c_msg = f"Channel {vc} settings:\n"
             for key, value in c_settings.items():
+                if value is not None:
+                    if key == "role":
+                        value = f"<@&{value}>"
+                    if key == "channel":
+                        value = f"<#{value}>"
                 key = key.replace("_", " ").title()
-                c_msg += f"\t{key}: {value}\n"
-        else:
-            c_msg = ""
-        await ctx.send(f"{g_msg}\n{c_msg}".strip())
+                embed.add_field(name=key, value=value)
+            await ctx.send(embed=embed)
 
     @invoice.command()
     @commands.guild_only()
@@ -53,6 +61,8 @@ class InVoice(commands.Cog):
             true_or_false = not await self.config.guild(ctx.guild).dynamic()
         await self.config.guild(ctx.guild).dynamic.set(true_or_false)
         await ctx.tick()
+
+    # TODO: mute, deaf, selfdeaf
 
     @invoice.command(aliases=["server"])
     @commands.guild_only()
@@ -78,6 +88,17 @@ class InVoice(commands.Cog):
         *,
         role_or_channel: typing.Union[discord.Role, discord.TextChannel, None] = None,
     ):
+        """
+        Links a role or text channel to a voice channel.
+
+        When a member joins or leaves the channel, the role is applied accordingly.
+
+        As well, if the related settings are enabled:
+            When a member becomes deafened or undeafened, the role is applied accordingly.
+            When a member becomes server muted or unmuted, the channel permissions are updated accordingly.
+
+        If a role or channel is not set, the bot will update the other instead.
+        """
         if not role_or_channel:
             await self.config.channel(vc).clear()
             await ctx.send("Link(s) for {vc} cleared.".format(vc=vc))
@@ -99,7 +120,8 @@ class InVoice(commands.Cog):
         guild = vc.guild
         if not await self.config.guild(guild).dynamic():
             return
-        role = await guild.create_role(name=vc.name, reason="Dynamic role for {vc}".format(vc=vc))
+        name = "🔊 " + vc.name
+        role = await guild.create_role(name=name, reason="Dynamic role for {vc}".format(vc=vc))
         await self.config.channel(vc).role.set(role.id)
         if vc.category:
             def_over = vc.category.overwrites_for(guild.default_role)
@@ -109,15 +131,34 @@ class InVoice(commands.Cog):
         role_over = discord.PermissionOverwrite(**dict(def_over))
         role_over.update(read_messages=True, send_messages=True)
         text = await guild.create_text_channel(
-            name=vc.name,
-            overwrites={guild.default_role: def_over, role: role_over},
+            name=name,
+            overwrites={guild.default_role: def_over, role: role_over, guild.me: role_over},
             category=vc.category,
             reason="Dynamic channel for {vc}".format(vc=vc),
         )
         await self.config.channel(vc).channel.set(text.id)
 
     @listener()
+    async def on_guild_channel_delete(self, vc):
+        if not isinstance(vc, discord.VoiceChannel):
+            return
+        guild = vc.guild
+        async with self.config.channel(vc).all() as conf:
+            settings = conf.copy()
+            conf.clear()
+        if not await self.config.guild(guild).dynamic():
+            return
+        role = guild.get_role(settings["role"])
+        if role:
+            await role.delete(reason="Dynamic role for {vc}".format(vc=vc))
+        channel = guild.get_channel(settings["channel"])
+        if channel:
+            await channel.delete(reason="Dynamic channel for {vc}".format(vc=vc))
+
+    @listener()
     async def on_voice_state_update(self, member, before, after):
+        if member.bot:
+            return
         if not before.channel and not after.channel:
             return  # I doubt this could happen, but just in case
         if before.channel != after.channel:
@@ -147,49 +188,58 @@ class InVoice(commands.Cog):
         if a.channel:
             reason = "Joined channel {vc}".format(vc=a.channel)
             to_add = []
-            role = m.guild.get_role(await self.config.channel(b.channel).role())
+            role = m.guild.get_role(await self.config.channel(a.channel).role())
             if role and role not in m.roles:
                 to_add.append(role)
-            if guild_role and guild_role not in m.roles and not a.afk:
-                to_add.append(role)
+            if guild_role and not a.afk and guild_role not in m.roles:
+                to_add.append(guild_role)
             if to_add:
                 await m.add_roles(*to_add, reason=reason)
-            tc = m.guild.get_channel(await self.config.channel(b.channel).channel())
+            tc = m.guild.get_channel(await self.config.channel(a.channel).channel())
             if tc and m in tc.overwrites:
                 await tc.set_permissions(target=m, overwrite=None, reason=reason)
 
     async def mute_update(self, m, b, a):
+        # TODO: UNMUTE
         if not await self.config.guild(m.guild).mute():
             return
-        tc = m.guild.get_channel(await self.config.channel(b.channel).channel())
+        tc = m.guild.get_channel(await self.config.channel(a.channel).channel())
         if tc:
             overs = tc.overwrites_for(m)
             overs.send_messages = False
             await tc.set_permissions(target=m, overwrite=overs, reason="Server muted")
         else:
-            role = m.guild.get_role(await self.config.channel(b.channel).role())
-            await m.remove_roles(role, reason="Server muted")
+            roles = (
+                await self.config.guild(m.guild).role(),
+                await self.config.channel(a.channel).role(),
+            )
+            roles = map(m.guild.get_role, roles)
+            roles = tuple(filter(bool, roles))
+            if roles:
+                await m.remove_roles(*roles, reason="Server muted")
 
     async def deaf_update(self, m, b, a):
+        # TODO: UNDEAF
         if not await self.config.guild(m.guild).deaf():
             return
-        role = m.guild.get_role(await self.config.channel(b.channel).role())
-        if role:
-            await m.remove_roles(role, reason="Server deafened")
-        else:
-            tc = m.guild.get_channel(await self.config.channel(b.channel).channel())
-            overs = tc.overwrites_for(m)
-            overs.read_messages = False
-            await tc.set_permissions(target=m, overwrite=overs, reason="Server deafened")
+        await self._deaf_update(m, b, a, reason="Server deafened")
 
     async def self_deaf_update(self, m, b, a):
+        # TODO: UNDEAF
         if not await self.config.guild(m.guild).self_deaf():
             return
-        role = m.guild.get_role(await self.config.channel(b.channel).role())
+        await self._deaf_update(m, b, a, reason="Self deafened")
+
+    async def _deaf_update(self, m, b, a, *, reason):
+        role = m.guild.get_role(await self.config.channel(a.channel).role())
         if role:
-            await m.remove_roles(role, reason="Self deafened")
+            guild_role = m.guild.get_role(await self.config.guild(m.guild).role())
+            await m.remove_roles(guild_role, role, reason=reason)
         else:
-            tc = m.guild.get_channel(await self.config.channel(b.channel).channel())
+            tc = m.guild.get_channel(await self.config.channel(a.channel).channel())
             overs = tc.overwrites_for(m)
             overs.read_messages = False
-            await tc.set_permissions(target=m, overwrite=overs, reason="Self deafened")
+            await tc.set_permissions(target=m, overwrite=overs, reason=reason)
+
+    async def _undeaf_update(self, m, b, a, *, reason):
+        pass
