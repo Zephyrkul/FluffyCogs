@@ -4,6 +4,9 @@ import typing
 
 from copy import copy
 from redbot.core import checks, commands, Config
+from redbot.core.utils.chat_formatting import box, bordered
+
+from .proxy import ProxyEmbed
 
 listener = getattr(commands.Cog, "listener", lambda name=None: (lambda f: f))
 
@@ -27,28 +30,33 @@ class InVoice(commands.Cog):
             return
         color = await ctx.embed_colour()
 
-        embed = discord.Embed(title=f"Guild {ctx.guild} settings:\n", color=color)
+        embed = ProxyEmbed(title=f"Current settings", color=color)
         g_settings = await self.config.guild(ctx.guild).all()
+        g_msg = []
         for key, value in g_settings.items():
             if value is not None and key == "role":
-                value = f"<@&{value}>"
+                value = ctx.guild.get_role(value)
+                value = value.name if value else "<Deleted role>"
             key = key.replace("_", " ").title()
-            embed.add_field(name=key, value=value)
-        await ctx.send(embed=embed)
+            g_msg.append(f"{key}: {value}")
+        embed.add_field(name=f"Guild {ctx.guild} settings", value="\n".join(g_msg))
 
         vc = ctx.author.voice.channel if ctx.author.voice else None
         if vc:
-            embed = discord.Embed(title=f"Channel {vc} settings:\n", color=color)
             c_settings = await self.config.channel(vc).all()
+            c_msg = []
             for key, value in c_settings.items():
                 if value is not None:
                     if key == "role":
-                        value = f"<@&{value}>"
+                        value = ctx.guild.get_role(value)
+                        value = value.name if value else "<Deleted role>"
                     if key == "channel":
-                        value = f"<#{value}>"
+                        value = ctx.guild.get_channel(value)
+                        value = value.name if value else "<Deleted channel>"
                 key = key.replace("_", " ").title()
-                embed.add_field(name=key, value=value)
-            await ctx.send(embed=embed)
+                c_msg.append(f"{key}: {value}")
+            embed.add_field(name=f"Channel {vc} settings", value="\n".join(c_msg))
+        await embed.send_to(ctx)
 
     @invoice.command()
     @commands.guild_only()
@@ -200,46 +208,65 @@ class InVoice(commands.Cog):
                 await tc.set_permissions(target=m, overwrite=None, reason=reason)
 
     async def mute_update(self, m, b, a):
-        # TODO: UNMUTE
         if not await self.config.guild(m.guild).mute():
             return
         tc = m.guild.get_channel(await self.config.channel(a.channel).channel())
         if tc:
             overs = tc.overwrites_for(m)
-            overs.send_messages = False
-            await tc.set_permissions(target=m, overwrite=overs, reason="Server muted")
-        else:
-            roles = (
-                await self.config.guild(m.guild).role(),
-                await self.config.channel(a.channel).role(),
+            overs.send_messages = not a.mute
+            await tc.set_permissions(
+                target=m,
+                overwrite=overs,
+                reason="Server {un}muted".format(un="" if a.mute else "un"),
             )
-            roles = map(m.guild.get_role, roles)
-            roles = tuple(filter(bool, roles))
-            if roles:
-                await m.remove_roles(*roles, reason="Server muted")
+        else:
+            if a.mute:
+                await self._remove_roles(m, a.channel, reason="Server muted")
+            else:
+                await self._add_roles(m, a.channel, reason="Server unmuted")
 
     async def deaf_update(self, m, b, a):
-        # TODO: UNDEAF
         if not await self.config.guild(m.guild).deaf():
             return
-        await self._deaf_update(m, b, a, reason="Server deafened")
+        await self._deaf_update(m, b, a, reason="Server {un}deafened", is_deaf=a.deaf)
 
     async def self_deaf_update(self, m, b, a):
-        # TODO: UNDEAF
         if not await self.config.guild(m.guild).self_deaf():
             return
-        await self._deaf_update(m, b, a, reason="Self deafened")
+        await self._deaf_update(m, b, a, reason="Self {un}deafened", is_deaf=a.self_deaf)
 
-    async def _deaf_update(self, m, b, a, *, reason):
+    async def _deaf_update(self, m, b, a, *, reason, is_deaf):
+        reason = reason.format(un="" if is_deaf else "un")
         role = m.guild.get_role(await self.config.channel(a.channel).role())
         if role:
-            guild_role = m.guild.get_role(await self.config.guild(m.guild).role())
-            await m.remove_roles(guild_role, role, reason=reason)
+            if is_deaf:
+                await self._remove_roles(m, a.channel, reason=reason, role_id=role.id)
+            else:
+                await self._add_roles(m, a.channel, reason=reason, role_id=role.id)
         else:
             tc = m.guild.get_channel(await self.config.channel(a.channel).channel())
             overs = tc.overwrites_for(m)
-            overs.read_messages = False
+            overs.read_messages = not is_deaf
             await tc.set_permissions(target=m, overwrite=overs, reason=reason)
 
-    async def _undeaf_update(self, m, b, a, *, reason):
-        pass
+    async def _add_roles(self, m, c, *, reason, role_id=None, guild_role_id=None):
+        guild = m.guild
+        roles = (
+            guild_role_id or await self.config.guild(guild).role(),
+            role_id or await self.config.channel(c).role(),
+        )
+        roles = map(guild.get_role, roles)
+        roles = tuple(filter(bool, roles))
+        if roles:
+            await m.add_roles(*roles, reason=reason)
+
+    async def _remove_roles(self, m, c, *, reason, role_id=None, guild_role_id=None):
+        guild = m.guild
+        roles = (
+            guild_role_id or await self.config.guild(guild).role(),
+            role_id or await self.config.channel(c).role(),
+        )
+        roles = map(guild.get_role, roles)
+        roles = tuple(filter(bool, roles))
+        if roles:
+            await m.remove_roles(*roles, reason=reason)

@@ -18,6 +18,8 @@ from sans.api import Api
 from redbot.core import checks, commands, Config, version_info as red_version
 from redbot.core.utils.chat_formatting import box, pagify, escape
 
+from .proxy import ProxyEmbed
+
 listener = getattr(commands.Cog, "listener", lambda: lambda x: x)
 
 
@@ -83,13 +85,6 @@ class NationStates(commands.Cog):
     # __________ UTILS __________
 
     @staticmethod
-    async def _maybe_embed(dest, embed):
-        try:
-            return await dest.send(embed=embed)
-        except discord.Forbidden as e:
-            raise commands.BotMissingPermissions([("embed_links", True)]) from e
-
-    @staticmethod
     def _illion(num):
         illion = ("million", "billion", "trillion", "quadrillion")
         num = float(num)
@@ -115,12 +110,6 @@ class NationStates(commands.Cog):
                     f"https://www.nationstates.net/page=WA_past_resolution/id={res_id}/un=1"
                 )
                 continue
-            else:
-                if not ctx.channel.permissions_for(ctx.me).embed_links:
-                    await ctx.send(
-                        f"https://www.nationstates.net/page=WA_past_resolution/id={res_id}/council={council}"
-                    )
-                    continue
             ctx.invoked_with = match.group(1).lower()
             await ctx.invoke(self.wa, int(res_id))
 
@@ -141,7 +130,6 @@ class NationStates(commands.Cog):
         await ctx.send(f"Agent set: {Api.agent}")
 
     @commands.command()
-    @commands.bot_has_permissions(embed_links=True)
     async def nation(self, ctx, *, nation: partial(link_extract, expected="nation")):
         """Retrieves general info about a specified NationStates nation"""
         nation = Api(
@@ -157,7 +145,7 @@ class NationStates(commands.Cog):
             root = await nation
         except NotFound:
             nation = nation["nation"]
-            embed = discord.Embed(
+            embed = ProxyEmbed(
                 title=nation.replace("_", " ").title(),
                 url="https://www.nationstates.net/page="
                 "boneyard?nation={}".format("_".join(nation.split()).lower()),
@@ -165,7 +153,7 @@ class NationStates(commands.Cog):
             )
             embed.set_author(name="NationStates", url="https://www.nationstates.net/")
             embed.set_thumbnail(url="http://i.imgur.com/Pp1zO19.png")
-            return await self._maybe_embed(ctx, embed)
+            return await embed.send_to(ctx)
         except HTTPException as e:
             return await ctx.send(f"{e.status}: {e.message}")
         endo = int(root[".//SCALE[@id='66']/SCORE"])
@@ -175,7 +163,7 @@ class NationStates(commands.Cog):
             endo = "{:d} endorsements".format(endo)
         if root["FOUNDED"] == 0:
             root["FOUNDED"] = "in Antiquity"
-        embed = discord.Embed(
+        embed = ProxyEmbed(
             title=root["FULLNAME"],
             url="https://www.nationstates.net/nation={}".format(root.get("id")),
             description="[{}](https://www.nationstates.net/region={})"
@@ -217,10 +205,9 @@ class NationStates(commands.Cog):
             ),
         )
         embed.set_footer(text="Last Active")
-        return await self._maybe_embed(ctx, embed)
+        await embed.send_to(ctx)
 
     @commands.command()
-    @commands.bot_has_permissions(embed_links=True)
     async def region(self, ctx, *, region: partial(link_extract, expected="region")):
         """Retrieves general info about a specified NationStates region"""
         region = Api(
@@ -233,11 +220,11 @@ class NationStates(commands.Cog):
             if e.status != 404:
                 return await ctx.send(f"{e.status}: {e.message}")
             region = region["region"]
-            embed = discord.Embed(
+            embed = ProxyEmbed(
                 title=region.replace("_", " ").title(), description="This region does not exist."
             )
             embed.set_author(name="NationStates", url="https://www.nationstates.net/")
-            return await self._maybe_embed(ctx, embed)
+            return await embed.send_to(ctx)
         if root["DELEGATE"] == 0:
             root["DELEGATE"] = "No Delegate"
         else:
@@ -278,7 +265,7 @@ class NationStates(commands.Cog):
                 root["FOUNDER"] = "{} (Ceased to Exist)".format(
                     root["FOUNDER"].replace("_", " ").capitalize()
                 )
-        embed = discord.Embed(
+        embed = ProxyEmbed(
             title=root["NAME"],
             url="https://www.nationstates.net/region={}".format(root.get("id")),
             description="[{} nations](https://www.nationstates.net/region={}"
@@ -296,12 +283,11 @@ class NationStates(commands.Cog):
             name="Delegate{}".format(root["DELEGATEAUTH"]), value=root["DELEGATE"], inline=False
         )
         embed.set_footer(text="Last Updated")
-        await self._maybe_embed(ctx, embed)
+        await embed.send_to(ctx)
 
     # __________ ASSEMBLY __________
 
     @commands.command(aliases=["ga", "sc"])
-    @commands.bot_has_permissions(embed_links=True)
     async def wa(self, ctx, resolution_id: Optional[int] = None, *options: WAOptions.convert):
         """
         Retrieves general info about World Assembly resolutions.
@@ -347,11 +333,11 @@ class NationStates(commands.Cog):
                 )
             except ValueError:
                 pass
-            embed = discord.Embed(
+            embed = ProxyEmbed(
                 title="Last Resolution", description=out, colour=await ctx.embed_colour()
             )
             embed.set_thumbnail(url="http://i.imgur.com/{}.jpg".format(img))
-            return await self._maybe_embed(ctx, embed)
+            return await embed.send_to(ctx)
         root = root["RESOLUTION"]
         if options & WAOptions.TEXT:
             description = "**Category: {}**\n\n{}".format(
@@ -374,7 +360,7 @@ class NationStates(commands.Cog):
             impl = root["IMPLEMENTED"]
         else:
             impl = root["PROMOTED"] + (4 * 24 * 60 * 60)  # 4 Days
-        embed = discord.Embed(
+        embed = ProxyEmbed(
             title=root["NAME"],
             url="https://www.nationstates.net/page={}".format("sc" if is_sc else "ga")
             if not resolution_id
@@ -462,7 +448,7 @@ class NationStates(commands.Cog):
                 ),
             )
         embed.set_footer(text="Passed" if resolution_id else "Voting Closes")
-        await self._maybe_embed(ctx, embed)
+        await embed.send_to(ctx)
 
     # __________ SHARD __________
 
