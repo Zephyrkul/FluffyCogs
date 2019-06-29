@@ -18,7 +18,7 @@ from sans.api import Api
 from redbot.core import checks, commands, Config, version_info as red_version
 from redbot.core.utils.chat_formatting import box, pagify, escape
 
-# from .proxy import ProxyEmbed
+# pylint: disable=E0401
 from cog_shared.proxyembed import ProxyEmbed
 
 listener = getattr(commands.Cog, "listener", lambda: lambda x: x)

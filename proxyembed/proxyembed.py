@@ -3,6 +3,10 @@ from redbot.core.commands import Context
 from redbot.core.utils import chat_formatting as CF
 
 
+__all__ = ["ProxyEmbed"]
+__author__ = "Zephyrkul"
+
+
 class ProxyEmbed(discord.Embed):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
