@@ -1,0 +1,12 @@
+{
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "Usage: `[p]help OnEdit`.",
+    "name": "OnEdit",
+    "short": "Allow users to run bot commands with edited messages, with a specified timeout.",
+    "description": "Allow users to run bot commands with edited messages, with a specified timeout.",
+    "tags": [
+        "utility"
+    ]
+}
