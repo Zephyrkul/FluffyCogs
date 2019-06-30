@@ -9,10 +9,10 @@ class OnEdit(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
-        self.config.register_guild(timeout=5)
+        self.config.register_global(timeout=5)
 
     @commands.command()
-    @checks.admin_or_permissions(manage_guild=True)
+    @checks.is_owner()
     async def edittime(self, ctx, *, timeout: float):
         """
         Change how long the bot will listen for message edits to invoke as commands.
@@ -22,15 +22,13 @@ class OnEdit(commands.Cog):
         """
         if timeout < 0:
             timeout = 0
-        await self.config.guild(ctx.guild).timeout.set(timeout)
+        await self.config.timeout.set(timeout)
         await ctx.tick()
 
     @listener()
-    async def on_message_edit(self, message):
+    async def on_message_edit(self, _, message):
         if not message.guild:
             return
-        if (message.edited_at - message.created_at).total_seconds() > await self.config.guild(
-            message.guild
-        ).timeout():
+        if (message.edited_at - message.created_at).total_seconds() > await self.config.timeout():
             return
         await self.bot.process_commands(message)
