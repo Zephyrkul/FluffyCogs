@@ -69,9 +69,71 @@ class InVoice(commands.Cog):
         if true_or_false is None:
             true_or_false = not await self.config.guild(ctx.guild).dynamic()
         await self.config.guild(ctx.guild).dynamic.set(true_or_false)
-        await ctx.tick()
+        await ctx.send(
+            "I will {} dynamically create roles and channels for new VCs.".format(
+                "now" if true_or_false else "no longer"
+            )
+        )
 
-    # TODO: mute, deaf, selfdeaf
+    @invoice.command()
+    @commands.guild_only()
+    @checks.admin_or_permissions(manage_guild=True)
+    async def mute(self, ctx, *, true_or_false: bool = None):
+        """
+        Toggle whether to modify permissions when a user is server muted.
+
+        If a text channel is set, the user will no longer be able to send messages in it.
+        Otherwise, the roles controlled by this cog will be removed.
+        Self mutes are unaffected by this setting.
+        """
+        if true_or_false is None:
+            true_or_false = not await self.config.guild(ctx.guild).mute()
+        await self.config.guild(ctx.guild).mute.set(true_or_false)
+        await ctx.send(
+            "I will {} modify permissions when a user is server muted.".format(
+                "now" if true_or_false else "no longer"
+            )
+        )
+
+    @invoice.command()
+    @commands.guild_only()
+    @checks.admin_or_permissions(manage_guild=True)
+    async def deaf(self, ctx, *, true_or_false: bool = None):
+        """
+        Toggle whether to modify permissions when a user is server deafened.
+
+        If a role is set, it will be removed.
+        Otherwise, the user will no longer be able to send messages in the set text channel.
+        Self deafens are unaffected by this setting.
+        """
+        if true_or_false is None:
+            true_or_false = not await self.config.guild(ctx.guild).deaf()
+        await self.config.guild(ctx.guild).deaf.set(true_or_false)
+        await ctx.send(
+            "I will {} modify permissions when a user is server deafened.".format(
+                "now" if true_or_false else "no longer"
+            )
+        )
+
+    @invoice.command()
+    @commands.guild_only()
+    @checks.admin_or_permissions(manage_guild=True)
+    async def selfdeaf(self, ctx, *, true_or_false: bool = None):
+        """
+        Toggle whether to modify permissions when a user is self deafened.
+
+        If a role is set, it will be removed.
+        Otherwise, the user will no longer be able to send messages in the set text channel.
+        Server deafens are unaffected by this setting.
+        """
+        if true_or_false is None:
+            true_or_false = not await self.config.guild(ctx.guild).self_deaf()
+        await self.config.guild(ctx.guild).self_deaf.set(true_or_false)
+        await ctx.send(
+            "I will {} modify permissions when a user is self deafened.".format(
+                "now" if true_or_false else "no longer"
+            )
+        )
 
     @invoice.command(aliases=["server"])
     @commands.guild_only()
