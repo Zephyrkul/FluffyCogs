@@ -27,8 +27,6 @@ class OnEdit(commands.Cog):
 
     @listener()
     async def on_message_edit(self, _, message):
-        if not message.guild:
-            return
         if (message.edited_at - message.created_at).total_seconds() > await self.config.timeout():
             return
         await self.bot.process_commands(message)
