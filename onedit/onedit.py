@@ -26,7 +26,11 @@ class OnEdit(commands.Cog):
         await ctx.tick()
 
     @listener()
-    async def on_message_edit(self, _, message):
-        if (message.edited_at - message.created_at).total_seconds() > await self.config.timeout():
+    async def on_message_edit(self, before, after):
+        if not after.edited_at:
             return
-        await self.bot.process_commands(message)
+        if before.content == after.content:
+            return
+        if (after.edited_at - after.created_at).total_seconds() > await self.config.timeout():
+            return
+        await self.bot.process_commands(after)
