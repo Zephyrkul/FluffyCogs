@@ -30,13 +30,7 @@ LINK_RE = re.compile(
 WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
 
 
-class WAOptions(Flag):
-    NONE = 0
-    TEXT = auto()
-    VOTE = auto()
-    NATION = auto()
-    DELEGATE = auto()
-
+class Options(Flag):
     @classmethod
     def convert(cls, argument: str):
         argument = argument.upper().rstrip("S")
@@ -50,6 +44,15 @@ class WAOptions(Flag):
         if not args:
             return cls(default)
         return cls(reduce(or_, args))
+
+
+class WAOptions(Options):
+    ALL = -1
+    NONE = 0
+    TEXT = auto()
+    VOTE = auto()
+    NATION = auto()
+    DELEGATE = auto()
 
 
 def link_extract(link: str, *, expected):
