@@ -1,5 +1,6 @@
 import asyncio
 import discord
+import inspect
 import typing
 
 from copy import copy
@@ -155,7 +156,7 @@ class InVoice(commands.Cog):
     async def link(
         self,
         ctx,
-        vc: discord.VoiceChannel,
+        vc: typing.Optional[discord.VoiceChannel] = None,
         *,
         role_or_channel: typing.Union[discord.Role, discord.TextChannel, None] = None,
     ):
@@ -170,6 +171,13 @@ class InVoice(commands.Cog):
 
         If a role or channel is not set, the bot will update the other instead.
         """
+        if not vc:
+            if not ctx.author.voice:
+                raise commands.MissingRequiredArgument(
+                    # pylint: disable=no-member
+                    inspect.signature(self.link.callback).parameters["vc"]
+                )
+            vc = ctx.author.voice.channel
         if not role_or_channel:
             await self.config.channel(vc).clear()
             await ctx.send("Link(s) for {vc} cleared.".format(vc=vc))
@@ -247,9 +255,9 @@ class InVoice(commands.Cog):
             reason = "Left channel {vc}".format(vc=b.channel)
             to_remove = []
             role = m.guild.get_role(await self.config.channel(b.channel).role())
-            if role and role in m.roles:
+            if role:
                 to_remove.append(role)
-            if (not a.channel or a.afk) and guild_role and guild_role in m.roles:
+            if guild_role and (not a.channel or a.afk):
                 to_remove.append(guild_role)
             if to_remove:
                 await m.remove_roles(*to_remove, reason=reason)
@@ -260,9 +268,9 @@ class InVoice(commands.Cog):
             reason = "Joined channel {vc}".format(vc=a.channel)
             to_add = []
             role = m.guild.get_role(await self.config.channel(a.channel).role())
-            if role and role not in m.roles:
+            if role:
                 to_add.append(role)
-            if guild_role and not a.afk and guild_role not in m.roles:
+            if guild_role and not a.afk:
                 to_add.append(guild_role)
             if to_add:
                 await m.add_roles(*to_add, reason=reason)
@@ -276,10 +284,10 @@ class InVoice(commands.Cog):
         tc = m.guild.get_channel(await self.config.channel(a.channel).channel())
         if tc:
             overs = tc.overwrites_for(m)
-            overs.send_messages = not a.mute
+            overs.send_messages = False if a.mute else None
             await tc.set_permissions(
                 target=m,
-                overwrite=overs,
+                overwrite=overs if overs.value else None,
                 reason="Server {un}muted".format(un="" if a.mute else "un"),
             )
         else:
@@ -309,8 +317,10 @@ class InVoice(commands.Cog):
         else:
             tc = m.guild.get_channel(await self.config.channel(a.channel).channel())
             overs = tc.overwrites_for(m)
-            overs.read_messages = not is_deaf
-            await tc.set_permissions(target=m, overwrite=overs, reason=reason)
+            overs.read_messages = False if is_deaf else None
+            await tc.set_permissions(
+                target=m, overwrite=overs if overs.value else None, reason=reason
+            )
 
     async def _add_roles(self, m, c, *, reason, role_id=None, guild_role_id=None):
         guild = m.guild
