@@ -295,7 +295,7 @@ class NationStates(commands.Cog):
             nations - The total nations for and against
             delegates - The top ten Delegates for and against
         """
-        option = WA.collapse(options, default=0)
+        option = WA.collapse(*options, default=0)
         if resolution_id and option & (WA.NATION | WA.DELEGATE):
             return await ctx.send(
                 "The Nations and Delegates options are not available for past resolutions."
