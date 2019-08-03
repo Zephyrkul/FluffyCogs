@@ -199,8 +199,9 @@ class Act(Cog):
             "Click `+ Create new app` and fill out the form.",
             "Copy the key from the app you just created.",
             "Give the key to Red with this command:\n"
-            "`[p]set apikey tenor api_key your_api_key`"
-            "Replace `your_api_key` with the key you just got. Everything else should be the same.",
+            f"`{ctx.prefix}set api tenor api_key your_api_key`\n"
+            "Replace `your_api_key` with the key you just got.\n"
+            "Everything else should be the same.",
         ]
         instructions = [f"**{i}.** {v}" for i, v in enumerate(instructions, 1)]
         await ctx.maybe_send_embed("\n".join(instructions))
