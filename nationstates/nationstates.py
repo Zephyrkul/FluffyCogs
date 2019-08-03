@@ -244,38 +244,51 @@ class NationStates(commands.Cog):
             delheader = "Delegate"
         else:
             delheader = "Delegate (Non-Executive)"
+        tags = {t.text for t in root.iterfind("TAGS/TAG")}
+        founderless = "Founderless" in tags
         if root["FOUNDED"] == 0:
-            root["FOUNDED"] = "in Antiquity"
+            founded = "in Antiquity"
+        else:
+            founded = root["FOUNDED"]
         if root["FOUNDER"] == 0:
-            root["FOUNDER"] = "No Founder"
+            foundervalue = "No Founder"
         else:
-            root["FOUNDER"] = "[{}](https://www.nationstates.net/nation={})".format(
-                root["FOUNDER"].replace("_", " ").title(), root["FOUNDER"]
+            if founderless:
+                url = "https://www.nationstates.net/page=boneyard?nation="
+            else:
+                url = "https://www.nationstates.net/nation="
+            foundervalue = "[{}]({}{}){}".format(
+                root["FOUNDER"].replace("_", " ").title(),
+                url,
+                root["FOUNDER"],
+                " (Ceased to Exist)" if founderless else "",
             )
-        if root["FOUNDERAUTH"] and "X" in root["FOUNDERAUTH"]:
+        if founderless:
+            founderheader = "Founderless"
+        else:
             founderheader = "Founder"
+        if not root["FOUNDERAUTH"] or "X" not in root["FOUNDERAUTH"]:
+            founderheader += " (Non-Executive)"
+        fash = "Fascist" in tags and "Anti-Fascist" not in tags  # why do people hoard tags...
+        name = "{}{}".format("\N{LOCK} " if "Password" in tags else "", root["NAME"])
+        if fash:
+            warning = "\n**```css\n\N{HEAVY EXCLAMATION MARK SYMBOL} Region Tagged as Fascist \N{HEAVY EXCLAMATION MARK SYMBOL}\n```**"
         else:
-            founderheader = "Founder (Non-Executive)"
-        try:
-            root['TAGS/TAG/[.="Password"]']
-        except KeyError:
-            name = root["NAME"]
-        else:
-            name = f'\N{LOCK} {root["NAME"]}'
+            warning = ""
+        description = "[{} nations](https://www.nationstates.net/region={}/page=list_nations) | Founded {} | Power: {}{}".format(
+            root["NUMNATIONS"], root.get("id"), founded, root["POWER"], warning
+        )
         embed = ProxyEmbed(
             title=name,
             url="https://www.nationstates.net/region={}".format(root.get("id")),
-            description="[{} nations](https://www.nationstates.net/region={}"
-            "/page=list_nations) | Founded {} | Power: {}".format(
-                root["NUMNATIONS"], root.get("id"), root["FOUNDED"], root["POWER"]
-            ),
+            description=description,
             timestamp=datetime.utcfromtimestamp(root["LASTUPDATE"]),
-            colour=await ctx.embed_colour(),
+            colour=0x000001 if fash else await ctx.embed_colour(),
         )
         embed.set_author(name="NationStates", url="https://www.nationstates.net/")
         if root["FLAG"]:
             embed.set_thumbnail(url=root["FLAG"])
-        embed.add_field(name=founderheader, value=root["FOUNDER"], inline=False)
+        embed.add_field(name=founderheader, value=foundervalue, inline=False)
         embed.add_field(name=delheader, value=delvalue, inline=False)
         embed.set_footer(text="Last Updated")
         await embed.send_to(ctx)
