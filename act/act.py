@@ -26,6 +26,14 @@ class Act(Cog):
         self.config.register_global(custom={}, tenorkey=None)
         self.config.register_guild(custom={})
 
+    async def initialize(self, bot):
+        # temporary backwards compatibility
+        key = await self.config.tenorkey()
+        if not key:
+            return
+        await bot.db.api_tokens.set_raw("tenor", "api_key", value=key)
+        await self.config.tenorkey.clear()
+
     @commands.command(hidden=True)
     async def act(self, ctx, *, target: Union[discord.Member, str] = None):
         """
@@ -76,7 +84,7 @@ class Act(Cog):
         # add reaction gif
         if not ctx.channel.permissions_for(ctx.me).embed_links:
             return await ctx.send(message)
-        key = await self.config.tenorkey()
+        key = await ctx.bot.db.api_tokens.get_raw("tenor", "api_key", default=None)
         if not key:
             return await ctx.send(message)
         async with aiohttp.request(
@@ -179,22 +187,23 @@ class Act(Cog):
 
     @actset.command()
     @checks.is_owner()
-    async def tenorkey(self, ctx, *, key: str):
+    async def tenorkey(self, ctx):
         """
         Sets a Tenor GIF API key to enable reaction gifs with act commands.
 
         You can obtain a key from here: https://tenor.com/developer/dashboard
         """
-        if not isinstance(ctx.channel, discord.DMChannel):
-            try:
-                await ctx.message.delete()
-            except discord.Forbidden:
-                pass
-            return await ctx.send(
-                "Please use that command in DM. Since users probably saw your key, it is recommended to reset it right now."
-            )
-        await self.config.tenorkey.set(key)
-        await ctx.author.send("Key set.")
+        instructions = [
+            "Go to the Tenor developer dashboard: https://tenor.com/developer/dashboard",
+            "Log in or sign up if you haven't already.",
+            "Click `+ Create new app` and fill out the form.",
+            "Copy the key from the app you just created.",
+            "Give the key to Red with this command:\n"
+            "`[p]set apikey tenor api_key your_api_key`"
+            "Replace `your_api_key` with the key you just got. Everything else should be the same.",
+        ]
+        instructions = [f"**{i}.** {v}" for i, v in enumerate(instructions, 1)]
+        await ctx.maybe_send_embed("\n".join(instructions))
 
     @listener()
     async def on_message(self, message):

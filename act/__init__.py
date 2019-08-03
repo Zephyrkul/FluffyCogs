@@ -1,5 +1,7 @@
 from .act import Act
 
 
-def setup(bot):
-    bot.add_cog(Act(bot))
+async def setup(bot):
+    act = Act(bot)
+    await act.initialize(bot)
+    bot.add_cog(act)

@@ -313,3 +313,5 @@ class Turn(Cog):
                         await message_coro(timeout=timeout)
                     get().paused = False
                     get().queue.rotate(-1)
+        if last:
+            await last.delete()

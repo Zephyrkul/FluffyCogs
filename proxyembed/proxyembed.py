@@ -55,7 +55,7 @@ class ProxyEmbed(discord.Embed):
             next_break = True
         description = self._("description")
         if description:
-            content.append(CF.box(description.strip("`")))
+            content.append(CF.box(CF.escape(description, formatting=True)))
             next_break = False
         if next_break:
             content.append("")
@@ -68,7 +68,7 @@ class ProxyEmbed(discord.Embed):
             )
             if not inline or len(name) + len(value) > 78 or "\n" in name or "\n" in value:
                 content.append(name)
-                content.append(CF.box(value.strip("`")))
+                content.append(CF.box(CF.escape(value, formatting=True)))
                 next_break = False
             else:
                 content.append(f"{name}: {value}")
