@@ -10,7 +10,7 @@ async def setup(bot):
             "Run this command to install it: [p]pipinstall sans"
         ) from e
     else:
-        if sans.version_info < type(sans.version_info)("0.0.1a3"):
+        if sans.version_info < type(sans.version_info)("0.0.1b1"):
             raise RuntimeError(
                 "The sans library is out of date.\n"
                 "Run this command to update it: [p]pipinstall sans"
