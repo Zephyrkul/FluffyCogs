@@ -2,6 +2,7 @@ import aiohttp
 import contextlib
 import discord
 import re
+import time
 from datetime import datetime
 from enum import Flag, auto
 from functools import reduce, partial
@@ -85,6 +86,15 @@ class NationStates(commands.Cog):
             # only make the user_info request if necessary
             agent = str(self.bot.get_user(owner_id) or await self.bot.fetch_user(owner_id))
         Api.agent = f"{agent} Red-DiscordBot/{red_version}"
+
+    def cog_check(self, ctx):
+        # this will also cause `[p]agent` to be blocked but this is intended
+        if ctx.cog is not self:
+            return True
+        xra = Api.xra
+        if xra:
+            raise commands.CommandOnCooldown(None, time.time() - xra)
+        return True
 
     # __________ UTILS __________
 
