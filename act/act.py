@@ -216,7 +216,10 @@ class Act(Cog):
             return
 
         if ctx.valid and ctx.command.enabled:
-            if await ctx.command.can_run(ctx):
+            try:
+                if await ctx.command.can_run(ctx):
+                    return
+            except commands.errors.CheckFailure:
                 return
 
         ctx.command = self.act
