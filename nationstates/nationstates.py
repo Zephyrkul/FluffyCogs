@@ -1,4 +1,5 @@
 import aiohttp
+import asyncio
 import contextlib
 import discord
 import re
@@ -96,6 +97,16 @@ class NationStates(commands.Cog):
             raise commands.CommandOnCooldown(None, time.time() - xra)
         return True
 
+    def cog_command_error(self, ctx, error):
+        # not a coro but returns one anyway
+        original = getattr(error, "original", None)
+        if original:
+            if isinstance(original, asyncio.TimeoutError):
+                return ctx.send("Request timed out.")
+            if isinstance(original, HTTPException):
+                return ctx.send(f"{original.status}: {original.message}")
+        return ctx.bot.on_command_error(ctx, error, unhandled_by_cog=True)
+
     # __________ UTILS __________
 
     @staticmethod
@@ -168,8 +179,6 @@ class NationStates(commands.Cog):
             embed.set_author(name="NationStates", url="https://www.nationstates.net/")
             embed.set_thumbnail(url="http://i.imgur.com/Pp1zO19.png")
             return await embed.send_to(ctx)
-        except HTTPException as e:
-            return await ctx.send(f"{e.status}: {e.message}")
         endo = root["CENSUS/SCALE[@id='66']/SCORE"]
         if endo == 1:
             endo = "{:.0f} endorsement".format(endo)
@@ -230,9 +239,7 @@ class NationStates(commands.Cog):
         )
         try:
             root = await api
-        except HTTPException as e:
-            if e.status != 404:
-                return await ctx.send(f"{e.status}: {e.message}")
+        except NotFound as e:
             region = api["region"]
             embed = ProxyEmbed(
                 title=region.replace("_", " ").title(), description="This region does not exist."
@@ -324,18 +331,15 @@ class NationStates(commands.Cog):
                 "The Nations and Delegates options are not available for past resolutions."
             )
         is_sc = ctx.invoked_with == "sc"
-        try:
-            shards = ["resolution"]
-            request = {"wa": "2" if is_sc else "1"}
-            if option & WA.DELEGATE:
-                shards.append("delvotes")
-            if resolution_id:
-                request["id"] = str(resolution_id)
-            else:
-                shards.append("lastresolution")
-            root = await Api(request, q=shards)
-        except HTTPException as e:
-            return await ctx.send(f"{e.status}: {e.message}")
+        shards = ["resolution"]
+        request = {"wa": "2" if is_sc else "1"}
+        if option & WA.DELEGATE:
+            shards.append("delvotes")
+        if resolution_id:
+            request["id"] = str(resolution_id)
+        else:
+            shards.append("lastresolution")
+        root = await Api(request, q=shards)
         img = "4dHt6si" if is_sc else "7EMYsJ6"
         if root["RESOLUTION"] is None:
             out = (
@@ -401,8 +405,6 @@ class NationStates(commands.Cog):
                 ),
                 icon_url="http://i.imgur.com/Pp1zO19.png",
             )
-        except HTTPException as e:
-            await ctx.send(f"{e.status}: {e.message}")
         else:
             embed.set_author(
                 name=authroot["FULLNAME"],
@@ -502,10 +504,7 @@ class NationStates(commands.Cog):
                 key = "q"
         if key != "q":
             return await ctx.send("No value provided for key {!r}".format(key))
-        try:
-            root = await Api(request)
-        except HTTPException as e:
-            return await ctx.send(f"{e.status}: {e.message}")
+        root = await Api(request)
         await ctx.send_interactive(pagify(root.to_pretty_string(), shorten_by=11), "xml")
 
     # __________ ENDORSE __________
@@ -513,10 +512,7 @@ class NationStates(commands.Cog):
     @commands.command()
     async def ne(self, ctx, *, wa_nation: str):
         """Nations Endorsing (NE) the specified WA nation"""
-        try:
-            root = await Api("endorsements fullname wa", nation=wa_nation)
-        except HTTPException as e:
-            return await ctx.send(f"{e.status}: {e.message}")
+        root = await Api("endorsements fullname wa", nation=wa_nation)
         if root["UNSTATUS"].lower() == "non-member":
             return await ctx.send(f"{root['FULLNAME']} is not a WA member.")
         await ctx.send(
@@ -527,10 +523,7 @@ class NationStates(commands.Cog):
     @commands.command()
     async def nec(self, ctx, *, wa_nation: str):
         """Nations Endorsing [Count] (NEC) the specified WA nation"""
-        try:
-            root = await Api("census fullname wa", nation=wa_nation, scale="66", mode="score")
-        except HTTPException as e:
-            return await ctx.send(f"{e.status}: {e.message}")
+        root = await Api("census fullname wa", nation=wa_nation, scale="66", mode="score")
         if root["UNSTATUS"].lower() == "non-member":
             return await ctx.send(f"{root['FULLNAME']} is not a WA member.")
         await ctx.send(
@@ -542,10 +535,7 @@ class NationStates(commands.Cog):
     @commands.command()
     async def spdr(self, ctx, *, nation: str):
         """Soft Power Disbursement Rating (SPDR, aka numerical Influence) of the specified nation"""
-        try:
-            root = await Api("census fullname", nation=nation, scale="65", mode="score")
-        except HTTPException as e:
-            return await ctx.send(f"{e.status}: {e.message}")
+        root = await Api("census fullname", nation=nation, scale="65", mode="score")
         await ctx.send(
             "{} has {:.0f} influence".format(root["FULLNAME"], root[".//SCALE[@id='65']/SCORE"])
         )
@@ -553,10 +543,7 @@ class NationStates(commands.Cog):
     @commands.command()
     async def nne(self, ctx, *, wa_nation: str):
         """Nations Not Endorsing (NNE) the specified WA nation"""
-        try:
-            nation_root = await Api("endorsements fullname region wa", nation=wa_nation)
-        except HTTPException as e:
-            return await ctx.send(f"{e.status}: {e.message}")
+        nation_root = await Api("endorsements fullname region wa", nation=wa_nation)
         if nation_root["UNSTATUS"].lower() == "non-member":
             return await ctx.send(f"{nation_root['FULLNAMENAME']} is not a WA member.")
         wa_root = await Api("members", wa="1")
@@ -574,10 +561,7 @@ class NationStates(commands.Cog):
     @commands.command()
     async def nnec(self, ctx, *, wa_nation: str):
         """Nations Not Endorsing [Count] (NNEC) the specified WA nation"""
-        try:
-            nation_root = await Api("endorsements fullname region wa", nation=wa_nation)
-        except HTTPException as e:
-            return await ctx.send(f"{e.status}: {e.message}")
+        nation_root = await Api("endorsements fullname region wa", nation=wa_nation)
         if nation_root["UNSTATUS"].lower() == "non-member":
             return await ctx.send(f"{nation_root['NAME']} is not a WA member.")
         wa_root = await Api("members", wa="1")
