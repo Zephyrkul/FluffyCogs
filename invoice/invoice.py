@@ -199,19 +199,29 @@ class InVoice(commands.Cog):
         guild = vc.guild
         if not await self.config.guild(guild).dynamic():
             return
+        guild_role = await self.config.guild(guild).role()
         name = "🔊 " + vc.name
         role = await guild.create_role(name=name, reason="Dynamic role for {vc}".format(vc=vc))
         await self.config.channel(vc).role.set(role.id)
         if vc.category:
-            def_over = vc.category.overwrites_for(guild.default_role)
-            def_over.read_messages = False
+            overs = vc.category.overwrites
         else:
-            def_over = discord.PermissionOverwrite(read_messages=False)
-        role_over = discord.PermissionOverwrite(**dict(def_over))
-        role_over.update(read_messages=True, send_messages=True)
+            overs = {}
+        # inherit guild role and remove its overwrites
+        default = overs.pop(guild_role, discord.PermissionOverwrite())
+        # vc-specific role, inherited from guild role
+        overs.setdefault(role, default).update(read_messages=True, send_messages=True)
+        # @everyone, remove read permissions
+        overs.setdefault(guild.default_role, discord.PermissionOverwrite()).update(
+            read_messages=False
+        )
+        # add bot to the channel
+        overs.setdefault(guild.me, discord.PermissionOverwrite()).update(
+            read_messages=True, send_messages=True
+        )
         text = await guild.create_text_channel(
             name=name,
-            overwrites={guild.default_role: def_over, role: role_over, guild.me: role_over},
+            overwrites=overs,
             category=vc.category,
             reason="Dynamic channel for {vc}".format(vc=vc),
         )
