@@ -1,19 +1,19 @@
+import asyncio
 import collections
 import io
 import itertools
 import sys
-from collections import deque
+from copy import copy
 from dataclasses import dataclass
 from datetime import datetime, date, time
-from typing import Optional
+from typing import Optional, Union
 
 import discord
 
 from redbot.core import commands
 from redbot.core.i18n import Translator, cog_i18n
-
-
-Cog = getattr(commands, "Cog", object)
+from redbot.core.utils.predicates import MessagePredicate
+from redbot.core.utils.mod import check_permissions
 
 
 _T = Translator("LogsFrom", __file__)
@@ -23,7 +23,7 @@ _T = Translator("LogsFrom", __file__)
 class MHeaders:
     author: discord.User
     created: datetime
-    edited: Optional[datetime] = None
+    edited: Optional[datetime]
 
     def to_str(self, other: "MHeaders") -> str:
         final = []
@@ -48,61 +48,109 @@ class MHeaders:
         return "\n".join(final)
 
 
-def positive_int(argument):
-    try:
-        i = int(argument)
-    except ValueError as e:
-        raise commands.BadArgument(_T("Please use a positive number.")) from e
-    if i <= 0:
-        raise commands.BadArgument(_T("Please use a positive number."))
-    return i
+async def history(channel, **kwargs):
+    d = collections.deque()
+    async for message in channel.history(**kwargs):
+        d.append(message)
+    return d
+
+
+MaybeMessage = Optional[Union[int, discord.Message]]  # yes, this order is intentional
 
 
 @cog_i18n(_T)
-class LogsFrom(Cog):
-    @commands.group(invoke_without_command=True)
+class LogsFrom(commands.Cog):
+    @commands.command(usage="[bounds...] [channel]")
     async def logsfrom(
-        self, ctx, limit: positive_int = 100, *, channel: discord.TextChannel = None
+        self,
+        ctx,
+        after: MaybeMessage = None,
+        before: MaybeMessage = None,
+        *,
+        channel: discord.TextChannel = None,
     ):
-        """Logs the channel into a file, then uploads the file.
+        """
+        Logs the specified channel into a file, then uploads the file.
 
+        The channel will default to the current channel if none is specified.
         The limit may be the number of messages to log or the ID of the message to start after, exclusive.
-        All timestamps are in UTC."""
-        channel = channel or ctx.channel
-        if not channel.permissions_for(ctx.author).read_message_history:
-            raise commands.MissingPermissions(["read_message_history"])
+        All timestamps are in UTC.
+        """
+        if channel:
+            ctxc = copy(ctx)
+            ctxc.channel = channel
+        else:
+            channel = ctx.channel
+            ctxc = ctx
         if not channel.permissions_for(ctx.me).read_message_history:
             raise commands.BotMissingPermissions(["read_message_history"])
+        if not await check_permissions(ctxc, {"read_message_history": True}):
+            raise commands.MissingPermissions(["read_message_history"])
+        after, before = getattr(after, "id", after), getattr(before, "id", before)
+        cancel_task = asyncio.ensure_future(
+            ctx.bot.wait_for("message", check=MessagePredicate.cancelled(ctx))
+        )
         async with ctx.typing():
-            kwargs = {"after": discord.Object(id=limit), "limit": limit}
-            if channel == ctx.channel:
-                kwargs["before"] = ctx.message
+            kwargs = {"oldest_first": False}
+            if not after and not before:
+                kwargs["limit"] = 100
+            elif not before:
+                kwargs.update(after=discord.Object(id=after), limit=after)
+            elif not after:
+                raise RuntimeError("This should never happen.")
+            else:
+                before = min((ctx.message.id, before))
+                # TODO: wtf should this shit even *mean*
+                if after >= before:
+                    kwargs.update(after=discord.Object(id=after), limit=before, oldest_first=True)
+                else:
+                    kwargs.update(
+                        after=discord.Object(id=after),
+                        before=discord.Object(id=before),
+                        limit=min((before, after)),
+                    )
+            print(kwargs)
             stream = io.BytesIO()
-            last_h = MHeaders(None, None)
-            try:
-                messages = await channel.history(**kwargs, oldest_first=False).flatten()
-            except TypeError:
-                messages = await channel.history(**kwargs, reverse=False).flatten()
-            processed = len(messages)
-            for _ in range(processed):
-                m = messages.pop()
-                now_h = MHeaders(m.author, m.created_at, m.edited_at)
+            last_h = MHeaders(None, None, None)
+            message_task = asyncio.ensure_future(history(**kwargs))
+            done, _ = await asyncio.wait(
+                (cancel_task, message_task), return_when=asyncio.FIRST_COMPLETED
+            )
+            if cancel_task in done:
+                message_task.cancel()
+                return await ctx.send(_T("Okay, I've cancelled my logging."))
+            messages = message_task.result()
+            processed = 0
+            if kwargs["oldest_first"]:
+                pop = messages.popleft
+            else:
+                pop = messages.pop
+            while messages:
+                await asyncio.sleep(0)
+                if cancel_task.done():
+                    return await ctx.send(_T("Okay, I've cancelled my logging."))
+                message = pop()
+                now_h = MHeaders(message.author, message.created_at, message.edited_at)
                 headers = now_h.to_str(last_h)
                 last_h = now_h
                 if headers:
                     stream.write(headers.encode("utf-8"))
-                stream.write(m.clean_content.encode("utf-8"))
-                if m.attachments:
+                stream.write(message.clean_content.encode("utf-8"))
+                if message.attachments:
                     stream.write(b"\n")
                     stream.write(
-                        "; ".join(f"[{a.filename}]({a.url})" for a in m.attachments).encode(
+                        "; ".join(f"[{a.filename}]({a.url})" for a in message.attachments).encode(
                             "utf-8"
                         )
                     )
                 stream.write(b"\n")
+                processed += 1
+            cancel_task.cancel()
             stream.seek(0)
             return await ctx.send(
-                content=_T("{} messages logged.").format(processed),
+                content=_T("{} message{s} logged.").format(
+                    processed, s=("" if processed == 1 else "s")
+                ),
                 file=discord.File(stream, filename=f"{channel.name}.md"),
                 delete_after=300,
             )
