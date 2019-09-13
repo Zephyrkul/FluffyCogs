@@ -7,6 +7,7 @@ from typing import Union
 
 from redbot.core import commands, checks, Config
 from redbot.core.bot import Red
+from redbot.core.i18n import get_locale
 from redbot.core.utils.chat_formatting import italics
 
 from .helpers import *
@@ -15,17 +16,18 @@ from .helpers import *
 Cog = getattr(commands, "Cog", object)
 listener = getattr(Cog, "listener", lambda: lambda x: x)
 
-get_shared_api_key = getattr(Red, "get_shared_api_key", None)
-if not get_shared_api_key:
+
+get_shared_api_tokens = getattr(Red, "get_shared_api_tokens", None)
+if not get_shared_api_tokens:
     # pylint: disable=function-redefined
-    async def get_shared_api_key(bot: Red, service_name: str):
+    async def get_shared_api_tokens(bot: Red, service_name: str):
         return await bot.db.api_tokens.get_raw(service_name, default={})
 
 
-set_shared_api_key = getattr(Red, "set_shared_api_key", None)
-if not set_shared_api_key:
+set_shared_api_tokens = getattr(Red, "set_shared_api_tokens", None)
+if not set_shared_api_tokens:
     # pylint: disable=function-redefined
-    async def set_shared_api_key(bot: Red, service_name: str, **tokens: str):
+    async def set_shared_api_tokens(bot: Red, service_name: str, **tokens: str):
         async with bot.db.api_tokens.get_attr(service_name)() as method_abuse:
             method_abuse.update(**tokens)
 
@@ -46,7 +48,7 @@ class Act(Cog):
         key = await self.config.tenorkey()
         if not key:
             return
-        await set_shared_api_key(bot, "tenor", api_key=key)
+        await set_shared_api_tokens(bot, "tenor", api_key=key)
         await self.config.tenorkey.clear()
 
     @commands.command(hidden=True)
@@ -99,7 +101,7 @@ class Act(Cog):
         # add reaction gif
         if not ctx.channel.permissions_for(ctx.me).embed_links:
             return await ctx.send(message)
-        key = (await get_shared_api_key(ctx.bot, "tenor")).get("api_key")
+        key = (await get_shared_api_tokens(ctx.bot, "tenor")).get("api_key")
         if not key:
             return await ctx.send(message)
         async with aiohttp.request(
@@ -108,12 +110,11 @@ class Act(Cog):
             params={
                 "q": ctx.invoked_with,
                 "key": key,
-                "limit": "8",
                 "anon_id": str(ctx.author.id ^ ctx.me.id),
                 "media_filter": "minimal",
                 "contentfilter": "low",
                 "ar_range": "wide",
-                "locale": await getattr(ctx.bot, "_config", ctx.bot.db).locale(),
+                "locale": get_locale(),
             },
         ) as response:
             if response.status >= 400:
