@@ -123,6 +123,8 @@ class NationStates(commands.Cog):
 
     @listener()
     async def on_message(self, message):
+        if message.author.bot:
+            return
         ctx = await self.bot.get_context(message)
         if ctx.valid:
             return
