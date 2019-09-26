@@ -112,7 +112,7 @@ class LogsFrom(commands.Cog):
             print(kwargs)
             stream = io.BytesIO()
             last_h = MHeaders(None, None, None)
-            message_task = asyncio.ensure_future(history(**kwargs))
+            message_task = asyncio.ensure_future(history(channel, **kwargs))
             done, _ = await asyncio.wait(
                 (cancel_task, message_task), return_when=asyncio.FIRST_COMPLETED
             )
