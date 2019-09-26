@@ -547,7 +547,7 @@ class NationStates(commands.Cog):
         """Nations Not Endorsing (NNE) the specified WA nation"""
         nation_root = await Api("endorsements fullname region wa", nation=wa_nation)
         if nation_root["UNSTATUS"].lower() == "non-member":
-            return await ctx.send(f"{nation_root['FULLNAMENAME']} is not a WA member.")
+            return await ctx.send(f"{nation_root['FULLNAME']} is not a WA member.")
         wa_root = await Api("members", wa="1")
         region_root = await Api("nations", region=nation_root["REGION"])
         final = (
