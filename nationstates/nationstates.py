@@ -30,6 +30,7 @@ LINK_RE = re.compile(
     r"(?i)\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b"
 )
 WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
+ZDAY_EPOCHS = (1572465600, 1572584400 + 604800)
 
 
 class Options(Flag):
@@ -119,6 +120,11 @@ class NationStates(commands.Cog):
             num /= 1000
         return "{} {}".format(round(num, 3), illion[index])
 
+    @staticmethod
+    def _is_zday(snowflake: discord.abc.Snowflake):
+        epoch = snowflake.created_at
+        return epoch >= ZDAY_EPOCHS[0] and epoch < ZDAY_EPOCHS[1]
+
     # __________ LISTENERS __________
 
     @listener()
@@ -163,7 +169,7 @@ class NationStates(commands.Cog):
             "census category dbid demonym2plural",
             "flag founded freedom fullname",
             "influence lastlogin motto name",
-            "population region wa",
+            "population region wa zombies",
             nation=nation,
             mode="score",
             scale="65 66",
@@ -200,7 +206,7 @@ class NationStates(commands.Cog):
                 root["FOUNDED"],
             ),
             timestamp=datetime.utcfromtimestamp(root["LASTLOGIN"]),
-            colour=await ctx.embed_colour(),
+            colour=0x8BBC21 if self._is_zday(ctx.message) else await ctx.embed_colour(),
         )
         embed.set_author(name="NationStates", url="https://www.nationstates.net/")
         embed.set_thumbnail(url=root["FLAG"])
@@ -220,6 +226,19 @@ class NationStates(commands.Cog):
             ),
             inline=False,
         )
+        if self._is_zday(ctx.message):
+            embed.add_field(
+                name="{}{}".format(
+                    root["ZOMBIE/ZACTION"] or "No Action",
+                    " (Unintended)" if root["ZOMBIE/ZACTIONINTENDED"] else "",
+                ),
+                value="Survivors: {} | Zombies: {} | Dead: {}".format(
+                    self._illion(root["ZOMBIE/SURVIVORS"]),
+                    self._illion(root["ZOMBIE/ZOMBIES"]),
+                    self._illion(root["ZOMBIE/DEAD"]),
+                ),
+                inline=False,
+            )
         embed.add_field(
             name="Cards",
             value=(
@@ -241,7 +260,7 @@ class NationStates(commands.Cog):
         )
         try:
             root = await api
-        except NotFound as e:
+        except NotFound:
             region = api["region"]
             embed = ProxyEmbed(
                 title=region.replace("_", " ").title(), description="This region does not exist."
@@ -302,13 +321,27 @@ class NationStates(commands.Cog):
             url="https://www.nationstates.net/region={}".format(root.get("id")),
             description=description,
             timestamp=datetime.utcfromtimestamp(root["LASTUPDATE"]),
-            colour=0x000001 if fash else await ctx.embed_colour(),
+            colour=0x000001
+            if fash
+            else 0x8BBC21
+            if self._is_zday(ctx.message)
+            else await ctx.embed_colour(),
         )
         embed.set_author(name="NationStates", url="https://www.nationstates.net/")
         if root["FLAG"]:
             embed.set_thumbnail(url=root["FLAG"])
         embed.add_field(name=founderheader, value=foundervalue, inline=False)
         embed.add_field(name=delheader, value=delvalue, inline=False)
+        if self._is_zday(ctx.message):
+            embed.add_field(
+                name="Zombies",
+                value="Survivors: {} | Zombies: {} | Dead: {}".format(
+                    self._illion(root["ZOMBIE/SURVIVORS"]),
+                    self._illion(root["ZOMBIE/ZOMBIES"]),
+                    self._illion(root["ZOMBIE/DEAD"]),
+                ),
+                inline=False,
+            )
         embed.set_footer(text="Last Updated")
         await embed.send_to(ctx)
 
