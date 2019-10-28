@@ -550,6 +550,8 @@ class NationStates(commands.Cog):
         root = await Api("endorsements fullname wa", nation=wa_nation)
         if root["UNSTATUS"].lower() == "non-member":
             return await ctx.send(f"{root['FULLNAME']} is not a WA member.")
+        if not root["ENDORSEMENTS"]:
+            return await ctx.send(f"{root['FULLNAME']} has no endorsements.")
         await ctx.send(
             "Nations endorsing " + root["FULLNAME"],
             file=discord.File(BytesIO(root["ENDORSEMENTS"].encode()), "ne.txt"),
@@ -586,7 +588,7 @@ class NationStates(commands.Cog):
         final = (
             set(region_root["NATIONS"].split(":"))
             .intersection(wa_root["MEMBERS"].split(","))
-            .difference(nation_root["ENDORSEMENTS"].split(","))
+            .difference((nation_root["ENDORSEMENTS"] or "").split(","))
         )
         await ctx.send(
             "Nations not endorsing " + nation_root["FULLNAME"],
@@ -604,7 +606,7 @@ class NationStates(commands.Cog):
         final = (
             set(region_root["NATIONS"].split(":"))
             .intersection(wa_root["MEMBERS"].split(","))
-            .difference(nation_root["ENDORSEMENTS"].split(","))
+            .difference((nation_root["ENDORSEMENTS"] or "").split(","))
         )
         await ctx.send(
             "{:.0f} nations are not endorsing {}".format(len(final), nation_root["FULLNAME"])

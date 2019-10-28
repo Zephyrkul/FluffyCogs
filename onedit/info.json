@@ -6,8 +6,8 @@
     "name": "OnEdit",
     "short": "Allow users to run bot commands with edited messages, with a specified timeout.",
     "description": "Allow users to run bot commands with edited messages, with a specified timeout.",
-    "hidden": true,
     "tags": [
         "utility"
-    ]
+    ],
+    "min_bot_version": "3.1.6"
 }
