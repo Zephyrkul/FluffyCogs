@@ -122,7 +122,7 @@ class NationStates(commands.Cog):
 
     @staticmethod
     def _is_zday(snowflake: discord.abc.Snowflake):
-        epoch = snowflake.created_at
+        epoch = snowflake.created_at.timestamp()
         return epoch >= ZDAY_EPOCHS[0] and epoch < ZDAY_EPOCHS[1]
 
     # __________ LISTENERS __________
