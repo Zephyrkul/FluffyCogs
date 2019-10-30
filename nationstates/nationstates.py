@@ -169,7 +169,7 @@ class NationStates(commands.Cog):
             "census category dbid demonym2plural",
             "flag founded freedom fullname",
             "influence lastlogin motto name",
-            "population region wa zombies",
+            "population region wa zombie",
             nation=nation,
             mode="score",
             scale="65 66",
@@ -255,7 +255,7 @@ class NationStates(commands.Cog):
     async def region(self, ctx, *, region: partial(link_extract, expected="region")):
         """Retrieves general info about a specified NationStates region"""
         api: Api = Api(
-            "delegate delegateauth delegatevotes flag founded founder founderauth lastupdate name numnations power tags",
+            "delegate delegateauth delegatevotes flag founded founder founderauth lastupdate name numnations power tags zombie",
             region=region,
         )
         try:
