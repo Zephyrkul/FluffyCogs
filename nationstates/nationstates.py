@@ -229,7 +229,7 @@ class NationStates(commands.Cog):
         if self._is_zday(ctx.message):
             embed.add_field(
                 name="{}{}".format(
-                    root["ZOMBIE/ZACTION"] or "No Action",
+                    (root["ZOMBIE/ZACTION"] or "No Action").title(),
                     " (Unintended)" if root["ZOMBIE/ZACTIONINTENDED"] else "",
                 ),
                 value="Survivors: {} | Zombies: {} | Dead: {}".format(
