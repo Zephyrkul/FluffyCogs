@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import suppress
 from copy import copy
 from io import BytesIO
@@ -9,16 +10,15 @@ from redbot.core import commands, checks, Config
 from redbot.core.utils import common_filters, mod
 from redbot.core.utils.chat_formatting import pagify, humanize_list
 from redbot.core.i18n import Translator, cog_i18n
-
-check_permissions = getattr(mod, "check_permissions", checks.check_permissions)
-
 from .converter import RiftConverter, search_converter
 
 
 Cog = getattr(commands, "Cog", object)
 listener = getattr(Cog, "listener", lambda: lambda x: x)
+check_permissions = getattr(mod, "check_permissions", checks.check_permissions)
 
 
+log = logging.getLogger("red.fluffy.rift")
 _ = Translator("Rift", __file__)
 
 
@@ -252,14 +252,21 @@ class Rift(Cog):
                 overs.send_messages = True
                 overs = overs.pair()
                 perms = (every.permissions.value & ~overs[1].value) | overs[0].value
+                log.debug(
+                    "calculated permissions for @everyone in server %s: %s",
+                    destination.guild.id,
+                    perms,
+                )
                 return discord.Permissions(perms)
         return discord.Permissions.all()
 
     async def process_message(self, rift, message, destination):
         if isinstance(destination, discord.Message):
             send_coro = destination.edit
+            log.debug("editing message %s-%s", destination.channel.id, destination.id)
         else:
             send_coro = destination.send
+            log.debug("sending message to channel %s", destination.id)
         channel = (
             message.author if isinstance(message.channel, discord.DMChannel) else message.channel
         )
@@ -284,7 +291,7 @@ class Rift(Cog):
         files = []
         embed = None
         if attachments and author_perms.attach_files and bot_perms.attach_files:
-            overs = await asyncio.gather(*(self.save_attach(file, files) for file in attachments))
+            overs = [await self.save_attach(file, files) for file in attachments]
             overs = list(filter(bool, overs))
             if overs:
                 if bot_perms.embed_links:
@@ -303,7 +310,8 @@ class Rift(Cog):
         return await send_coro(content=content, files=files, embed=embed)
 
     async def save_attach(self, file: discord.Attachment, files) -> discord.File:
-        if file.size > max_size:
+        if sum((len(f.getbuffer()) for f in files)) + file.size > max_size:
+            log.debug("Attachment %r would exceed file size limits", file.filename)
             return file
         buffer = BytesIO()
         await file.save(buffer, seek_begin=True)

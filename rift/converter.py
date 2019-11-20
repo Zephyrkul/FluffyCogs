@@ -1,5 +1,6 @@
 import asyncio
 import discord
+import logging
 from collections import deque, namedtuple
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -7,6 +8,9 @@ from typing import List
 
 from redbot.core import commands
 from redbot.core.utils.chat_formatting import pagify, humanize_list
+
+
+log = logging.getLogger("red.fluffy.rift.converter")
 
 
 Rift = namedtuple("Rift", ["author", "source", "destination"])
@@ -78,10 +82,14 @@ class RiftConverter(commands.Converter):
                 if cls.channel_filter(ctx, is_owner, channel, argument):
                     if not await config.channel(channel).blacklisted():
                         result.add(channel)
+                    else:
+                        log.debug("Channel %s ignored: blacklisted", channel.id)
             for member in guild.members.copy():
                 if member not in result and cls.user_filter(ctx, is_owner, member, argument):
                     if not await config.user(member).blacklisted():
                         result.add(member)
+                    else:
+                        log.debug("User %s ignored: blacklisted", member.id)
         if not result:
             raise commands.BadArgument(
                 _(
@@ -93,6 +101,7 @@ class RiftConverter(commands.Converter):
     @staticmethod
     async def guild_filter(ctx, is_owner, guild):
         if await ctx.cog.config.guild(guild).blacklisted():
+            log.debug("Guild %s ignored: blacklisted", guild.id)
             return False
         if guild == ctx.guild:
             return True
@@ -101,13 +110,16 @@ class RiftConverter(commands.Converter):
     @staticmethod
     def channel_filter(ctx, is_owner, channel, argument):
         if ctx.channel == channel:
+            log.debug("Channel %s ignored: it is the current channel", channel.id)
             return False
         bot = channel.guild.me
         if not channel.permissions_for(bot).send_messages:
+            log.debug("Channel %s ignored: the bot doesn't have access", channel.id)
             return False
         if not is_owner:
             member = channel.guild.get_member(ctx.author.id)
             if not channel.permissions_for(member).send_messages:
+                log.debug("Channel %s ignored: user %s doesn't have access", channel.id, member.id)
                 return False
         if argument == str(channel.id):
             return True
@@ -120,8 +132,10 @@ class RiftConverter(commands.Converter):
     @staticmethod
     def user_filter(ctx, is_owner, member, argument):
         if ctx.author.id == member.id and isinstance(ctx.channel, discord.DMChannel):
+            log.debug("User %s ignored: it is the current channel", member.id)
             return False
         if member.bot:
+            log.debug("User %s ignored: it is a bot", member.id)
             return False
         if argument == str(member.id):
             return True
