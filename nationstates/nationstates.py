@@ -375,7 +375,6 @@ class NationStates(commands.Cog):
         else:
             shards.append("lastresolution")
         root = await Api(request, q=shards)
-        img = "4dHt6si" if is_sc else "7EMYsJ6"
         if root["RESOLUTION"] is None:
             out = (
                 unescape(root["LASTRESOLUTION"])
@@ -394,9 +393,14 @@ class NationStates(commands.Cog):
             embed = ProxyEmbed(
                 title="Last Resolution", description=out, colour=await ctx.embed_colour()
             )
-            embed.set_thumbnail(url="http://i.imgur.com/{}.jpg".format(img))
+            embed.set_thumbnail(url="https://www.nationstates.net/images/{}.jpg".format("sc" if is_sc else "ga"))
             return await embed.send_to(ctx)
         root = root["RESOLUTION"]
+        img = {
+            "Commendation": "images/commend.png",
+            "Condemnation": "images/condemn.png",
+            "Liberation": "images/liberate.png",
+        }.get(root["CATEGORY"], "images/ga.jpg")
         if option & WA.TEXT:
             description = "**Category: {}**\n\n{}".format(
                 root["CATEGORY"], escape(root["DESC"], formatting=True)
@@ -446,7 +450,7 @@ class NationStates(commands.Cog):
                 url="https://www.nationstates.net/nation={}".format(root["PROPOSED_BY"]),
                 icon_url=authroot["FLAG"],
             )
-        embed.set_thumbnail(url="http://i.imgur.com/{}.jpg".format(img))
+        embed.set_thumbnail(url="https://www.nationstates.net/{}".format(img))
         if option & WA.DELEGATE:
             for_del_votes = sorted(
                 root.iterfind("DELVOTES_FOR/DELEGATE"), key=lambda e: e["VOTES"], reverse=True
@@ -489,6 +493,7 @@ class NationStates(commands.Cog):
                     "►" * int(round(percent / 10)) + str(int(round(percent))) + "%",
                     root["TOTAL_VOTES_AGAINST"],
                 ),
+                inline=False,
             )
         if option & WA.NATION:
             percent = (
@@ -503,6 +508,23 @@ class NationStates(commands.Cog):
                     "►" * int(round(percent / 10)) + str(int(round(percent))) + "%",
                     root["TOTAL_NATIONS_AGAINST"],
                 ),
+                inline=False,
+            )
+        if "REPEALED_BY" in root:
+            embed.add_field(
+                name="Repealed By",
+                value='[Repeal "{}"](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})".format(
+                    root["NAME"], root["REPEALED_BY"], "2" if is_sc else "1"
+                ),
+                inline=False,
+            )
+        if "REPEALS_COUNCILID" in root:
+            embed.add_field(
+                name="Repeals",
+                value='[{}](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})".format(
+                    root["NAME"][8:-1], root["REPEALS_COUNCILID"], "2" if is_sc else "1"
+                ),
+                inline=False,
             )
         embed.set_footer(text="Passed" if resolution_id else "Voting Started")
         await embed.send_to(ctx)
