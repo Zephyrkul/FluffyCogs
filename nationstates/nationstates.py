@@ -513,7 +513,7 @@ class NationStates(commands.Cog):
         if "REPEALED_BY" in root:
             embed.add_field(
                 name="Repealed By",
-                value='[Repeal "{}"](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})".format(
+                value='[Repeal "{}"](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})'.format(
                     root["NAME"], root["REPEALED_BY"], "2" if is_sc else "1"
                 ),
                 inline=False,
@@ -521,7 +521,7 @@ class NationStates(commands.Cog):
         if "REPEALS_COUNCILID" in root:
             embed.add_field(
                 name="Repeals",
-                value='[{}](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})".format(
+                value='[{}](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})'.format(
                     root["NAME"][8:-1], root["REPEALS_COUNCILID"], "2" if is_sc else "1"
                 ),
                 inline=False,
