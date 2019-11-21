@@ -393,7 +393,9 @@ class NationStates(commands.Cog):
             embed = ProxyEmbed(
                 title="Last Resolution", description=out, colour=await ctx.embed_colour()
             )
-            embed.set_thumbnail(url="https://www.nationstates.net/images/{}.jpg".format("sc" if is_sc else "ga"))
+            embed.set_thumbnail(
+                url="https://www.nationstates.net/images/{}.jpg".format("sc" if is_sc else "ga")
+            )
             return await embed.send_to(ctx)
         root = root["RESOLUTION"]
         img = {
@@ -510,7 +512,12 @@ class NationStates(commands.Cog):
                 ),
                 inline=False,
             )
-        if "REPEALED_BY" in root:
+        # I can only blame my own buggy code for the following
+        try:
+            root["REPEALED_BY"]
+        except KeyError:
+            pass
+        else:
             embed.add_field(
                 name="Repealed By",
                 value='[Repeal "{}"](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})'.format(
@@ -518,10 +525,14 @@ class NationStates(commands.Cog):
                 ),
                 inline=False,
             )
-        if "REPEALS_COUNCILID" in root:
+        try:
+            root["REPEALS_COUNCILID"]
+        except KeyError:
+            pass
+        else:
             embed.add_field(
                 name="Repeals",
-                value='[{}](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})'.format(
+                value="[{}](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})".format(
                     root["NAME"][8:-1], root["REPEALS_COUNCILID"], "2" if is_sc else "1"
                 ),
                 inline=False,
