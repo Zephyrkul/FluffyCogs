@@ -567,8 +567,8 @@ class NationStates(commands.Cog):
                 key = "q"
         if key != "q":
             return await ctx.send("No value provided for key {!r}".format(key))
-        root = await Api(request)
-        await ctx.send_interactive(pagify(pretty_string(root), shorten_by=11), "xml")
+        root = await Api(**request)
+        await ctx.send_interactive(pagify(root.to_pretty_string(), shorten_by=11), "xml")
 
     # __________ ENDORSE __________
 
