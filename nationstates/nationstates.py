@@ -13,12 +13,12 @@ from operator import or_
 from typing import Optional, Union
 
 # pylint: disable=E0611
-import sans
 from sans.errors import HTTPException, NotFound
 from sans.api import Api
+from sans.utils import pretty_string
 
 from redbot.core import checks, commands, Config, version_info as red_version
-from redbot.core.utils.chat_formatting import box, pagify, escape
+from redbot.core.utils.chat_formatting import pagify, escape
 
 # pylint: disable=E0401
 from cog_shared.proxyembed import ProxyEmbed
@@ -187,55 +187,54 @@ class NationStates(commands.Cog):
             embed.set_author(name="NationStates", url="https://www.nationstates.net/")
             embed.set_thumbnail(url="http://i.imgur.com/Pp1zO19.png")
             return await embed.send_to(ctx)
-        endo = root["CENSUS/SCALE[@id='66']/SCORE"]
+        endo = root.find("CENSUS/SCALE[@id='66']/SCORE").pyval
         if endo == 1:
             endo = "{:.0f} endorsement".format(endo)
         else:
             endo = "{:.0f} endorsements".format(endo)
-        if root["FOUNDED"] == 0:
-            root["FOUNDED"] = "in Antiquity"
+        founded = root.FOUNDED.pyval or "in Antiquity"
         embed = ProxyEmbed(
-            title=root["FULLNAME"],
+            title=root.FULLNAME.pyval,
             url="https://www.nationstates.net/nation={}".format(root.get("id")),
             description="[{}](https://www.nationstates.net/region={})"
             " | {} {} | Founded {}".format(
-                root["REGION"],
-                "_".join(root["REGION"].lower().split()),
-                self._illion(root["POPULATION"]),
-                root["DEMONYM2PLURAL"],
-                root["FOUNDED"],
+                root.REGION.pyval,
+                "_".join(root.REGION.text.lower().split()),
+                self._illion(root.POPULATION.pyval),
+                root["DEMONYM2PLURAL"].pyval,
+                founded,
             ),
-            timestamp=datetime.utcfromtimestamp(root["LASTLOGIN"]),
+            timestamp=datetime.utcfromtimestamp(root.LASTLOGIN.pyval),
             colour=0x8BBC21 if self._is_zday(ctx.message) else await ctx.embed_colour(),
         )
         embed.set_author(name="NationStates", url="https://www.nationstates.net/")
-        embed.set_thumbnail(url=root["FLAG"])
+        embed.set_thumbnail(url=root.FLAG.pyval)
         embed.add_field(
-            name=root["CATEGORY"],
+            name=root.CATEGORY.pyval,
             value="{}\t|\t{}\t|\t{}".format(
-                root["FREEDOM/CIVILRIGHTS"],
-                root["FREEDOM/ECONOMY"],
-                root["FREEDOM/POLITICALFREEDOM"],
+                root.find("FREEDOM/CIVILRIGHTS"),
+                root.find("FREEDOM/ECONOMY"),
+                root.find("FREEDOM/POLITICALFREEDOM"),
             ),
             inline=False,
         )
         embed.add_field(
-            name=root["UNSTATUS"],
+            name=root.UNSTATUS.pyval,
             value="{} | {:.0f} influence ({})".format(
-                endo, root["CENSUS/SCALE[@id='65']/SCORE"], root["INFLUENCE"]
+                endo, root.find("CENSUS/SCALE[@id='65']/SCORE").pyval, root.INFLUENCE.pyval
             ),
             inline=False,
         )
         if self._is_zday(ctx.message):
             embed.add_field(
                 name="{}{}".format(
-                    (root["ZOMBIE/ZACTION"] or "No Action").title(),
-                    " (Unintended)" if root["ZOMBIE/ZACTIONINTENDED"] else "",
+                    (root.find("ZOMBIE/ZACTION") or "No Action").title(),
+                    " (Unintended)" if root.find("ZOMBIE/ZACTIONINTENDED") else "",
                 ),
                 value="Survivors: {} | Zombies: {} | Dead: {}".format(
-                    self._illion(root["ZOMBIE/SURVIVORS"]),
-                    self._illion(root["ZOMBIE/ZOMBIES"]),
-                    self._illion(root["ZOMBIE/DEAD"]),
+                    self._illion(root.find("ZOMBIE/SURVIVORS")),
+                    self._illion(root.find("ZOMBIE/ZOMBIES")),
+                    self._illion(root.find("ZOMBIE/DEAD")),
                 ),
                 inline=False,
             )
@@ -244,7 +243,7 @@ class NationStates(commands.Cog):
             value=(
                 "[{0}'s Deck](https://www.nationstates.net/page=deck/nation={1})\t|"
                 "\t[{0}'s Card](https://www.nationstates.net/page=deck/card={2})".format(
-                    root["NAME"], root.get("id"), root["DBID"]
+                    root.NAME.pyval, root.get("id"), root.DBID.pyval
                 )
             ),
         )
@@ -267,28 +266,28 @@ class NationStates(commands.Cog):
             )
             embed.set_author(name="NationStates", url="https://www.nationstates.net/")
             return await embed.send_to(ctx)
-        if root["DELEGATE"] == 0:
+        if root.DELEGATE.pyval == 0:
             delvalue = "No Delegate"
         else:
-            endo = root["DELEGATEVOTES"] - 1
+            endo = root.DELEGATEVOTES.pyval - 1
             if endo == 1:
                 endo = "{:.0f} endorsement".format(endo)
             else:
                 endo = "{:.0f} endorsements".format(endo)
             delvalue = "[{}](https://www.nationstates.net/nation={}) | {}".format(
-                root["DELEGATE"].replace("_", " ").title(), root["DELEGATE"], endo
+                root.DELEGATE.pyval.replace("_", " ").title(), root.DELEGATE.pyval, endo
             )
-        if "X" in root["DELEGATEAUTH"]:
+        if "X" in root.DELEGATEAUTH.pyval:
             delheader = "Delegate"
         else:
             delheader = "Delegate (Non-Executive)"
         tags = {t.text for t in root.iterfind("TAGS/TAG")}
         founderless = "Founderless" in tags
-        if root["FOUNDED"] == 0:
+        if root.FOUNDED.pyval == 0:
             founded = "in Antiquity"
         else:
-            founded = root["FOUNDED"]
-        if root["FOUNDER"] == 0:
+            founded = root.FOUNDED.pyval
+        if root.FOUNDER.pyval == 0:
             foundervalue = "No Founder"
         else:
             if founderless:
@@ -296,31 +295,31 @@ class NationStates(commands.Cog):
             else:
                 url = "https://www.nationstates.net/nation="
             foundervalue = "[{}]({}{}){}".format(
-                root["FOUNDER"].replace("_", " ").title(),
+                root.FOUNDER.pyval.replace("_", " ").title(),
                 url,
-                root["FOUNDER"],
+                root.FOUNDER.pyval,
                 " (Ceased to Exist)" if founderless else "",
             )
         if founderless:
             founderheader = "Founderless"
         else:
             founderheader = "Founder"
-        if not root["FOUNDERAUTH"] or "X" not in root["FOUNDERAUTH"]:
+        if not root.FOUNDERAUTH.pyval or "X" not in root.FOUNDERAUTH.pyval:
             founderheader += " (Non-Executive)"
         fash = "Fascist" in tags and "Anti-Fascist" not in tags  # why do people hoard tags...
-        name = "{}{}".format("\N{LOCK} " if "Password" in tags else "", root["NAME"])
+        name = "{}{}".format("\N{LOCK} " if "Password" in tags else "", root.NAME.pyval)
         if fash:
             warning = "\n**```css\n\N{HEAVY EXCLAMATION MARK SYMBOL} Region Tagged as Fascist \N{HEAVY EXCLAMATION MARK SYMBOL}\n```**"
         else:
             warning = ""
         description = "[{} nations](https://www.nationstates.net/region={}/page=list_nations) | Founded {} | Power: {}{}".format(
-            root["NUMNATIONS"], root.get("id"), founded, root["POWER"], warning
+            root.NUMNATIONS.pyval, root.get("id"), founded, root.POWER.pyval, warning
         )
         embed = ProxyEmbed(
             title=name,
             url="https://www.nationstates.net/region={}".format(root.get("id")),
             description=description,
-            timestamp=datetime.utcfromtimestamp(root["LASTUPDATE"]),
+            timestamp=datetime.utcfromtimestamp(root.LASTUPDATE.pyval),
             colour=0x000001
             if fash
             else 0x8BBC21
@@ -328,17 +327,17 @@ class NationStates(commands.Cog):
             else await ctx.embed_colour(),
         )
         embed.set_author(name="NationStates", url="https://www.nationstates.net/")
-        if root["FLAG"]:
-            embed.set_thumbnail(url=root["FLAG"])
+        if root.FLAG.pyval:
+            embed.set_thumbnail(url=root.FLAG.pyval)
         embed.add_field(name=founderheader, value=foundervalue, inline=False)
         embed.add_field(name=delheader, value=delvalue, inline=False)
         if self._is_zday(ctx.message):
             embed.add_field(
                 name="Zombies",
                 value="Survivors: {} | Zombies: {} | Dead: {}".format(
-                    self._illion(root["ZOMBIE/SURVIVORS"]),
-                    self._illion(root["ZOMBIE/ZOMBIES"]),
-                    self._illion(root["ZOMBIE/DEAD"]),
+                    self._illion(root.find("ZOMBIE/SURVIVORS")),
+                    self._illion(root.find("ZOMBIE/ZOMBIES")),
+                    self._illion(root.find("ZOMBIE/DEAD")),
                 ),
                 inline=False,
             )
@@ -375,9 +374,9 @@ class NationStates(commands.Cog):
         else:
             shards.append("lastresolution")
         root = await Api(request, q=shards)
-        if root["RESOLUTION"] is None:
+        if not root.RESOLUTION:
             out = (
-                unescape(root["LASTRESOLUTION"])
+                unescape(root.LASTRESOLUTION.pyval)
                 .replace("<strong>", "**")
                 .replace("</strong>", "**")
             )
@@ -397,15 +396,15 @@ class NationStates(commands.Cog):
                 url="https://www.nationstates.net/images/{}.jpg".format("sc" if is_sc else "ga")
             )
             return await embed.send_to(ctx)
-        root = root["RESOLUTION"]
+        root = root.RESOLUTION
         img = {
             "Commendation": "images/commend.png",
             "Condemnation": "images/condemn.png",
             "Liberation": "images/liberate.png",
-        }.get(root["CATEGORY"], "images/ga.jpg")
+        }.get(root.CATEGORY.pyval, "images/ga.jpg")
         if option & WA.TEXT:
             description = "**Category: {}**\n\n{}".format(
-                root["CATEGORY"], escape(root["DESC"], formatting=True)
+                root.CATEGORY.pyval, escape(root.DESC.pyval, formatting=True)
             )
             short = next(
                 pagify(
@@ -419,14 +418,14 @@ class NationStates(commands.Cog):
             if len(short) < len(description):
                 description = short + "\N{HORIZONTAL ELLIPSIS}"
         else:
-            description = "Category: {}".format(root["CATEGORY"])
+            description = "Category: {}".format(root.CATEGORY.pyval)
         if resolution_id:
-            impl = root["IMPLEMENTED"]
+            impl = root.IMPLEMENTED.pyval
         else:
             # mobile embeds can't handle the FUTURE
-            impl = root["PROMOTED"]  # + (4 * 24 * 60 * 60)  # 4 Days
+            impl = root.PROMOTED.pyval  # + (4 * 24 * 60 * 60)  # 4 Days
         embed = ProxyEmbed(
-            title=root["NAME"],
+            title=root.NAME.pyval,
             url="https://www.nationstates.net/page={}".format("sc" if is_sc else "ga")
             if not resolution_id
             else "https://www.nationstates.net/page=WA_past_resolution/id={}/council={}".format(
@@ -437,35 +436,37 @@ class NationStates(commands.Cog):
             colour=await ctx.embed_colour(),
         )
         try:
-            authroot = await Api("fullname flag", nation=root["PROPOSED_BY"])
+            authroot = await Api("fullname flag", nation=root.PROPOSED_BY.pyval)
         except NotFound:
             embed.set_author(
-                name=" ".join(root["PROPOSED_BY"].split("_")).title(),
+                name=" ".join(root.PROPOSED_BY.pyval.split("_")).title(),
                 url="https://www.nationstates.net/page=boneyard?nation={}".format(
-                    root["PROPOSED_BY"]
+                    root.PROPOSED_BY.pyval
                 ),
                 icon_url="http://i.imgur.com/Pp1zO19.png",
             )
         else:
             embed.set_author(
-                name=authroot["FULLNAME"],
-                url="https://www.nationstates.net/nation={}".format(root["PROPOSED_BY"]),
-                icon_url=authroot["FLAG"],
+                name=authroot.FULLNAME.pyval,
+                url="https://www.nationstates.net/nation={}".format(root.PROPOSED_BY.pyval),
+                icon_url=authroot.FLAG.pyval,
             )
         embed.set_thumbnail(url="https://www.nationstates.net/{}".format(img))
         if option & WA.DELEGATE:
             for_del_votes = sorted(
-                root.iterfind("DELVOTES_FOR/DELEGATE"), key=lambda e: e["VOTES"], reverse=True
+                root.iterfind("DELVOTES_FOR/DELEGATE"), key=lambda e: e.VOTES.pyval, reverse=True
             )[:10]
             against_del_votes = sorted(
-                root.iterfind("DELVOTES_AGAINST/DELEGATE"), key=lambda e: e["VOTES"], reverse=True
+                root.iterfind("DELVOTES_AGAINST/DELEGATE"),
+                key=lambda e: e.VOTES.pyval,
+                reverse=True,
             )[:10]
             if for_del_votes:
                 embed.add_field(
                     name="Top Delegates For",
                     value="\t|\t".join(
                         "[{}](https://www.nationstates.net/nation={}) ({})".format(
-                            e["NATION"].replace("_", " ").title(), e["NATION"], e["VOTES"]
+                            e.NATION.pyval.replace("_", " ").title(), e.NATION.pyval, e.VOTES.pyval
                         )
                         for e in for_del_votes
                     ),
@@ -476,7 +477,7 @@ class NationStates(commands.Cog):
                     name="Top Delegates Against",
                     value="\t|\t".join(
                         "[{}](https://www.nationstates.net/nation={}) ({})".format(
-                            e["NATION"].replace("_", " ").title(), e["NATION"], e["VOTES"]
+                            e.NATION.pyval.replace("_", " ").title(), e.NATION.pyval, e.VOTES.pyval
                         )
                         for e in against_del_votes
                     ),
@@ -485,55 +486,49 @@ class NationStates(commands.Cog):
         if option & WA.VOTE:
             percent = (
                 100
-                * root["TOTAL_VOTES_FOR"]
-                / (root["TOTAL_VOTES_FOR"] + root["TOTAL_VOTES_AGAINST"])
+                * root.TOTAL_VOTES_FOR.pyval
+                / (root.TOTAL_VOTES_FOR.pyval + root.TOTAL_VOTES_AGAINST.pyval)
             )
             embed.add_field(
                 name="Total Votes",
                 value="For {}\t{:◄<13}\t{} Against".format(
-                    root["TOTAL_VOTES_FOR"],
+                    root.TOTAL_VOTES_FOR.pyval,
                     "►" * int(round(percent / 10)) + str(int(round(percent))) + "%",
-                    root["TOTAL_VOTES_AGAINST"],
+                    root.TOTAL_VOTES_AGAINST.pyval,
                 ),
                 inline=False,
             )
         if option & WA.NATION:
             percent = (
                 100
-                * root["TOTAL_NATIONS_FOR"]
-                / (root["TOTAL_NATIONS_FOR"] + root["TOTAL_NATIONS_AGAINST"])
+                * root.TOTAL_NATIONS_FOR.pyval
+                / (root.TOTAL_NATIONS_FOR.pyval + root.TOTAL_NATIONS_AGAINST.pyval)
             )
             embed.add_field(
                 name="Total Nations",
                 value="For {}\t{:◄<13}\t{} Against".format(
-                    root["TOTAL_NATIONS_FOR"],
+                    root.TOTAL_NATIONS_FOR.pyval,
                     "►" * int(round(percent / 10)) + str(int(round(percent))) + "%",
-                    root["TOTAL_NATIONS_AGAINST"],
+                    root.TOTAL_NATIONS_AGAINST.pyval,
                 ),
                 inline=False,
             )
         # I can only blame my own buggy code for the following
-        try:
-            root["REPEALED_BY"]
-        except KeyError:
-            pass
-        else:
+        repealed_by = root.find("REPEALED_BY")
+        if repealed_by is not None:
             embed.add_field(
                 name="Repealed By",
                 value='[Repeal "{}"](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})'.format(
-                    root["NAME"], root["REPEALED_BY"], "2" if is_sc else "1"
+                    root.NAME.pyval, root.REPEALED_BY.pyval, "2" if is_sc else "1"
                 ),
                 inline=False,
             )
-        try:
-            root["REPEALS_COUNCILID"]
-        except KeyError:
-            pass
-        else:
+        repeals = root.find("REPEALS_COUNCILID")
+        if repeals is not None:
             embed.add_field(
                 name="Repeals",
                 value="[{}](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})".format(
-                    root["NAME"][8:-1], root["REPEALS_COUNCILID"], "2" if is_sc else "1"
+                    root.NAME.pyval[8:-1], repeals, "2" if is_sc else "1"
                 ),
                 inline=False,
             )
@@ -573,7 +568,7 @@ class NationStates(commands.Cog):
         if key != "q":
             return await ctx.send("No value provided for key {!r}".format(key))
         root = await Api(request)
-        await ctx.send_interactive(pagify(root.to_pretty_string(), shorten_by=11), "xml")
+        await ctx.send_interactive(pagify(pretty_string(root), shorten_by=11), "xml")
 
     # __________ ENDORSE __________
 
@@ -581,24 +576,24 @@ class NationStates(commands.Cog):
     async def ne(self, ctx, *, wa_nation: str):
         """Nations Endorsing (NE) the specified WA nation"""
         root = await Api("endorsements fullname wa", nation=wa_nation)
-        if root["UNSTATUS"].lower() == "non-member":
-            return await ctx.send(f"{root['FULLNAME']} is not a WA member.")
-        if not root["ENDORSEMENTS"]:
-            return await ctx.send(f"{root['FULLNAME']} has no endorsements.")
+        if root.UNSTATUS.pyval.lower() == "non-member":
+            return await ctx.send(f"{root.FULLNAME.pyval} is not a WA member.")
+        if not root.ENDORSEMENTS.pyval:
+            return await ctx.send(f"{root.FULLNAME.pyval} has no endorsements.")
         await ctx.send(
-            "Nations endorsing " + root["FULLNAME"],
-            file=discord.File(BytesIO(root["ENDORSEMENTS"].encode()), "ne.txt"),
+            "Nations endorsing " + root.FULLNAME.pyval,
+            file=discord.File(BytesIO(root.ENDORSEMENTS.pyval.encode()), "ne.txt"),
         )
 
     @commands.command()
     async def nec(self, ctx, *, wa_nation: str):
         """Nations Endorsing [Count] (NEC) the specified WA nation"""
         root = await Api("census fullname wa", nation=wa_nation, scale="66", mode="score")
-        if root["UNSTATUS"].lower() == "non-member":
-            return await ctx.send(f"{root['FULLNAME']} is not a WA member.")
+        if root.UNSTATUS.pyval.lower() == "non-member":
+            return await ctx.send(f"{root.FULLNAME.pyval} is not a WA member.")
         await ctx.send(
             "{:.0f} nations are endorsing {}".format(
-                root[".//SCALE[@id='66']/SCORE"], root["FULLNAME"]
+                root.find(".//SCALE[@id='66']/SCORE").pyval, root.FULLNAME.pyval
             )
         )
 
@@ -607,24 +602,26 @@ class NationStates(commands.Cog):
         """Soft Power Disbursement Rating (SPDR, aka numerical Influence) of the specified nation"""
         root = await Api("census fullname", nation=nation, scale="65", mode="score")
         await ctx.send(
-            "{} has {:.0f} influence".format(root["FULLNAME"], root[".//SCALE[@id='65']/SCORE"])
+            "{} has {:.0f} influence".format(
+                root.FULLNAME.pyval, root.find(".//SCALE[@id='65']/SCORE").pyval
+            )
         )
 
     @commands.command()
     async def nne(self, ctx, *, wa_nation: str):
         """Nations Not Endorsing (NNE) the specified WA nation"""
         nation_root = await Api("endorsements fullname region wa", nation=wa_nation)
-        if nation_root["UNSTATUS"].lower() == "non-member":
-            return await ctx.send(f"{nation_root['FULLNAME']} is not a WA member.")
+        if nation_root.UNSTATUS.pyval.lower() == "non-member":
+            return await ctx.send(f"{nation_root.FULLNAME.pyval} is not a WA member.")
         wa_root = await Api("members", wa="1")
-        region_root = await Api("nations", region=nation_root["REGION"])
+        region_root = await Api("nations", region=nation_root.REGION.pyval)
         final = (
-            set(region_root["NATIONS"].split(":"))
-            .intersection(wa_root["MEMBERS"].split(","))
-            .difference((nation_root["ENDORSEMENTS"] or "").split(","))
+            set(region_root.NATIONS.pyval.split(":"))
+            .intersection(wa_root.MEMBERS.pyval.split(","))
+            .difference((nation_root.ENDORSEMENTS.pyval or "").split(","))
         )
         await ctx.send(
-            "Nations not endorsing " + nation_root["FULLNAME"],
+            "Nations not endorsing " + nation_root.FULLNAME.pyval,
             file=discord.File(BytesIO(",".join(final).encode()), "nne.txt"),
         )
 
@@ -632,15 +629,15 @@ class NationStates(commands.Cog):
     async def nnec(self, ctx, *, wa_nation: str):
         """Nations Not Endorsing [Count] (NNEC) the specified WA nation"""
         nation_root = await Api("endorsements fullname region wa", nation=wa_nation)
-        if nation_root["UNSTATUS"].lower() == "non-member":
-            return await ctx.send(f"{nation_root['NAME']} is not a WA member.")
+        if nation_root.UNSTATUS.pyval.lower() == "non-member":
+            return await ctx.send(f"{nation_root.NAME.pyval} is not a WA member.")
         wa_root = await Api("members", wa="1")
-        region_root = await Api("nations", region=nation_root["REGION"])
+        region_root = await Api("nations", region=nation_root.REGION.pyval)
         final = (
-            set(region_root["NATIONS"].split(":"))
-            .intersection(wa_root["MEMBERS"].split(","))
-            .difference((nation_root["ENDORSEMENTS"] or "").split(","))
+            set(region_root.NATIONS.pyval.split(":"))
+            .intersection(wa_root.MEMBERS.pyval.split(","))
+            .difference((nation_root.ENDORSEMENTS.pyval or "").split(","))
         )
         await ctx.send(
-            "{:.0f} nations are not endorsing {}".format(len(final), nation_root["FULLNAME"])
+            "{:.0f} nations are not endorsing {}".format(len(final), nation_root.FULLNAME.pyval)
         )
