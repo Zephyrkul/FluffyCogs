@@ -8,7 +8,7 @@ from redbot.core.utils.menus import start_adding_reactions
 from redbot.core.utils.predicates import ReactionPredicate
 
 
-class MemberRestore(commands.cog):
+class MemberRestore(commands.Cog):
     def __init__(self):
         super().__init__()
         self.cache: Dict[discord.Member, Tuple[str, List[discord.Role]]] = {}
