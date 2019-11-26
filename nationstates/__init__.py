@@ -13,7 +13,8 @@ async def setup(bot):
         if sans.version_info < type(sans.version_info)("0.0.1b6"):
             raise RuntimeError(
                 "The sans library is out of date.\n"
-                "Run this command to update it: [p]pipinstall sans"
+                "Run this command to update it: [p]pipinstall sans\n"
+                "You may have to [p]restart your bot to have the new version take effect."
             )
     cog = NationStates(bot)
     await cog.initialize()
