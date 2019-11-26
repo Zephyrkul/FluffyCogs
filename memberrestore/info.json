@@ -1,0 +1,13 @@
+{
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "Usage: `[p]help MemberRestore`.",
+    "name": "MemberRestore",
+    "short": "Restores a member's roles after they've been removed.",
+    "description": "Restores a member's roles after they've been removed.",
+    "tags": [
+        "utility",
+        "mod"
+    ]
+}
