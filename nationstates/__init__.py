@@ -1,6 +1,7 @@
 try:
     import sans
     from .nationstates import NationStates
+
     import_failed = None
 except ImportError as e:
     import_failed = e
@@ -11,7 +12,7 @@ async def setup(bot):
         raise RuntimeError(
             "The sans library is out of date or not installed.\n"
             "Run this command to update it: [p]pipinstall sans\n"
-             "You may have to [p]restart your bot to have the new version take effect."
+            "You may have to [p]restart your bot to have the new version take effect."
         ) from import_failed
     cog = NationStates(bot)
     await cog.initialize()
