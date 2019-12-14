@@ -63,5 +63,5 @@ class MemberRestore(commands.Cog):
         await ctx.send("Done.")
 
     @commands.Cog.listener()
-    async def on_member_leave(self, member):
+    async def on_member_remove(self, member):
         self.cache[member] = member.nick, list(map(lambda r: r.id, member.roles))
