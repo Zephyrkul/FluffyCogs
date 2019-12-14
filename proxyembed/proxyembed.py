@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import discord
 from redbot.core.commands import Context
 from redbot.core.utils import chat_formatting as CF
@@ -17,30 +19,51 @@ def findall(p, s):
         i = s.find(p, i + 1)
 
 
+class _OverwritesEmbed(discord.Embed):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._fields = defaultdict(
+            lambda key: defaultdict(lambda k: self.Empty),
+            {i: v for i, v in enumerate(getattr(self, "_fields", ()))},
+        )
+
+    def add_field(self, *args, **kwargs):
+        raise NotImplementedError("This operation is unsupported for overwrites.")
+
+
 class ProxyEmbed(discord.Embed):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.overwrites = {}
+        self.overwrites = _OverwritesEmbed()
+
+    @classmethod
+    def _get(cls, obj, attr):
+        try:
+            obj = getattr(obj, attr)
+        except AttributeError:
+            try:
+                # pylint: disable=E1136
+                obj = obj[int(attr)]
+            except (ValueError, IndexError):
+                try:
+                    # pylint: disable=E1136
+                    obj = obj[attr]
+                except KeyError:
+                    return cls.Empty
 
     def _(self, *attrs):
         attrs = ".".join(map(str, attrs))
         overwrite = self.overwrites
         obj = self
         for attr in attrs.split("."):
-            if overwrite is not None:
-                overwrite = overwrite.get(attr)
-            try:
-                obj = getattr(obj, attr)
-            except AttributeError:
-                try:
-                    # pylint: disable=E1136
-                    obj = obj[int(attr)]
-                except ValueError:
-                    # pylint: disable=E1136
-                    obj = obj[attr]
-        if overwrite:
-            return str(overwrite).strip()
-        return str(obj).strip()
+            if overwrite is not self.Empty:
+                overwrite = self._get(overwrite, attr)
+            obj = self._get(obj, attr)
+        if overwrite is not self.Empty:
+            return overwrite
+        if obj is not self.Empty:
+            return overwrite
+        return self.Empty
 
     async def send_to(self, ctx: Context, content=None):
         if await ctx.embed_requested():
@@ -78,6 +101,7 @@ class ProxyEmbed(discord.Embed):
             )
             if not inline or len(name) + len(value) > 78 or "\n" in name or "\n" in value:
                 content.append(name)
+                value = value.strip()
                 blocks = tuple(findall("```", value))
                 if blocks == (0, len(value) - 3):
                     content.append(value)
