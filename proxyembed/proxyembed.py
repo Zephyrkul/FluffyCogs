@@ -7,6 +7,16 @@ __all__ = ["ProxyEmbed"]
 __author__ = "Zephyrkul"
 
 
+# from: https://stackoverflow.com/a/34445090
+def findall(p, s):
+    """Yields all the positions of
+    the pattern p in the string s."""
+    i = s.find(p)
+    while i != -1:
+        yield i
+        i = s.find(p, i + 1)
+
+
 class ProxyEmbed(discord.Embed):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -29,8 +39,8 @@ class ProxyEmbed(discord.Embed):
                     # pylint: disable=E1136
                     obj = obj[attr]
         if overwrite:
-            return overwrite
-        return obj
+            return str(overwrite).strip()
+        return str(obj).strip()
 
     async def send_to(self, ctx: Context, content=None):
         if await ctx.embed_requested():
@@ -68,7 +78,11 @@ class ProxyEmbed(discord.Embed):
             )
             if not inline or len(name) + len(value) > 78 or "\n" in name or "\n" in value:
                 content.append(name)
-                content.append(CF.box(CF.escape(value, formatting=True)))
+                blocks = tuple(findall("```", value))
+                if blocks == (0, len(value) - 3):
+                    content.append(value)
+                else:
+                    content.append(CF.box(CF.escape(value, formatting=True)))
                 next_break = False
             else:
                 content.append(f"{name}: {value}")
