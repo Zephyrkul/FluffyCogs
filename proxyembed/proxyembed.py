@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 
 import discord
@@ -7,6 +8,8 @@ from redbot.core.utils import chat_formatting as CF
 
 __all__ = ["ProxyEmbed"]
 __author__ = "Zephyrkul"
+
+LOG = logging.getLogger("red.fluffy.proxyembed")
 
 
 # from: https://stackoverflow.com/a/34445090
@@ -66,10 +69,11 @@ class ProxyEmbed(discord.Embed):
             if overwrite is not self.Empty:
                 overwrite = self._get(overwrite, attr)
             obj = self._get(obj, attr)
-        if overwrite is not self.Empty:
-            return overwrite
-        if obj is not self.Empty:
-            return obj
+        if overwrite not in (None, self.Empty):
+            LOG.debug("Returning overwritten value %r", overwrite)
+            return str(overwrite).strip()
+        if obj not in (None, self.Empty):
+            return str(obj).strip()
         return self.Empty
 
     async def send_to(self, ctx: Context, content=None):
