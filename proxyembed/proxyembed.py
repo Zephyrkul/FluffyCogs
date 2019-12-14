@@ -60,6 +60,7 @@ class ProxyEmbed(discord.Embed):
                     obj = obj[attr]
                 except (IndexError, KeyError, TypeError):
                     return cls.Empty
+        return obj
 
     def _(self, *attrs):
         attrs = ".".join(map(str, attrs))
@@ -69,10 +70,10 @@ class ProxyEmbed(discord.Embed):
             if overwrite is not self.Empty:
                 overwrite = self._get(overwrite, attr)
             obj = self._get(obj, attr)
-        if overwrite not in (None, self.Empty):
+        if overwrite is not self.Empty:
             LOG.debug("Returning overwritten value %r", overwrite)
             return str(overwrite).strip()
-        if obj not in (None, self.Empty):
+        if obj is not self.Empty:
             return str(obj).strip()
         return self.Empty
 
