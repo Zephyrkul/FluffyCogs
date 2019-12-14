@@ -1,6 +1,5 @@
-import aiohttp
 import asyncio
-import contextlib
+import bisect
 import discord
 import re
 import time
@@ -18,7 +17,7 @@ from sans.api import Api
 from sans.utils import pretty_string
 
 from redbot.core import checks, commands, Config, version_info as red_version
-from redbot.core.utils.chat_formatting import pagify, escape
+from redbot.core.utils.chat_formatting import pagify, escape, box
 
 # pylint: disable=E0401
 from cog_shared.proxyembed import ProxyEmbed
@@ -31,6 +30,13 @@ LINK_RE = re.compile(
 )
 WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
 ZDAY_EPOCHS = (1572465600, 1572584400 + 604800)
+CARD_COLORS = {
+    "legendary": 0xFFD700,
+    "epic": 0xDB9E1C,
+    "rare": 0x008EC1,
+    "uncommon": 0x00AA4C,
+    "common": 0x7E7E7E,
+}
 
 
 class Options(Flag):
@@ -77,6 +83,9 @@ class NationStates(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_global(agent=None)
+        self.db_cache = None
+        self.config.init_custom("NATION", 1)
+        self.config.register_custom("NATION", dbid=None)
 
     async def initialize(self):
         agent = await self.config.agent()
@@ -88,6 +97,7 @@ class NationStates(commands.Cog):
             # only make the user_info request if necessary
             agent = str(self.bot.get_user(owner_id) or await self.bot.fetch_user(owner_id))
         Api.agent = f"{agent} Red-DiscordBot/{red_version}"
+        self.db_cache = await self.config.custom("NATION").all()
 
     def cog_check(self, ctx):
         # this will also cause `[p]agent` to be blocked but this is intended
@@ -154,7 +164,7 @@ class NationStates(commands.Cog):
     async def agent(self, ctx, *, agent: str):
         """
         Sets the user agent.
-        
+
         Recommendations: https://www.nationstates.net/pages/api.html#terms
         Defaults to your username#hash
         """
@@ -187,6 +197,10 @@ class NationStates(commands.Cog):
             embed.set_author(name="NationStates", url="https://www.nationstates.net/")
             embed.set_thumbnail(url="http://i.imgur.com/Pp1zO19.png")
             return await embed.send_to(ctx)
+        n_id = root.get("id")
+        if n_id not in self.db_cache:
+            self.db_cache[n_id] = {"dbid": root.DBID.pyval}
+            await self.config.custom("NATION", n_id).dbid.set(root.DBID.pyval)
         endo = root.find("CENSUS/SCALE[@id='66']/SCORE").pyval
         if endo == 1:
             endo = "{:.0f} endorsement".format(endo)
@@ -243,7 +257,7 @@ class NationStates(commands.Cog):
             value=(
                 "[{0}'s Deck](https://www.nationstates.net/page=deck/nation={1})\t|"
                 "\t[{0}'s Card](https://www.nationstates.net/page=deck/card={2})".format(
-                    root.NAME.pyval, root.get("id"), root.DBID.pyval
+                    root.NAME.pyval, n_id, root.DBID.pyval
                 )
             ),
         )
@@ -342,6 +356,134 @@ class NationStates(commands.Cog):
                 inline=False,
             )
         embed.set_footer(text="Last Updated")
+        await embed.send_to(ctx)
+
+    # __________ CARDS __________
+
+    @commands.command()
+    async def card(
+        self,
+        ctx,
+        season: Optional[int] = 2,
+        *,
+        nation: Union[int, partial(link_extract, expected="nation")],
+    ):
+        """
+        Retrieves general info about the specified card.
+
+        If a number is provided, the bot will look for the card with that ID.
+        Note that a season number must be specified if an ID is passed.
+        Otherwise, the bot will look for the specified nation's card.
+        """
+        if isinstance(nation, str) and nation not in self.db_cache:
+            api = Api("dbid", nation=nation)
+            root = await api
+            n_id, nation = root.get("id"), root.DBID.pyval
+            self.db_cache[n_id] = {"dbid": nation}
+            await self.config.custom("NATION", n_id).dbid.set(nation)
+        else:
+            nation = self.db_cache.get(nation, {}).get("dbid", nation)
+        assert isinstance(nation, int), repr(nation)
+        api = Api("card info markets", cardid=nation, season=season)
+        root = await api
+        if not root.countchildren():
+            return await ctx.send("No such card.")
+        embed = ProxyEmbed(
+            title=f"The {root.TYPE.pyval} of {root.NAME.pyval}",
+            url=f"https://www.nationstates.net/page=deck/card={nation}/season={season}",
+            colour=CARD_COLORS.get(root.CATEGORY.text, 0),
+        )
+        embed.set_author(name=root.CATEGORY.text.title())
+        embed.set_thumbnail(
+            url=f"https://www.nationstates.net/images/cards/s{season}/{root.FLAG.pyval}"
+        )
+        embed.add_field(
+            name="Market Value (estimated)",
+            value=box(root.MARKET_VALUE.text, lang="swift"),
+            inline=False,
+        )
+        sellers, buyers = [], []
+        for market in root.MARKETS.iterchildren():
+            # negative price to reverse sorting
+            if market.TYPE.text == "bid":
+                bisect.insort(
+                    buyers, (-market.PRICE.pyval, market.NATION.text.replace("_", "\xa0").title())
+                )
+            elif market.TYPE.text == "ask":
+                bisect.insort(
+                    sellers, (market.PRICE.pyval, market.NATION.text.replace("_", "\xa0").title())
+                )
+        max_listed = 5
+        max_len = max(len(buyers), len(sellers))
+        max_len = min(max_len, max_listed + 1)
+        for is_buyers, arr in enumerate((sellers, buyers)):
+            pad = "\n\u200b" * max(0, max_len - len(arr))
+            if not arr:
+                embed.add_field(name="Buyers" if is_buyers else "Sellers", value=box(pad))
+                embed.overwrites.set_field_at(
+                    is_buyers + 1,
+                    name=embed.fields[is_buyers + 1].name,
+                    value=box("\u200b", lang="swift"),
+                )
+                continue
+            tarr = [
+                f"{-j[0]:.02f}\xa0{j[1]}" if is_buyers else f"{j[1]}\xa0{j[0]:.02f}"
+                for j in arr[:max_listed]
+            ]
+            if len(arr) > max_listed:
+                num = len(arr) - max_listed
+                tarr.append(
+                    f"+ {num} more {'bid' if is_buyers else 'ask'}{'' if num == 1 else 's'}\N{HORIZONTAL ELLIPSIS}"
+                )
+            raw_text = "\n".join(tarr)
+            if not is_buyers:
+                width = max(map(len, tarr))
+                for i, t in enumerate(tarr):
+                    tarr[i] = t.rjust(width)
+            text = "\n".join(tarr) + pad
+            embed.add_field(
+                name="Buyers" if is_buyers else "Sellers", value=box(text, lang="swift")
+            )
+            embed.overwrites.set_field_at(
+                is_buyers + 1,
+                name=embed.fields[is_buyers + 1].name,
+                value=box(raw_text, lang="swift"),
+            )
+        await embed.send_to(ctx)
+
+    @commands.command()
+    async def deck(self, ctx, *, nation: Union[int, partial(link_extract, expected="nation")]):
+        """Retrieves general info about the specified nation's deck."""
+        is_id = isinstance(nation, int)
+        if is_id:
+            api = Api("cards info", nationid=nation)
+        else:
+            api = Api("cards info", nationname=nation)
+        root = await api
+        if not root.INFO.countchildren():
+            return await ctx.send("No such deck.")
+        if not is_id:
+            n_id = nation.replace(" ", "_").casefold()
+            if n_id not in self.db_cache:
+                self.db_cache[n_id] = {"dbid": root.INFO.ID.pyval}
+                await self.config.custom("NATION", n_id).dbid.set(root.INFO.ID.pyval)
+        else:
+            n_id = ""
+        proper = f"ID: {nation}" if is_id else nation.replace("_", " ").title()
+        embed = ProxyEmbed(
+            title=proper,
+            description=f"{root.INFO.DECK_SIZE.text} cards",
+            colour=await ctx.embed_colour(),
+            timestamp=datetime.utcfromtimestamp(root.INFO.LAST_VALUED.pyval),
+        )
+        embed.add_field(name="Bank", value=root.INFO.BANK.text)
+        embed.add_field(
+            name="Deck Value",
+            value=root.INFO.DECK_VALUE.text
+            if is_id
+            else f"[{root.INFO.DECK_VALUE.text}](https://www.nationstates.net/nation={n_id}/detail=trend/censusid=86)",
+        )
+        embed.set_footer(text="Last Valued")
         await embed.send_to(ctx)
 
     # __________ ASSEMBLY __________
@@ -568,7 +710,7 @@ class NationStates(commands.Cog):
         if key != "q":
             return await ctx.send("No value provided for key {!r}".format(key))
         root = await Api(**request)
-        await ctx.send_interactive(pagify(root.to_pretty_string(), shorten_by=11), "xml")
+        await ctx.send_interactive(pagify(pretty_string(root), shorten_by=11), "xml")
 
     # __________ ENDORSE __________
 
