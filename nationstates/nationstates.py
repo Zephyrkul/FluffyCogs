@@ -386,6 +386,10 @@ class NationStates(commands.Cog):
         assert isinstance(nation, int), repr(nation)
         api = Api("card info markets", cardid=nation, season=season)
         root = await api
+        n_id = root.NAME.text.casefold().replace(" ", "_")
+        if n_id not in self.db_cache:
+            self.db_cache[n_id] = {"dbid": nation}
+            await self.config.custom("NATION", n_id).dbid.set(nation)
         if not root.countchildren():
             return await ctx.send("No such card.")
         embed = ProxyEmbed(
