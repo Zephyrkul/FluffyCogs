@@ -33,7 +33,7 @@ class _OverwritesEmbed(discord.Embed):
     @property
     def fields(self):
         return defaultdict(
-            lambda: defaultdict(lambda: self.Empty),
+            lambda: discord.embeds.EmbedProxy(),
             {i: discord.embeds.EmbedProxy(v) for i, v in self._fields.items()},
         )
 
