@@ -44,11 +44,11 @@ class ProxyEmbed(discord.Embed):
             try:
                 # pylint: disable=E1136
                 obj = obj[int(attr)]
-            except (ValueError, IndexError):
+            except (ValueError, IndexError, KeyError, TypeError):
                 try:
                     # pylint: disable=E1136
                     obj = obj[attr]
-                except KeyError:
+                except (IndexError, KeyError, TypeError):
                     return cls.Empty
 
     def _(self, *attrs):
