@@ -74,7 +74,7 @@ class ProxyEmbed(discord.Embed):
             return str(overwrite).strip()
         if obj not in (None, self.Empty):
             return str(obj).strip()
-        return self.Empty
+        raise AttributeError(*attrs)
 
     async def send_to(self, ctx: Context, content=None):
         if await ctx.embed_requested():
@@ -104,15 +104,14 @@ class ProxyEmbed(discord.Embed):
         if next_break:
             content.append("")
             next_break = False
-        for i in range(len(self.fields)):
+        for i in range(len(self._fields)):
             inline, name, value = (
-                self._("fields", i, "inline"),
-                self._("fields", i, "name"),
-                self._("fields", i, "value"),
+                self._("_fields", i, "inline"),
+                self._("_fields", i, "name"),
+                self._("_fields", i, "value"),
             )
             if not inline or len(name) + len(value) > 78 or "\n" in name or "\n" in value:
                 content.append(name)
-                value = value.strip()
                 blocks = tuple(findall("```", value))
                 if blocks == (0, len(value) - 3):
                     content.append(value)
