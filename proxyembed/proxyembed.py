@@ -69,7 +69,7 @@ class ProxyEmbed(discord.Embed):
         if overwrite is not self.Empty:
             return overwrite
         if obj is not self.Empty:
-            return overwrite
+            return obj
         return self.Empty
 
     async def send_to(self, ctx: Context, content=None):
