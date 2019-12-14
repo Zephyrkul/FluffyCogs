@@ -23,7 +23,7 @@ class _OverwritesEmbed(discord.Embed):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._fields = defaultdict(
-            lambda key: defaultdict(lambda k: self.Empty),
+            lambda: defaultdict(lambda: self.Empty),
             {i: v for i, v in enumerate(getattr(self, "_fields", ()))},
         )
 
