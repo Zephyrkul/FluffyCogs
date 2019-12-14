@@ -27,6 +27,13 @@ class _OverwritesEmbed(discord.Embed):
             {i: v for i, v in enumerate(getattr(self, "_fields", ()))},
         )
 
+    @property
+    def fields(self):
+        return defaultdict(
+            lambda: defaultdict(lambda: self.Empty),
+            {i: discord.embeds.EmbedProxy(v) for i, v in self._fields.items()},
+        )
+
     def add_field(self, *args, **kwargs):
         raise NotImplementedError("This operation is unsupported for overwrites.")
 
