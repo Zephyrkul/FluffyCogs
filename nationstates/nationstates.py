@@ -100,6 +100,8 @@ class NationStates(commands.Cog):
         self.db_cache = await self.config.custom("NATION").all()
 
     def cog_check(self, ctx):
+        if not ctx.channel.permissions_for(ctx.me).send_messages:
+            raise commands.BotMissingPermissions(["send_messages"])
         # this will also cause `[p]agent` to be blocked but this is intended
         if ctx.cog is not self:
             return True
@@ -382,16 +384,18 @@ class NationStates(commands.Cog):
             self.db_cache[n_id] = {"dbid": nation}
             await self.config.custom("NATION", n_id).dbid.set(nation)
         else:
-            nation = self.db_cache.get(nation, {}).get("dbid", nation)
+            n_id, nation = None, self.db_cache.get(nation, {}).get("dbid", nation)
         assert isinstance(nation, int), repr(nation)
         api = Api("card info markets", cardid=nation, season=season)
         root = await api
+        if not root.countchildren():
+            if n_id:
+                return await ctx.send(f"No such card for nation {n_id!r}.")
+            return await ctx.send(f"No such card for ID {nation!r}.")
         n_id = root.NAME.text.casefold().replace(" ", "_")
         if n_id not in self.db_cache:
             self.db_cache[n_id] = {"dbid": nation}
             await self.config.custom("NATION", n_id).dbid.set(nation)
-        if not root.countchildren():
-            return await ctx.send("No such card.")
         embed = ProxyEmbed(
             title=f"The {root.TYPE.pyval} of {root.NAME.pyval}",
             url=f"https://www.nationstates.net/page=deck/card={nation}/season={season}",
