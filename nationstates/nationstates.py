@@ -26,7 +26,7 @@ listener = getattr(commands.Cog, "listener", lambda: lambda x: x)
 
 
 LINK_RE = re.compile(
-    r"(?i)\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b"
+    r'(?i)["<]?\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b[">]?'
 )
 WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
 ZDAY_EPOCHS = (1572465600, 1572584400 + 604800)
@@ -67,7 +67,7 @@ class WA(Options):
 def link_extract(link: str, *, expected):
     match = LINK_RE.match(link)
     if not match:
-        return link
+        return link.strip('"<>')
     if (match.group(1) or "nation").lower() != expected.lower():
         raise commands.BadArgument()
     return match.group(2)
@@ -368,15 +368,19 @@ class NationStates(commands.Cog):
         ctx,
         season: Optional[int] = 2,
         *,
-        nation: Union[int, partial(link_extract, expected="nation")],
+        nation: Optional[Union[int, partial(link_extract, expected="nation")]] = None,
     ):
         """
         Retrieves general info about the specified card.
 
         If a number is provided, the bot will look for the card with that ID.
-        Note that a season number must be specified if an ID is passed.
         Otherwise, the bot will look for the specified nation's card.
+
+        If you want to find a nation that has a numerical name,
+        use a link or "quotes" to specify that it is a name, and not an ID.
         """
+        if season is not None and nation is None:
+            season, nation = 2, season
         if isinstance(nation, str) and nation not in self.db_cache:
             api = Api("dbid", nation=nation)
             root = await api
