@@ -389,6 +389,7 @@ class NationStates(commands.Cog):
 
         If you want to find a nation that has a numerical name,
         use a link or "quotes" to specify that it is a name, and not an ID.
+        A season must be specified if this is the case.
         """
         if season is not None and nation is None:
             season, nation = 2, season
