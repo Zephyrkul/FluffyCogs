@@ -9,7 +9,7 @@ from functools import reduce, partial
 from html import unescape
 from io import BytesIO
 from operator import or_
-from typing import Optional, Union
+from typing import Generic, Type, TypeVar, Optional, Union
 
 # pylint: disable=E0611
 from sans.errors import HTTPException, NotFound
@@ -21,22 +21,6 @@ from redbot.core.utils.chat_formatting import pagify, escape, box
 
 # pylint: disable=E0401
 from cog_shared.proxyembed import ProxyEmbed
-
-listener = getattr(commands.Cog, "listener", lambda: lambda x: x)
-
-
-LINK_RE = re.compile(
-    r'(?i)["<]?\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b[">]?'
-)
-WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
-ZDAY_EPOCHS = (1572465600, 1572584400 + 604800)
-CARD_COLORS = {
-    "legendary": 0xFFD700,
-    "epic": 0xDB9E1C,
-    "rare": 0x008EC1,
-    "uncommon": 0x00AA4C,
-    "common": 0x7E7E7E,
-}
 
 
 class Options(Flag):
@@ -55,6 +39,16 @@ class Options(Flag):
         return cls(reduce(or_, args))
 
 
+class Nation(Options):
+    ALL = -1
+    NONE = 0
+
+
+class Region(Options):
+    ALL = -1
+    NONE = 0
+
+
 class WA(Options):
     ALL = -1
     NONE = 0
@@ -64,13 +58,34 @@ class WA(Options):
     DELEGATE = auto()
 
 
-def link_extract(link: str, *, expected):
-    match = LINK_RE.match(link)
-    if not match:
-        return link.strip('"<>')
-    if (match.group(1) or "nation").lower() != expected.lower():
+CARD_COLORS = {
+    "legendary": 0xFFD700,
+    "epic": 0xDB9E1C,
+    "rare": 0x008EC1,
+    "uncommon": 0x00AA4C,
+    "common": 0x7E7E7E,
+}
+LINK_RE = re.compile(
+    r'(?i)["<]?\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b[">]?'
+)
+WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
+ZDAY_EPOCHS = (1572465600, 1572584400 + 604800)
+T = TypeVar("T", bound=Options)
+
+
+class Link(str, Generic[T]):
+    @classmethod
+    def __class_getitem__(cls, item: Type[T]):
+        return partial(cls.link_extract, expected=item.__name__)
+
+    @staticmethod
+    def link_extract(link: str, *, expected: str):
+        match = LINK_RE.match(link)
+        if not match:
+            return link.strip('"<>')
+        if (match.group(1) or "nation").casefold() == expected.casefold():
+            return match.group(2)
         raise commands.BadArgument()
-    return match.group(2)
 
 
 class NationStates(commands.Cog):
@@ -139,7 +154,7 @@ class NationStates(commands.Cog):
 
     # __________ LISTENERS __________
 
-    @listener()
+    @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
             return
@@ -175,7 +190,7 @@ class NationStates(commands.Cog):
         await ctx.send(f"Agent set: {Api.agent}")
 
     @commands.command()
-    async def nation(self, ctx, *, nation: partial(link_extract, expected="nation")):
+    async def nation(self, ctx, *, nation: Link[Nation]):
         """Retrieves general info about a specified NationStates nation"""
         api: Api = Api(
             "census category dbid demonym2plural",
@@ -267,7 +282,7 @@ class NationStates(commands.Cog):
         await embed.send_to(ctx)
 
     @commands.command()
-    async def region(self, ctx, *, region: partial(link_extract, expected="region")):
+    async def region(self, ctx, *, region: Link[Region]):
         """Retrieves general info about a specified NationStates region"""
         api: Api = Api(
             "delegate delegateauth delegatevotes flag founded founder founderauth lastupdate name numnations power tags zombie",
@@ -364,11 +379,7 @@ class NationStates(commands.Cog):
 
     @commands.command()
     async def card(
-        self,
-        ctx,
-        season: Optional[int] = 2,
-        *,
-        nation: Optional[Union[int, partial(link_extract, expected="nation")]] = None,
+        self, ctx, season: Optional[int] = 2, *, nation: Optional[Union[int, Link[Nation]]] = None
     ):
         """
         Retrieves general info about the specified card.
@@ -464,7 +475,7 @@ class NationStates(commands.Cog):
         await embed.send_to(ctx)
 
     @commands.command()
-    async def deck(self, ctx, *, nation: Union[int, partial(link_extract, expected="nation")]):
+    async def deck(self, ctx, *, nation: Union[int, Link[Nation]]):
         """Retrieves general info about the specified nation's deck."""
         is_id = isinstance(nation, int)
         if is_id:
