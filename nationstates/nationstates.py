@@ -480,12 +480,14 @@ class NationStates(commands.Cog):
         """Retrieves general info about the specified nation's deck."""
         is_id = isinstance(nation, int)
         if is_id:
-            api = Api("cards info", nationid=nation)
+            api = Api("cards info deck", nationid=nation)
         else:
-            api = Api("cards info", nationname=nation)
+            api = Api("cards info deck", nationname=nation)
         root = await api
         if not root.INFO.countchildren():
-            return await ctx.send("No such deck.")
+            if is_id:
+                return await ctx.send(f"No such deck for ID {nation}.")
+            return await ctx.send(f"No such deck for {nation!r}.")
         if not is_id:
             n_id = nation.replace(" ", "_").casefold()
             if n_id not in self.db_cache:
@@ -496,7 +498,7 @@ class NationStates(commands.Cog):
         proper = f"ID: {nation}" if is_id else nation.replace("_", " ").title()
         embed = ProxyEmbed(
             title=proper,
-            description=f"{root.INFO.DECK_SIZE.text} cards",
+            description=f"{root.DECK.countchildren()} cards",
             colour=await ctx.embed_colour(),
             timestamp=datetime.utcfromtimestamp(root.INFO.LAST_VALUED.pyval),
         )
