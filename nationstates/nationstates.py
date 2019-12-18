@@ -193,10 +193,10 @@ class NationStates(commands.Cog):
     async def nation(self, ctx, *, nation: Link[Nation]):
         """Retrieves general info about a specified NationStates nation"""
         api: Api = Api(
-            "census category dbid demonym2plural",
-            "flag founded freedom fullname",
-            "influence lastlogin motto name",
-            "population region wa zombie",
+            "census cardcategory category dbid",
+            "demonym2plural flag founded freedom ",
+            "fullname influence lastlogin motto",
+            "name population region wa zombie",
             nation=nation,
             mode="score",
             scale="65 66",
@@ -225,21 +225,21 @@ class NationStates(commands.Cog):
             endo = "{:.0f} endorsements".format(endo)
         founded = root.FOUNDED.pyval or "in Antiquity"
         embed = ProxyEmbed(
-            title=root.FULLNAME.pyval,
+            title=root.FULLNAME.text,
             url="https://www.nationstates.net/nation={}".format(root.get("id")),
             description="[{}](https://www.nationstates.net/region={})"
             " | {} {} | Founded {}".format(
-                root.REGION.pyval,
+                root.REGION.text,
                 "_".join(root.REGION.text.lower().split()),
                 self._illion(root.POPULATION.pyval),
-                root["DEMONYM2PLURAL"].pyval,
+                root["DEMONYM2PLURAL"].text,
                 founded,
             ),
             timestamp=datetime.utcfromtimestamp(root.LASTLOGIN.pyval),
             colour=0x8BBC21 if self._is_zday(ctx.message) else await ctx.embed_colour(),
         )
         embed.set_author(name="NationStates", url="https://www.nationstates.net/")
-        embed.set_thumbnail(url=root.FLAG.pyval)
+        embed.set_thumbnail(url=root.FLAG.text)
         embed.add_field(
             name=root.CATEGORY.pyval,
             value="{}\t|\t{}\t|\t{}".format(
@@ -250,9 +250,9 @@ class NationStates(commands.Cog):
             inline=False,
         )
         embed.add_field(
-            name=root.UNSTATUS.pyval,
+            name=root.UNSTATUS.text,
             value="{} | {:.0f} influence ({})".format(
-                endo, root.find("CENSUS/SCALE[@id='65']/SCORE").pyval, root.INFLUENCE.pyval
+                endo, root.find("CENSUS/SCALE[@id='65']/SCORE").pyval, root.INFLUENCE.text
             ),
             inline=False,
         )
@@ -273,8 +273,8 @@ class NationStates(commands.Cog):
             name="Cards",
             value=(
                 "[{0}'s Deck](https://www.nationstates.net/page=deck/nation={1})\t|"
-                "\t[{0}'s Card](https://www.nationstates.net/page=deck/card={2})".format(
-                    root.NAME.pyval, n_id, root.DBID.pyval
+                "\t[{0}'s Card](https://www.nationstates.net/page=deck/card={2}) ({3})".format(
+                    root.NAME.text, n_id, root.DBID.text, root.CARD_CATEGORY.text.title()
                 )
             ),
         )
