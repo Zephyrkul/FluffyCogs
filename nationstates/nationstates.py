@@ -274,7 +274,7 @@ class NationStates(commands.Cog):
             value=(
                 "[{0}'s Deck](https://www.nationstates.net/page=deck/nation={1})\t|"
                 "\t[{0}'s Card](https://www.nationstates.net/page=deck/card={2}) ({3})".format(
-                    root.NAME.text, n_id, root.DBID.text, root.CARD_CATEGORY.text.title()
+                    root.NAME.text, n_id, root.DBID.text, root.CARDCATEGORY.text.title()
                 )
             ),
         )
