@@ -487,17 +487,14 @@ class NationStates(commands.Cog):
         if not root.INFO.countchildren():
             if is_id:
                 return await ctx.send(f"No such deck for ID {nation}.")
-            return await ctx.send(f"No such deck for {nation!r}.")
-        if not is_id:
-            n_id = nation.replace(" ", "_").casefold()
-            if n_id not in self.db_cache:
-                self.db_cache[n_id] = {"dbid": root.INFO.ID.pyval}
-                await self.config.custom("NATION", n_id).dbid.set(root.INFO.ID.pyval)
-        else:
-            n_id = ""
-        proper = f"ID: {nation}" if is_id else nation.replace("_", " ").title()
+            return await ctx.send(f"No such deck for nation {nation!r}.")
+        n_id = root.INFO.NAME.text
+        if n_id not in self.db_cache:
+            self.db_cache[n_id] = {"dbid": root.INFO.ID.pyval}
+            await self.config.custom("NATION", n_id).dbid.set(root.INFO.ID.pyval)
         embed = ProxyEmbed(
-            title=proper,
+            title=n_id.replace("_", " ").title(),
+            url=f"https://www.nationstates.net/page=deck/nation={n_id}",
             description=f"{root.DECK.countchildren()} cards",
             colour=await ctx.embed_colour(),
             timestamp=datetime.utcfromtimestamp(root.INFO.LAST_VALUED.pyval),
@@ -505,9 +502,9 @@ class NationStates(commands.Cog):
         embed.add_field(name="Bank", value=root.INFO.BANK.text)
         embed.add_field(
             name="Deck Value",
-            value=root.INFO.DECK_VALUE.text
-            if is_id
-            else f"[{root.INFO.DECK_VALUE.text}](https://www.nationstates.net/nation={n_id}/detail=trend/censusid=86)",
+            value=f"[{root.INFO.DECK_VALUE.text}](https://www.nationstates.net/nation={n_id}/detail=trend/censusid=86)"
+            f"\nRanked #{root.INFO.RANK.text} worldwide, #{root.INFO.REGION_RANK.text} regionally.",
+            inline=False,
         )
         embed.set_footer(text="Last Valued")
         await embed.send_to(ctx)
