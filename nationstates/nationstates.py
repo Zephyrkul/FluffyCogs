@@ -193,8 +193,8 @@ class NationStates(commands.Cog):
     async def nation(self, ctx, *, nation: Link[Nation]):
         """Retrieves general info about a specified NationStates nation"""
         api: Api = Api(
-            "census cardcategory category dbid",
-            "demonym2plural flag founded freedom ",
+            "census category dbid",
+            "demonym2plural flag founded freedom",
             "fullname influence lastlogin motto",
             "name population region wa zombie",
             nation=nation,
@@ -273,8 +273,8 @@ class NationStates(commands.Cog):
             name="Cards",
             value=(
                 "[{0}'s Deck](https://www.nationstates.net/page=deck/nation={1})\t|"
-                "\t[{0}'s Card](https://www.nationstates.net/page=deck/card={2}) ({3})".format(
-                    root.NAME.text, n_id, root.DBID.text, root.CARDCATEGORY.text.title()
+                "\t[{0}'s Card](https://www.nationstates.net/page=deck/card={2})".format(
+                    root.NAME.text, n_id, root.DBID.text
                 )
             ),
         )
