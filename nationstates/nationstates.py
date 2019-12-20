@@ -480,9 +480,9 @@ class NationStates(commands.Cog):
         """Retrieves general info about the specified nation's deck."""
         is_id = isinstance(nation, int)
         if is_id:
-            api = Api("cards info deck", nationid=nation)
+            api = Api("cards info", nationid=nation)
         else:
-            api = Api("cards info deck", nationname=nation)
+            api = Api("cards info", nationname=nation)
         root = await api
         if not root.INFO.countchildren():
             if is_id:
@@ -495,7 +495,7 @@ class NationStates(commands.Cog):
         embed = ProxyEmbed(
             title=n_id.replace("_", " ").title(),
             url=f"https://www.nationstates.net/page=deck/nation={n_id}",
-            description=f"{root.DECK.countchildren()} cards",
+            description=f"{root.INFO.NUM_CARDS.text} cards",
             colour=await ctx.embed_colour(),
             timestamp=datetime.utcfromtimestamp(root.INFO.LAST_VALUED.pyval),
         )
