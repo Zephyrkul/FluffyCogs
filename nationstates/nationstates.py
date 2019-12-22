@@ -82,9 +82,9 @@ class Link(str, Generic[T]):
     def link_extract(link: str, *, expected: str):
         match = LINK_RE.match(link)
         if not match:
-            return link.strip('"<>')
+            return "_".join(link.strip('"<>').casefold().split())
         if (match.group(1) or "nation").casefold() == expected.casefold():
-            return match.group(2)
+            return "_".join(match.group(2).casefold().split())
         raise commands.BadArgument()
 
 
@@ -204,11 +204,9 @@ class NationStates(commands.Cog):
         try:
             root = await api
         except NotFound:
-            nation = api["nation"]
             embed = ProxyEmbed(
                 title=nation.replace("_", " ").title(),
-                url="https://www.nationstates.net/page="
-                "boneyard?nation={}".format("_".join(nation.split()).lower()),
+                url="https://www.nationstates.net/page=" "boneyard?nation={}".format(nation),
                 description="This nation does not exist.",
             )
             embed.set_author(name="NationStates", url="https://www.nationstates.net/")
@@ -291,7 +289,6 @@ class NationStates(commands.Cog):
         try:
             root = await api
         except NotFound:
-            region = api["region"]
             embed = ProxyEmbed(
                 title=region.replace("_", " ").title(), description="This region does not exist."
             )
@@ -406,8 +403,8 @@ class NationStates(commands.Cog):
         root = await api
         if not root.countchildren():
             if n_id:
-                return await ctx.send(f"No such card for nation {n_id!r}.")
-            return await ctx.send(f"No such card for ID {nation!r}.")
+                return await ctx.send(f"No such S{season} card for nation {n_id!r}.")
+            return await ctx.send(f"No such S{season} card for ID {nation!r}.")
         n_id = root.NAME.text.casefold().replace(" ", "_")
         if n_id not in self.db_cache:
             self.db_cache[n_id] = {"dbid": nation}
@@ -606,7 +603,7 @@ class NationStates(commands.Cog):
             authroot = await Api("fullname flag", nation=root.PROPOSED_BY.pyval)
         except NotFound:
             embed.set_author(
-                name=" ".join(root.PROPOSED_BY.pyval.split("_")).title(),
+                name=root.PROPOSED_BY.text.replace("_", " ").title(),
                 url="https://www.nationstates.net/page=boneyard?nation={}".format(
                     root.PROPOSED_BY.pyval
                 ),
@@ -633,7 +630,7 @@ class NationStates(commands.Cog):
                     name="Top Delegates For",
                     value="\t|\t".join(
                         "[{}](https://www.nationstates.net/nation={}) ({})".format(
-                            e.NATION.pyval.replace("_", " ").title(), e.NATION.pyval, e.VOTES.pyval
+                            e.NATION.text.replace("_", " ").title(), e.NATION.pyval, e.VOTES.pyval
                         )
                         for e in for_del_votes
                     ),
@@ -644,7 +641,7 @@ class NationStates(commands.Cog):
                     name="Top Delegates Against",
                     value="\t|\t".join(
                         "[{}](https://www.nationstates.net/nation={}) ({})".format(
-                            e.NATION.pyval.replace("_", " ").title(), e.NATION.pyval, e.VOTES.pyval
+                            e.NATION.text.replace("_", " ").title(), e.NATION.pyval, e.VOTES.pyval
                         )
                         for e in against_del_votes
                     ),
