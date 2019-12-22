@@ -431,12 +431,14 @@ class NationStates(commands.Cog):
             # negative price to reverse sorting
             if market.TYPE.text == "bid":
                 bisect.insort(
-                    buyers, (-market.PRICE.pyval, market.NATION.text.replace("_", "\xa0").title())
+                    buyers, (-market.PRICE.pyval, market.NATION.text.replace("_", " ").title())
                 )
             elif market.TYPE.text == "ask":
                 bisect.insort(
-                    sellers, (market.PRICE.pyval, market.NATION.text.replace("_", "\xa0").title())
+                    sellers, (market.PRICE.pyval, market.NATION.text.replace("_", " ").title())
                 )
+        if not any((buyers, sellers)):
+            return await embed.send_to(ctx)
         max_listed = 5
         max_len = max(len(buyers), len(sellers))
         max_len = min(max_len, max_listed + 1)
