@@ -374,7 +374,7 @@ class NationStates(commands.Cog):
 
     # __________ CARDS __________
 
-    @commands.command()
+    @commands.command(usage="[season] <nation>")
     async def card(
         self, ctx, season: Optional[int] = 2, *, nation: Optional[Union[int, Link[Nation]]] = None
     ):
@@ -392,7 +392,13 @@ class NationStates(commands.Cog):
             season, nation = 2, season
         if isinstance(nation, str) and nation not in self.db_cache:
             api = Api("dbid", nation=nation)
-            root = await api
+            try:
+                root = await api
+            except NotFound:
+                return await ctx.send(
+                    f"Nation {nation!r} does not exist. "
+                    "Please provide its card ID instead, and I'll remember it for next time."
+                )
             n_id, nation = root.get("id"), root.DBID.pyval
             self.db_cache[n_id] = {"dbid": nation}
             await self.config.custom("NATION", n_id).dbid.set(nation)
