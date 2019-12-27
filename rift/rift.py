@@ -331,12 +331,11 @@ class Rift(Cog):
     # EVENTS
 
     @listener()
-    async def on_message(self, m):
+    async def on_message_without_command(self, m):
         if m.author.bot:
             return
         channel = m.author if isinstance(m.channel, discord.DMChannel) else m.channel
         sent = {}
-        is_command = (await self.bot.get_context(m)).valid
         for rift, record in self.open_rifts.copy().items():
             if rift.source == channel and rift.author == m.author:
                 if m.content.lower() == "exit":
@@ -348,13 +347,12 @@ class Rift(Cog):
                             )
                     await channel.send(_("Rift closed."))
                 else:
-                    if not is_command:
-                        try:
-                            record[m] = await self.process_message(rift, m, rift.destination)
-                        except discord.HTTPException as e:
-                            await channel.send(
-                                _("I couldn't send your message due to an error: {}").format(e)
-                            )
+                    try:
+                        record[m] = await self.process_message(rift, m, rift.destination)
+                    except discord.HTTPException as e:
+                        await channel.send(
+                            _("I couldn't send your message due to an error: {}").format(e)
+                        )
             elif rift.destination == channel:
                 rift_chans = (rift.source, rift.destination)
                 if rift_chans in sent:
