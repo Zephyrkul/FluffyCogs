@@ -3,6 +3,7 @@ import logging
 from contextlib import suppress
 from copy import copy
 from io import BytesIO
+from typing import Union
 
 import discord
 
@@ -13,11 +14,6 @@ from redbot.core.i18n import Translator, cog_i18n
 from .converter import RiftConverter, search_converter
 
 
-Cog = getattr(commands, "Cog", object)
-listener = getattr(Cog, "listener", lambda: lambda x: x)
-check_permissions = getattr(mod, "check_permissions", checks.check_permissions)
-
-
 log = logging.getLogger("red.fluffy.rift")
 _ = Translator("Rift", __file__)
 
@@ -25,11 +21,12 @@ _ = Translator("Rift", __file__)
 max_size = 8_000_000  # can be 1 << 23 but some unknowns also add to the size
 
 
-async def close_check(ctx):
+@commands.permissions_check
+async def check_can_close(ctx):
     """Admin / manage channel OR private channel"""
     if isinstance(ctx.channel, discord.DMChannel):
         return True
-    return await mod.is_admin_or_superior(ctx.bot, ctx.author) or await check_permissions(
+    return await mod.is_admin_or_superior(ctx.bot, ctx.author) or await mod.check_permissions(
         ctx, {"manage_channels": True}
     )
 
@@ -38,7 +35,7 @@ class RiftError(Exception):
     pass
 
 
-class Rift(Cog):
+class Rift(commands.Cog):
     """
     Communicate with other servers/channels.
     """
@@ -73,7 +70,7 @@ class Rift(Cog):
         pass
 
     @blacklist.command(name="channel")
-    @commands.check(close_check)
+    @check_can_close
     async def blacklist_channel(self, ctx, *, channel: discord.TextChannel = None):
         """
         Blacklists the current channel or the specified channel.
@@ -96,7 +93,7 @@ class Rift(Cog):
         if blacklisted:
             await self.close_rifts(ctx, ctx.author, channel)
 
-    @blacklist.command(name="server")
+    @blacklist.command(name="server", aliases=["guild"])
     @commands.guild_only()
     @checks.admin_or_permissions(manage_guild=True)
     async def blacklist_server(self, ctx):
@@ -116,7 +113,7 @@ class Rift(Cog):
             await self.close_rifts(ctx, ctx.author, ctx.guild)
 
     @rift.command(name="close")
-    @commands.check(close_check)
+    @check_can_close
     async def rift_close(self, ctx):
         """
         Closes all rifts that lead to this channel.
@@ -143,6 +140,17 @@ class Rift(Cog):
                 )
             )
         )
+
+    @rift.command(name="irc")
+    async def rift_irc(
+        self, ctx, domain: str, channel: Union[discord.TextChannel, discord.Member, str]
+    ):
+        if isinstance(channel, discord.TextChannel):
+            # the client auto-converted a hash to a channel mention
+            channel = f"#{channel.name}"
+        if isinstance(channel, discord.Member):
+            channel = channel.display_name
+        channel = channel.lstrip("@")
 
     @rift.command(name="open")
     async def rift_open(self, ctx, *rifts: RiftConverter(_, globally=True)):
@@ -253,7 +261,7 @@ class Rift(Cog):
                 overs = overs.pair()
                 perms = (every.permissions.value & ~overs[1].value) | overs[0].value
                 log.debug(
-                    "calculated permissions for @everyone in server %s: %s",
+                    "calculated permissions for @everyone in guild %s: %s",
                     destination.guild.id,
                     perms,
                 )
@@ -330,7 +338,7 @@ class Rift(Cog):
 
     # EVENTS
 
-    @listener()
+    @commands.Cog.listener()
     async def on_message_without_command(self, m):
         if m.author.bot:
             return
