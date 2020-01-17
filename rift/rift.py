@@ -362,6 +362,7 @@ class Rift(Cog):
                 else:
                     record[m] = sent[rift_chans] = await self.process_message(rift, m, rift.source)
 
+    @listener()
     async def on_message_delete(self, m):
         if m.author.bot:
             return
@@ -373,6 +374,7 @@ class Rift(Cog):
                     deleted.add(rifted)
                     await rifted.delete()
 
+    @listener()
     async def on_message_edit(self, b, a):
         if a.author.bot:
             return
