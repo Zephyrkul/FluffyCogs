@@ -4,5 +4,6 @@
     "name" : "Clocks",
     "short" : "Track projects with clocks.",
     "description" : "Track projects with clocks. Especially useful for Blades in the Dark.",
-    "tags" : ["utility"]
+    "tags" : ["utility"],
+    "hidden": true
 }
