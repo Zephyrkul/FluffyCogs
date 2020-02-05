@@ -1,8 +1,21 @@
 {
-    "author" : ["Zephyrkul (Zephyrkul#1089)", "Twentysix26 (Twentysix#5252)"],
-    "install_msg" : "Usage: `[p]help rift`",
-    "name" : "Rift",
-    "short" : "Allows cross-server communication through Red",
-    "description" : "Communicate with other servers through Red! Works to and from DMs as well.",
-    "tags" : ["cross-server", "communication", "fun", "trolling", "impersonation"]
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)",
+        "Twentysix26 (Twentysix#5252)"
+    ],
+    "install_msg": "Usage: `[p]help rift`",
+    "name": "Rift",
+    "short": "Allows cross-server communication through Red",
+    "description": "Communicate with other servers through Red! Works to and from DMs as well.",
+    "requirements": [
+        "discord-text-sanitizer",
+        "https://github.com/pinterest/urlnorm/archive/master.zip#egg=urlnorm"
+    ],
+    "tags": [
+        "cross-server",
+        "communication",
+        "fun",
+        "trolling",
+        "impersonation"
+    ]
 }
