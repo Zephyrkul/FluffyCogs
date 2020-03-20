@@ -71,16 +71,24 @@ class SimpleGraph(Dict[T, Set[T]]):
         return keys.union(chain.from_iterable(self.values()))
 
     def vectors(self) -> Generator[Vector[T], None, None]:
-        for vertex, neighbors in self.copy().items():
-            for neighbor in neighbors.copy():
+        for vertex, neighbors in self.items():
+            for neighbor in neighbors:
                 yield vertex, neighbor
 
+    def to_json(self):
+        return {k: list(v) for k, v in self.items()}
 
+    @classmethod
+    def from_json(cls, json):
+        return cls((k, set(v)) for k, v in json.items())
+
+
+"""
 class Graph(SimpleGraph[Messageable]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._lists = DefaultDict[
-            Optional[Vector[Messageable]],  # None means global
+            Optional[Union[Messageable, Vector[Messageable]]],  # None means global
             Tuple[Set[User], Set[User]],  # False: Blacklist, True: Whitelist
         ](lambda: (set(), set()))
         self.messages = SimpleGraph[discord.Message]()
@@ -105,12 +113,16 @@ class Graph(SimpleGraph[Messageable]):
             l.difference_update(add)
         return l.copy()
 
-    def is_allowed(self, *args: Messageable, user: User):
-        if len(args) not in (0, 2):
+    def is_allowed(self, *args: Messageable, user: User, strict=False):
+        if len(args) > 2:
             raise TypeError(f"Unexpected number of positional arguments: {len(args)}")
         vector = args or None
         if vector:
-            lists = [self._lists[None], self._lists[vector]]
+            lists = [
+                self._lists[None],
+                *(self._lists[vertex] for vertex in vector),
+                self._lists[vector],
+            ]
         else:
             lists = [self._lists[vector]]
         for l in lists:
@@ -120,7 +132,7 @@ class Graph(SimpleGraph[Messageable]):
             else:
                 if user in l[False]:
                     return False
-        return True
+        return not strict
 
     def whitelist(
         self,
@@ -130,7 +142,7 @@ class Graph(SimpleGraph[Messageable]):
         remove: User = None,
         remove_all: Iterable[User] = None,
     ):
-        if len(args) not in (0, 2):
+        if len(args) > 2:
             raise TypeError(f"Unexpected number of positional arguments: {len(args)}")
         return self._list(
             True, args or None, self._combine(add, add_all), self._combine(remove, remove_all)
@@ -144,8 +156,9 @@ class Graph(SimpleGraph[Messageable]):
         remove: User = None,
         remove_all: Iterable[User] = None,
     ):
-        if len(args) not in (0, 2):
+        if len(args) > 2:
             raise TypeError(f"Unexpected number of positional arguments: {len(args)}")
         return self._list(
             False, args or None, self._combine(add, add_all), self._combine(remove, remove_all)
         )
+"""
