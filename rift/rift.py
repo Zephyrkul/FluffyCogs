@@ -556,17 +556,18 @@ class Rift(commands.Cog):
         allowed_users = []
 
         def sub(m) -> str:
-            if not m.group(2) and is_op:
+            if not m.group(2):
                 group = m.group(1)
                 role, longest = None, 0
                 for r in reversed(destination.guild.roles):
                     rl = len(r.name)
-                    if group.startswith(r.name) and rl > longest:
+                    if rl > longest and group.startswith(r.name):
                         role, longest = r, rl
                 if role:
-                    allowed_roles.append(role)
+                    if is_op:
+                        allowed_roles.append(role)
                     return role.mention + group[len(role.name) :]
-            elif m.group(2):
+            else:
                 user = discord.utils.get(
                     destination.members, name=m.group(1), discriminator=m.group(2)
                 )
@@ -704,6 +705,6 @@ class Rift(commands.Cog):
 
     """
     @commands.Cog.listener()
-    async def on_pydle_unknown(self, message):
+    async def on_pydle_unknown(self, client, message):
         pass
     """
