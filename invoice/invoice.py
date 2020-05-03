@@ -326,11 +326,12 @@ class InVoice(commands.Cog):
                 await self._add_roles(m, a.channel, reason=reason, role_id=role.id)
         else:
             tc = m.guild.get_channel(await self.config.channel(a.channel).channel())
-            overs = tc.overwrites_for(m)
-            overs.read_messages = False if is_deaf else None
-            await tc.set_permissions(
-                target=m, overwrite=None if overs.is_empty() else overs, reason=reason
-            )
+            if tc:
+                overs = tc.overwrites_for(m)
+                overs.read_messages = False if is_deaf else None
+                await tc.set_permissions(
+                    target=m, overwrite=None if overs.is_empty() else overs, reason=reason
+                )
 
     async def _add_roles(self, m, c, *, reason, role_id=None, guild_role_id=None):
         guild = m.guild
