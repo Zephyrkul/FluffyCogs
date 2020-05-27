@@ -7,8 +7,7 @@ from copy import copy
 from redbot.core import checks, commands, Config
 from redbot.core.utils.chat_formatting import box, bordered
 
-# pylint: disable=E0401
-from cog_shared.proxyembed import ProxyEmbed
+from .proxyembed import ProxyEmbed
 
 listener = getattr(commands.Cog, "listener", lambda name=None: (lambda f: f))
 

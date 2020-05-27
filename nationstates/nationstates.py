@@ -19,8 +19,7 @@ from sans.utils import pretty_string
 from redbot.core import checks, commands, Config, version_info as red_version
 from redbot.core.utils.chat_formatting import pagify, escape, box
 
-# pylint: disable=E0401
-from cog_shared.proxyembed import ProxyEmbed
+from .proxyembed import ProxyEmbed
 
 
 class Options(Flag):
