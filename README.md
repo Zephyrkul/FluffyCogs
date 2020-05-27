@@ -20,9 +20,10 @@ To install:
 
 > [p]help <Cog_Name>
 
-# Contact
+# Support
 
-You can find me either [here on GitHub](https://github.com/zephyrkul/FluffyCogs/issues) or on in [#support-othercogs](https://discordapp.com/channels/240154543684321280/240212783503900673) at the [Red cog support server](https://discord.gg/GET4DVk). My Discord is Zephyrkul#1089.
+You can find support for these cogs in [#support-othercogs](https://discordapp.com/channels/240154543684321280/240212783503900673) at the [Red cog support server](https://discord.gg/GET4DVk). While I personally am not present in the support server, others are happy to assist you.
+If you *must* contact me directly, [file an issue](https://github.com/zephyrkul/FluffyCogs/issues/new/choose/).
 
 # Credits
 
