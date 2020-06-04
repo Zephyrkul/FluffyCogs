@@ -22,8 +22,7 @@ To install:
 
 # Support
 
-You can find support for these cogs in [#support-othercogs](https://discordapp.com/channels/240154543684321280/240212783503900673) at the [Red cog support server](https://discord.gg/GET4DVk). While I personally am not present in the support server, others are happy to assist you.
-If you *must* contact me directly, [file an issue](https://github.com/zephyrkul/FluffyCogs/issues/new/choose/).
+You can find support for these cogs in [#support-othercogs](https://discordapp.com/channels/240154543684321280/240212783503900673) at the [Red cog support server](https://discord.gg/GET4DVk).
 
 # Credits
 
