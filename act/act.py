@@ -42,6 +42,7 @@ class Act(Cog):
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_global(custom={}, tenorkey=None)
         self.config.register_guild(custom={})
+        self.try_after = None
 
     async def initialize(self, bot):
         # temporary backwards compatibility
@@ -99,6 +100,8 @@ class Act(Cog):
             message = message.format(target, user=target)
 
         # add reaction gif
+        if self.try_after and ctx.message.created_at < self.try_after:
+            return await ctx.send(message)
         if not ctx.channel.permissions_for(ctx.me).embed_links:
             return await ctx.send(message)
         key = (await get_shared_api_tokens(ctx.bot, "tenor")).get("api_key")
@@ -112,12 +115,16 @@ class Act(Cog):
                 "key": key,
                 "anon_id": str(ctx.author.id ^ ctx.me.id),
                 "media_filter": "minimal",
-                "contentfilter": "low",
+                "contentfilter": "off" if getattr(ctx.channel, "nsfw", False) else "low",
                 "ar_range": "wide",
+                "limit": "8",
                 "locale": get_locale(),
             },
         ) as response:
-            if response.status >= 400:
+            if response.status == 429:
+                self.try_after = ctx.message.created_at + 30
+                json: dict = {}
+            elif response.status >= 400:
                 json: dict = {}
             else:
                 json = await response.json()
