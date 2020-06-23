@@ -102,7 +102,7 @@ class Act(Cog):
         # add reaction gif
         if self.try_after and ctx.message.created_at < self.try_after:
             return await ctx.send(message)
-        if not ctx.channel.permissions_for(ctx.me).embed_links:
+        if not await ctx.embed_requested():
             return await ctx.send(message)
         key = (await get_shared_api_tokens(ctx.bot, "tenor")).get("api_key")
         if not key:
