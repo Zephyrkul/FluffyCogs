@@ -6,25 +6,21 @@
 
 The fluffiest of cogs for utility, requests, or proof-of-concepts. Or memes, as is the case with the Skyrim cog.
 
-# Installation
+## Installation
 
 To install:
 
-> [p]repo add FluffyCogs https://github.com/zephyrkul/FluffyCogs
+> [p]repo add FluffyCogs https://github.com/zephyrkul/FluffyCogs  
+> [p]cog list FluffyCogs  
+> [p]cog install FluffyCogs &lt;cog&gt;  
+> [p]load &lt;cog&gt;  
+> [p]help &lt;Cog&gt;  
 
-> [p]cog list FluffyCogs
-
-> [p]cog install FluffyCogs <cog_name>
-
-> [p]load <cog_name>
-
-> [p]help <Cog_Name>
-
-# Support
+## Support
 
 You can find support for these cogs in [#support-othercogs](https://discordapp.com/channels/240154543684321280/240212783503900673) at the [Red cog support server](https://discord.gg/GET4DVk).
 
-# Credits
+## Credits
 
 [Twentysix26](https://github.com/Twentysix26) - Developer of Red and initial creator of [the Rift cog](https://github.com/Twentysix26/26-Cogs/blob/master/rift/)
 
