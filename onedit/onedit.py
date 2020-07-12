@@ -13,7 +13,7 @@ class OnEdit(commands.Cog):
         self.timeout = None
 
     async def edit_process_commands(self, message: discord.Message):
-        """Same as Red's method (Red.process_commands), but dont dispatch message_without_command)"""
+        """Same as Red's method (Red.process_commands), but dont dispatch message_without_command."""
         if not message.author.bot:
             ctx = await self.bot.get_context(message)
             await self.bot.invoke(ctx)
