@@ -12,6 +12,12 @@ class OnEdit(commands.Cog):
         self.config.register_global(timeout=5)
         self.timeout = None
 
+    async def edit_process_commands(self, message: discord.Message):
+        """Same as Red's method (Red.process_commands), but dont dispatch message_without_command."""
+        if not message.author.bot:
+            ctx = await self.bot.get_context(message)
+            await self.bot.invoke(ctx)
+
     @commands.command()
     @checks.is_owner()
     async def edittime(self, ctx, *, timeout: float):
@@ -37,4 +43,4 @@ class OnEdit(commands.Cog):
             self.timeout = await self.config.timeout()
         if (after.edited_at - after.created_at).total_seconds() > self.timeout:
             return
-        await self.bot.process_commands(after)
+        await self.edit_process_commands(after)
