@@ -1,3 +1,4 @@
+from redbot.core.errors import CogLoadError
 try:
     import sans
     from .nationstates import NationStates
@@ -9,7 +10,7 @@ except ImportError as e:
 
 async def setup(bot):
     if import_failed or sans.version_info < type(sans.version_info)("0.0.1b6"):
-        raise RuntimeError(
+        raise CogLoadError(
             "The sans library is out of date or not installed.\n"
             "Run this command to update it: [p]pipinstall sans\n"
             "You may have to [p]restart your bot to have the new version take effect."
