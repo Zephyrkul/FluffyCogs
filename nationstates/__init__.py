@@ -1,4 +1,5 @@
 from redbot.core.errors import CogLoadError
+
 try:
     import sans
     from .nationstates import NationStates
