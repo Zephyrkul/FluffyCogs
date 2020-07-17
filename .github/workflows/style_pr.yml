@@ -1,0 +1,30 @@
+name: style
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  style:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Install prerequisite
+        run: pip install -U black
+      - uses: actions/checkout@v2
+      - name: Run style
+        run: black -l 99 `git ls-files "*.py"`
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: black
+          title: Style with Black
+          body: |
+            Automated stylecheck
+          labels: automated pr
+          branch: black

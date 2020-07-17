@@ -2,7 +2,7 @@
 
 [![Red](https://img.shields.io/badge/Red-DiscordBot-red.svg)](https://github.com/Cog-Creators/Red-DiscordBot/tree/V3/develop)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
-[![Build Status](https://travis-ci.com/zephyrkul/FluffyCogs.svg?branch=master)](https://travis-ci.com/zephyrkul/FluffyCogs)
+[![Build Status](https://github.com/zephyrkul/FluffyCogs/workflows/build/badge.svg)](https://github.com/zephyrkul/FluffyCogs/actions?workflow=build)
 
 The fluffiest of cogs for utility, requests, or proof-of-concepts. Or memes, as is the case with the Skyrim cog.
 
@@ -10,7 +10,7 @@ The fluffiest of cogs for utility, requests, or proof-of-concepts. Or memes, as 
 
 To install:
 
-> [p]repo add FluffyCogs https://github.com/zephyrkul/FluffyCogs  
+> [p]repo add FluffyCogs <https://github.com/zephyrkul/FluffyCogs>  
 > [p]cog list FluffyCogs  
 > [p]cog install FluffyCogs &lt;cog&gt;  
 > [p]load &lt;cog&gt;  
