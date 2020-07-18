@@ -18,9 +18,7 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.8
-      - name: Compile
-        run: python -m compileall .
-      - name: Black
-        run: |
-          pip install -U black
-          black --check -l 99 `git ls-files "*.py"`
+      - name: Install Flake8
+        run: python -m pip install -U flake8
+      - name: Lint with Flake8
+        run: python -m flake8 . --count --select=E9,F7,F82 --show-source
