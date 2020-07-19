@@ -566,7 +566,6 @@ class Rift(commands.Cog):
             for d in deduplicate_iterables(
                 self.rifts.get(Limited(message=message), ()), self.rifts.get(channel, ())
             )
-            # if self.rifts.is_allowed(channel, d, user=message.author)
         ]
         if not futures:
             return
@@ -574,12 +573,11 @@ class Rift(commands.Cog):
             try:
                 m = await fut
             except Exception as exc:
-                fr = None
+                destination = None
                 for fr, _line in walk_tb(exc.__traceback__):
-                    pass
-                if not fr:
+                    destination = fr.f_locals.get("destination", destination)
+                if not destination:
                     continue
-                destination = fr.f_locals["destination"]
                 log.exception(f"Couldn't send {message.id} to {destination}.")
                 if isinstance(exc, (RiftError, discord.HTTPException)):
                     reason = " ".join(exc.args)
@@ -603,10 +601,6 @@ class Rift(commands.Cog):
             return
         channel = message.channel if message.guild else message.author
         await asyncio.gather(
-            *(
-                self.process_discord_message(message, m)
-                for m in self.messages.get(message, ())
-                # if self.rifts.is_allowed(channel, m.channel if m.guild else m.author, user=message.author)
-            ),
+            *(self.process_discord_message(message, m) for m in self.messages.get(message, ())),
             return_exceptions=True,
         )

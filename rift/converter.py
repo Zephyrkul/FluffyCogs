@@ -24,24 +24,27 @@ class Limited(discord.abc.Messageable):
         self.message = message
 
     def __getattr__(self, attr):
-        return getattr(self.message, attr)
+        try:
+            return getattr(self.message.channel, attr)
+        except AttributeError:
+            return getattr(self.message, attr)
 
     def __hash__(self) -> int:
-        return hash((self.author, self.channel))
+        return hash((self.message.author, self.message.channel))
 
     def __eq__(self, o: object) -> bool:
         if not isinstance(o, Limited):
             return NotImplemented
-        return (self.author, self.channel) == (o.author, o.channel)
+        return (self.message.author, self.message.channel) == (o.message.author, o.message.channel)
 
     def __str__(self) -> str:
-        return f"{self.author}, in {self.channel}"
+        return f"{self.message.author}, in {self.message.channel}"
 
     def __repr__(self) -> str:
         return f"{self.__class__.__qualname__}(message={self.message!r})"
 
     def _get_channel(self):
-        return self.channel._get_channel()
+        return self.message.channel._get_channel()
 
 
 class DiscordConverter(commands.Converter):
