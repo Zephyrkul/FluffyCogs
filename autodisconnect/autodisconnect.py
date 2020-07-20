@@ -1,7 +1,7 @@
 import asyncio
-import discord
 
-from redbot.core import commands, Config
+import discord
+from redbot.core import Config, commands
 
 listener = getattr(commands.Cog, "listener", lambda: (lambda y: y))
 

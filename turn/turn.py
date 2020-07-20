@@ -5,12 +5,10 @@ import functools
 import typing
 
 import discord
-
-from redbot.core import commands, checks, Config
+from redbot.core import Config, checks, commands
 from redbot.core.utils import mod
 
 from .namedlist import NamedList
-
 
 Cog = getattr(commands, "Cog", object)
 

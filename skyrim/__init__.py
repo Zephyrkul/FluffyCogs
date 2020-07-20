@@ -1,4 +1,5 @@
 from redbot.core import data_manager
+
 from .skyrim import Skyrim
 
 

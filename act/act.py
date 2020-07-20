@@ -1,17 +1,16 @@
-import aiohttp
-import discord
-import inflection
 import itertools
 import random
 from typing import Union
 
-from redbot.core import commands, checks, Config
+import aiohttp
+import discord
+import inflection
+from redbot.core import Config, checks, commands
 from redbot.core.bot import Red
 from redbot.core.i18n import get_locale
 from redbot.core.utils.chat_formatting import italics
 
 from .helpers import *
-
 
 Cog = getattr(commands, "Cog", object)
 listener = getattr(Cog, "listener", lambda: lambda x: x)
