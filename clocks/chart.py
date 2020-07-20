@@ -1,6 +1,5 @@
-import math
 import itertools
-
+import math
 
 ch = r"•-\|/ "
 

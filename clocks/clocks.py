@@ -1,9 +1,7 @@
 import discord
-
-from redbot.core import commands, Config
+from redbot.core import Config, commands
 
 from .chart import pie
-
 
 Cog = getattr(commands, "Cog", object)
 

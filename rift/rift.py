@@ -5,13 +5,12 @@ from copy import copy
 from io import BytesIO
 
 import discord
-
-from redbot.core import commands, checks, Config
-from redbot.core.utils import common_filters, mod
-from redbot.core.utils.chat_formatting import pagify, humanize_list
+from redbot.core import Config, checks, commands
 from redbot.core.i18n import Translator, cog_i18n
-from .converter import RiftConverter, search_converter
+from redbot.core.utils import common_filters, mod
+from redbot.core.utils.chat_formatting import humanize_list, pagify
 
+from .converter import RiftConverter, search_converter
 
 Cog = getattr(commands, "Cog", object)
 listener = getattr(Cog, "listener", lambda: lambda x: x)

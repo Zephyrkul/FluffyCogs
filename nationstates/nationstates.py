@@ -1,23 +1,24 @@
 import asyncio
 import bisect
-import discord
 import re
 import time
 from datetime import datetime
 from enum import Flag, auto
-from functools import reduce, partial
+from functools import partial, reduce
 from html import unescape
 from io import BytesIO
 from operator import or_
-from typing import Generic, Type, TypeVar, Optional, Union
+from typing import Generic, Optional, Type, TypeVar, Union
+
+import discord
+from redbot.core import Config, checks, commands
+from redbot.core import version_info as red_version
+from redbot.core.utils.chat_formatting import box, escape, pagify
+from sans.api import Api
 
 # pylint: disable=E0611
 from sans.errors import HTTPException, NotFound
-from sans.api import Api
 from sans.utils import pretty_string
-
-from redbot.core import checks, commands, Config, version_info as red_version
-from redbot.core.utils.chat_formatting import pagify, escape, box
 
 from .proxyembed import ProxyEmbed
 

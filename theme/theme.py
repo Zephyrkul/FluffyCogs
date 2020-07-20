@@ -1,13 +1,12 @@
 import asyncio
-import discord
 from contextlib import suppress
 from random import choice
 
-from redbot.core import commands, Config
-from redbot.core.utils.chat_formatting import pagify, bold, italics, warning
-from redbot.core.utils.menus import menu
+import discord
+from redbot.core import Config, commands
 from redbot.core.i18n import Translator, cog_i18n
-
+from redbot.core.utils.chat_formatting import bold, italics, pagify, warning
+from redbot.core.utils.menus import menu
 
 Cog = getattr(commands, "Cog", object)
 
