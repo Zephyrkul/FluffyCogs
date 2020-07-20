@@ -29,5 +29,5 @@ jobs:
           title: Style with isort + black
           body: |
             Automated style check
-          labels: Automated PR, Style
+          labels: Automated, Style
           branch: automated/black
