@@ -15,16 +15,19 @@ jobs:
         with:
           python-version: 3.8
       - name: Install prerequisite
-        run: pip install -U black
+        run: python -m pip install -U isort black
       - name: Run style
-        run: black -l 99 `git ls-files "*.py"`
+        run: |
+          python -m isort --multi-line=3 --trailing-comma --force-grid-wrap=0 \
+          --use-parentheses --line-width=99 `git ls-files "*.py"`
+          python -m black -l 99 -t py38 `git ls-files "*.py"`
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: style with black
-          title: Code style
+          commit-message: style with isort + black
+          title: Style with isort + black
           body: |
             Automated style check
-          labels: automated pr
-          branch: black
+          labels: Automated PR, Style
+          branch: automated/black
