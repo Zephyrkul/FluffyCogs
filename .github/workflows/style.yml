@@ -14,20 +14,23 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.8
-      - name: Install prerequisite
-        run: python -m pip install -U isort black
+      - name: Install prerequisites
+        run: python -m pip install -U autoflake isort black
       - name: Run style
         run: |
-          python -m isort --multi-line=3 --trailing-comma --force-grid-wrap=0 \
-          --use-parentheses --line-width=99 `git ls-files "*.py"`
-          python -m black -l 99 -t py38 `git ls-files "*.py"`
+          python -m autoflake -ir --imports=aiohttp,discord,redbot .
+          python -m isort --profile black --line-width=99 .
+          python -m black -l 99 -t py38 .
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: style with isort + black
-          title: Style with isort + black
+          commit-message: style
+          title: Style
           body: |
             Automated style check
           labels: Automated, Style
-          branch: automated/black
+          branch: automated/style
+      - name: Mark style failure
+        if: env.PULL_REQUEST_NUMBER
+        run: exit 1
