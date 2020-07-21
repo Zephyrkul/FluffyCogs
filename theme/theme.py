@@ -1,5 +1,3 @@
-import asyncio
-from contextlib import suppress
 from random import choice
 
 import discord

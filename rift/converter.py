@@ -1,13 +1,11 @@
 import asyncio
 import logging
-from collections import deque, namedtuple
+from collections import namedtuple
 from contextlib import suppress
-from dataclasses import dataclass, field
-from typing import List
 
 import discord
 from redbot.core import commands
-from redbot.core.utils.chat_formatting import humanize_list, pagify
+from redbot.core.utils.chat_formatting import pagify
 
 log = logging.getLogger("red.fluffy.rift.converter")
 

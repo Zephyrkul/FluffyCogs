@@ -84,7 +84,6 @@ class Turn(Cog):
     @commands.guild_only()
     async def turn(self, ctx):
         """Manage turns in a channel."""
-        pass
 
     @turn.command()
     @checks.mod()
@@ -154,7 +153,6 @@ class Turn(Cog):
     @commands.guild_only()
     async def turn_set(self, ctx):
         """Configure turn settings."""
-        pass
 
     @turn_set.command()
     @checks.mod()

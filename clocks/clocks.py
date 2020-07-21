@@ -32,7 +32,6 @@ class Clocks(Cog):
     @commands.group(aliases=["clock"])
     async def clocks(self, ctx):
         """Track projects with clocks"""
-        pass
 
     @clocks.command()
     async def create(

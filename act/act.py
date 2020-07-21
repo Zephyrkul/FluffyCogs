@@ -138,7 +138,6 @@ class Act(Cog):
         """
         Configure various settings for the act cog.
         """
-        pass
 
     @actset.group(aliases=["custom"], invoke_without_command=True)
     @checks.admin_or_permissions(manage_guild=True)

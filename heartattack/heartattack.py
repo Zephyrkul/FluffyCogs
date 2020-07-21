@@ -3,7 +3,6 @@ import sys
 import threading
 import traceback
 
-import discord
 from redbot.core import commands
 
 dpy_log = logging.getLogger("discord.gateway")
