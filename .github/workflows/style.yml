@@ -29,6 +29,8 @@ jobs:
           title: Style
           body: |
             Automated style check
+          assignees: ${{ github.repository_owner }}
+          reviewers: ${{ github.repository_owner }}
           labels: Automated, Style
           branch: automated/style
       - name: Mark style failure
