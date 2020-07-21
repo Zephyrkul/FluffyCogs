@@ -1,12 +1,10 @@
-import asyncio
 import logging
 from contextlib import suppress
-from copy import copy
 from io import BytesIO
 
 import discord
 from redbot.core import Config, checks, commands
-from redbot.core.i18n import Translator, cog_i18n
+from redbot.core.i18n import Translator
 from redbot.core.utils import common_filters, mod
 from redbot.core.utils.chat_formatting import humanize_list, pagify
 
@@ -60,7 +58,6 @@ class Rift(Cog):
         """
         Communicate with other channels through Red.
         """
-        pass
 
     @rift.group()
     async def blacklist(self, ctx):
@@ -69,7 +66,6 @@ class Rift(Cog):
 
         Blacklisted destinations cannot have rifts opened to them.
         """
-        pass
 
     @blacklist.command(name="channel")
     @commands.check(close_check)

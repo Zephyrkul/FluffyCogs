@@ -2,10 +2,9 @@ import asyncio
 import collections
 import io
 import itertools
-import sys
 from copy import copy
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import datetime
 from typing import Optional, Union
 
 import discord
