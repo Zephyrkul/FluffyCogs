@@ -1,11 +1,8 @@
-import asyncio
-import discord
 import inspect
 import typing
 
-from copy import copy
-from redbot.core import checks, commands, Config
-from redbot.core.utils.chat_formatting import box, bordered
+import discord
+from redbot.core import Config, checks, commands
 
 from .proxyembed import ProxyEmbed
 

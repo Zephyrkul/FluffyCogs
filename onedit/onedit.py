@@ -1,6 +1,5 @@
 import discord
-
-from redbot.core import commands, Config, checks
+from redbot.core import Config, checks, commands
 
 listener = getattr(commands.Cog, "listener", lambda: lambda x: x)
 

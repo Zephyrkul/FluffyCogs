@@ -1,11 +1,10 @@
 import asyncio
-import discord
 import numbers
 from typing import Generic, Optional, Type, TypeVar, Union
 
-from redbot.core import commands, Config, checks
+import discord
+from redbot.core import Config, checks, commands
 from redbot.core.utils.mod import get_audit_reason
-
 
 T = TypeVar("T", float, int)
 defaults = dict(channel=None, days=1, uses=0)

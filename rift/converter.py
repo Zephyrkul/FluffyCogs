@@ -1,5 +1,4 @@
 import asyncio
-import discord
 import logging
 import re
 from collections import deque, namedtuple
@@ -9,11 +8,11 @@ from itertools import chain, filterfalse
 from typing import List, TYPE_CHECKING
 from urlnorm import norm_netloc
 
+import discord
 from redbot.core import commands
 from redbot.core.utils.predicates import MessagePredicate
 from redbot.core.utils.chat_formatting import pagify, humanize_list
 from redbot.core.i18n import Translator
-
 
 log = logging.getLogger("red.fluffy.rift.converter")
 _ = Translator(__name__, __file__)

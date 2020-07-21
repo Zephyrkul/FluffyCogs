@@ -97,7 +97,6 @@ class Rift(commands.Cog):
         """
         Communicate with other channels through Red.
         """
-        pass
 
     @rift.group()
     @check_can_close
@@ -107,7 +106,6 @@ class Rift(commands.Cog):
 
         Blacklisted destinations cannot have rifts opened to them.
         """
-        pass
 
     @blacklist.command(name="channel")
     @check_can_close

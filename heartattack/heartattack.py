@@ -1,11 +1,9 @@
-import discord
 import logging
 import sys
 import threading
 import traceback
 
 from redbot.core import commands
-
 
 dpy_log = logging.getLogger("discord.gateway")
 ha_log = logging.getLogger("red.heartattack")

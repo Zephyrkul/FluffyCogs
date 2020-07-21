@@ -1,9 +1,7 @@
 import discord
-
-from redbot.core import commands, Config
+from redbot.core import Config, commands
 
 from .chart import pie
-
 
 Cog = getattr(commands, "Cog", object)
 
@@ -34,7 +32,6 @@ class Clocks(Cog):
     @commands.group(aliases=["clock"])
     async def clocks(self, ctx):
         """Track projects with clocks"""
-        pass
 
     @clocks.command()
     async def create(
