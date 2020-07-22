@@ -1,12 +1,10 @@
-import discord
-from redbot.core.errors import CogLoadError
-
 import logging
 import sys
 import threading
 import traceback
 
-from redbot.core import commands
+import discord
+from redbot.core.errors import CogLoadError
 
 dpy_log = logging.getLogger("discord.gateway")
 ha_log = logging.getLogger("red.fluffy.heartattack")
