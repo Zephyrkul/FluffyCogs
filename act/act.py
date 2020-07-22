@@ -32,6 +32,10 @@ if not set_shared_api_tokens:
 
 
 class Act(Cog):
+    """
+    This cog makes all commands, e.g. [p]fluff, into valid commands if 
+    you command the bot to act on a user, e.g. [p]fluff [botname].
+    """
 
     __author__ = "Zephyrkul"
 
