@@ -32,6 +32,9 @@ if not set_shared_api_tokens:
 
 
 class Act(Cog):
+    """
+    
+    """
 
     __author__ = "Zephyrkul"
 
