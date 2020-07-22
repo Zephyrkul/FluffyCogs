@@ -1,17 +1,16 @@
 from itertools import chain
 from typing import (
-    Dict,
     DefaultDict,
+    Dict,
     Generator,
     Hashable,
     Iterable,
     Optional,
+    Set,
     Tuple,
     TypeVar,
-    Set,
     Union,
 )
-
 
 T = TypeVar("T", bound=Hashable)
 Vector = Tuple[T, T]  # ORDER MATTERS

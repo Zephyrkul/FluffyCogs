@@ -1,21 +1,16 @@
 import asyncio
-import discord
 import logging
-import re
-from copy import copy
-from contextlib import suppress
 from itertools import chain
-from operator import attrgetter
 from traceback import walk_tb
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Dict, Set, List, Literal, Optional, Type, Union, overload
+from typing import TYPE_CHECKING, List, Literal, Optional, Set, Union, overload
 
-from redbot.core import commands, checks, Config
-from redbot.core.utils import common_filters, deduplicate_iterables, mod
-from redbot.core.utils.chat_formatting import pagify, humanize_list
-from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
-from redbot.core.utils.predicates import MessagePredicate
+import discord
+from redbot.core import Config, checks, commands
 from redbot.core.i18n import Translator, cog_i18n
+from redbot.core.utils import common_filters, deduplicate_iterables, mod
+from redbot.core.utils.chat_formatting import humanize_list, pagify
+from redbot.core.utils.menus import DEFAULT_CONTROLS, menu
 
 from .graph import SimpleGraph, Vector
 
