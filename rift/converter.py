@@ -7,7 +7,6 @@ import discord
 from redbot.core import commands
 from redbot.core.i18n import Translator
 from redbot.core.utils.predicates import MessagePredicate
-from urlnorm import norm_netloc
 
 log = logging.getLogger("red.fluffy.rift.converter")
 _ = Translator(__name__, __file__)
