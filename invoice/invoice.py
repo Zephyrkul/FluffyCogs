@@ -2,9 +2,8 @@ import inspect
 import typing
 
 import discord
+from proxyembed import ProxyEmbed
 from redbot.core import Config, checks, commands
-
-from .proxyembed import ProxyEmbed
 
 listener = getattr(commands.Cog, "listener", lambda name=None: (lambda f: f))
 

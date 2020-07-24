@@ -7,6 +7,9 @@
     "name": "InVoice",
     "short": "Automatically role VC users according to various settings.",
     "description": "Automatically role VC users according to various settings.",
+    "requirements": [
+        "git+https://github.com/zephyrkul/proxyembed"
+    ],
     "tags": [
         "voice",
         "utility"
