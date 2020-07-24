@@ -13,31 +13,34 @@ _ = Translator(__name__, __file__)
 
 
 class Limited(discord.abc.Messageable):
-    def __init__(self, *, message: discord.Message):
-        self.message = message
+    def __init__(self, **kwargs):
+        super().__init__()
+        if message := kwargs.pop("message", None):
+            self.author, self.channel = message.author, message.channel
+        else:
+            self.author, self.channel = kwargs.pop("author"), kwargs.pop("channel")
+        if kwargs:
+            log.warning(f"Extraneous kwargs for class {self.__class__.__qualname__}: {kwargs}")
 
     def __getattr__(self, attr):
-        try:
-            return getattr(self.message.channel, attr)
-        except AttributeError:
-            return getattr(self.message, attr)
+        return getattr(self.channel, attr)
 
     def __hash__(self) -> int:
-        return hash((self.message.author, self.message.channel))
+        return hash((self.author, self.channel))
 
     def __eq__(self, o: object) -> bool:
         if not isinstance(o, Limited):
             return NotImplemented
-        return (self.message.author, self.message.channel) == (o.message.author, o.message.channel)
+        return (self.author, self.channel) == (o.author, o.channel)
 
     def __str__(self) -> str:
-        return f"{self.message.author}, in {self.message.channel}"
+        return f"{self.author}, in {self.channel}"
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__qualname__}(message={self.message!r})"
+        return f"{self.__class__.__qualname__}(author={self.author!r}, channel={self.channel!r})"
 
     def _get_channel(self):
-        return self.message.channel._get_channel()
+        return self.channel._get_channel()
 
 
 class DiscordConverter(commands.Converter):

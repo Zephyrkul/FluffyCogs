@@ -15,10 +15,10 @@ from redbot.core.utils.menus import DEFAULT_CONTROLS, menu
 from .graph import SimpleGraph, Vector
 
 if TYPE_CHECKING:
-    from discord.abc import Messageable as DiscordConverter
+    from discord.abc import Messageable
     from redbot.cogs.filter import Filter
 else:
-    from .converter import DiscordConverter
+    from .converter import DiscordConverter as Messageable
 
 from .converter import Limited
 
@@ -75,7 +75,7 @@ class Rift(commands.Cog):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
-        self.rifts = SimpleGraph[DiscordConverter]()
+        self.rifts = SimpleGraph[Messageable]()
         self.messages = SimpleGraph[discord.Message]()
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_channel(blacklisted=False)
@@ -88,14 +88,14 @@ class Rift(commands.Cog):
     # COMMANDS
 
     @commands.group()
-    async def rift(self, ctx):
+    async def rift(self, ctx: commands.Context):
         """
         Communicate with other channels through Red.
         """
 
     @rift.group()
     @check_can_close
-    async def blacklist(self, ctx):
+    async def blacklist(self, ctx: commands.Context):
         """
         Configures blacklists.
 
@@ -104,7 +104,9 @@ class Rift(commands.Cog):
 
     @blacklist.command(name="channel")
     @check_can_close
-    async def blacklist_channel(self, ctx, *, channel: discord.TextChannel = None):
+    async def blacklist_channel(
+        self, ctx: commands.Context, *, channel: discord.TextChannel = None
+    ):
         """
         Blacklists the current channel or the specified channel.
 
@@ -129,7 +131,7 @@ class Rift(commands.Cog):
     @blacklist.command(name="server", aliases=["guild"])
     @commands.guild_only()
     @checks.admin_or_permissions(manage_guild=True)
-    async def blacklist_server(self, ctx):
+    async def blacklist_server(self, ctx: commands.Context):
         """
         Blacklists the current server.
 
@@ -146,28 +148,36 @@ class Rift(commands.Cog):
             self.close_rifts(ctx.author, *ctx.guild.text_channels)
 
     @rift.group(name="close", invoke_without_command=True)
-    @check_can_close
-    async def rift_close(self, ctx):
+    async def rift_close(self, ctx: commands.Context):
         """
         Closes all rifts that lead to this channel.
         """
         channel = ctx.channel if ctx.guild else ctx.author
-        self.close_rifts(ctx.author, channel)
-        await ctx.tick()
+        if await can_close(ctx):
+            num = self.close_rifts(ctx.author, channel)
+        else:
+            num = self.close_rifts(ctx.author, Limited(message=ctx.message))
+        if num:
+            await ctx.send(f"{num} rifts that lead here have been closed.")
+        else:
+            await ctx.send("No rifts were found that lead to here.")
 
     @rift_close.command(name="guild", aliases=["server"])
     @commands.guild_only()
     @check_can_close
-    async def close_guild(self, ctx):
+    async def close_guild(self, ctx: commands.Context):
         """
         Closes all rifts that lead to this server.
         """
-        self.close_rifts(ctx.author, *ctx.guild.text_channels)
-        await ctx.tick()
+        num = self.close_rifts(ctx.author, *ctx.guild.text_channels)
+        if num:
+            await ctx.send(f"{num} rifts that lead here have been closed.")
+        else:
+            await ctx.send("No rifts were found that lead to here.")
 
     @rift.command(name="notify")
     @checks.is_owner()
-    async def rift_notify(self, ctx, *, notify: bool = None):
+    async def rift_notify(self, ctx: commands.Context, *, notify: bool = None):
         """
         Toggle whether the bot notifies the destination of an open rift.
 
@@ -184,14 +194,16 @@ class Rift(commands.Cog):
         )
 
     @rift.command(name="open")
-    async def rift_open(self, ctx, one_way: Optional[bool] = None, *rifts: DiscordConverter):
+    async def rift_open(
+        self, ctx: commands.Context, one_way: Optional[bool] = None, *rifts: Messageable
+    ):
         """
         Opens a rift to the specified destination(s).
         """
         if not rifts:
             raise commands.UserInputError()
-        unique_rifts: List[DiscordConverter] = deduplicate_iterables(rifts)
-        source = Limited(message=ctx.message)
+        unique_rifts: List[Messageable] = deduplicate_iterables(rifts)
+        source = Limited(message=ctx.message) if ctx.guild else ctx.author
         no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
         for rift in unique_rifts:
             if (
@@ -223,13 +235,15 @@ class Rift(commands.Cog):
 
     @rift.command(name="link")
     @check_can_close
-    async def rift_link(self, ctx, one_way: Optional[bool] = None, *rifts: DiscordConverter):
+    async def rift_link(
+        self, ctx: commands.Context, one_way: Optional[bool] = None, *rifts: Messageable
+    ):
         """
         Opens a rift to the specified destination(s).
         """
         if not rifts:
             raise commands.UserInputError()
-        unique_rifts: List[DiscordConverter] = deduplicate_iterables(rifts)
+        unique_rifts: List[Messageable] = deduplicate_iterables(rifts)
         source = ctx.channel if ctx.guild else ctx.author
         no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
         for rift in unique_rifts:
@@ -262,7 +276,7 @@ class Rift(commands.Cog):
 
     @rift.command(name="web")
     @checks.is_owner()
-    async def rift_web(self, ctx, *rifts: DiscordConverter):
+    async def rift_web(self, ctx: commands.Context, *rifts: Messageable):
         """
         Opens up all possible connections between this channel and the specified rifts.
 
@@ -270,7 +284,7 @@ class Rift(commands.Cog):
         """
         if not rifts:
             raise commands.UserInputError()
-        unique_rifts: List[DiscordConverter] = deduplicate_iterables(self.maybe_chain(rifts))
+        unique_rifts: List[Messageable] = deduplicate_iterables(self.maybe_chain(rifts))
         source = ctx.channel if ctx.guild else ctx.author
         no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
         self.rifts.add_web(source, *unique_rifts)
@@ -302,20 +316,21 @@ class Rift(commands.Cog):
 
     @rift.command(name="info")
     @commands.bot_has_permissions(embed_links=True)
-    async def rift_search(self, ctx, *, scope: str = "channel"):
+    async def rift_search(self, ctx: commands.Context, *, scope: str = "channel"):
         """
         Provides info about rifts opened in the specified scope.
         """
+        author = Limited(message=ctx.message) if ctx.guild else ctx.author
         try:
-            scoped = dict(
-                user=ctx.author,
-                member=ctx.author,
-                author=ctx.author,
-                channel=ctx.channel if ctx.guild else ctx.author,
-                guild=ctx.guild,
-                server=ctx.guild,
-                **{"global": None},
-            )[scope.casefold()]
+            scoped = {
+                "user": author,
+                "member": author,
+                "author": author,
+                "channel": ctx.channel if ctx.guild else ctx.author,
+                "guild": ctx.guild,
+                "server": ctx.guild,
+                "global": None,
+            }[scope.casefold()]
         except KeyError:
             raise commands.BadArgument(
                 _("Invalid scope. Scope must be author, channel, guild, server, or global.")
@@ -335,7 +350,7 @@ class Rift(commands.Cog):
                 return True
             return False
 
-        unique_rifts: Set[Vector[DiscordConverter]] = set()
+        unique_rifts: Set[Vector[Messageable]] = set()
         for source, destination in self.rifts.vectors():
             if check((source, destination)) and (destination, source) not in unique_rifts:
                 unique_rifts.add((source, destination))
@@ -427,23 +442,30 @@ class Rift(commands.Cog):
             data = await destination._state.http.request(route, json=payload)
             return destination._state.create_message(channel=destination, data=data)
 
-    def close_rifts(
-        self, closer: DiscordConverter, *destinations: Union[discord.Guild, DiscordConverter]
-    ):
-        unique = set(destinations)
+    def close_rifts(self, closer: discord.abc.User, *destinations: Messageable):
+        unique = set()
+        for destination in destinations:
+            unique.add(destination)
+            if not isinstance(destination, (Limited, discord.abc.User)):
+                unique.add(Limited(author=closer, channel=destination))
         fmt = _("{closer} has closed a rift to here from {source}.")
 
-        processed: Set[Vector[DiscordConverter]] = set()
+        processed: Set[Vector[Messageable]] = set()
+        num_closed = 0
         for source, dest in self.rifts.vectors():
             if (dest, source) in processed:
                 continue
+            print((source, dest))
             if source in unique:
                 asyncio.ensure_future(dest.send(fmt.format(closer=closer, source=source)))
+                num_closed += 1
             elif dest in unique:
                 asyncio.ensure_future(source.send(fmt.format(closer=closer, source=dest)))
+                num_closed += 1
             processed.add((source, dest))
 
         self.rifts.remove_vertices(*unique)
+        return num_closed
 
     async def get_embed(self, destination, attachments):
         if not attachments:
@@ -551,14 +573,20 @@ class Rift(commands.Cog):
         if not message.content and not message.attachments:
             return
         channel = message.channel if message.guild else message.author
-        if message.content.casefold() == "exit" and await can_close(message, self.bot):
-            self.close_rifts(message.author, channel)
-            return await message.channel.send(_("Rift closed."))
+        destinations = deduplicate_iterables(
+            self.rifts.get(Limited(message=message), ()), self.rifts.get(channel, ())
+        )
+        if not destinations:
+            return
+        if message.content.casefold() == "exit":
+            if await can_close(message, self.bot):
+                if num := self.close_rifts(message.author, channel):
+                    return await message.channel.send(_("{num} rifts closed.").format(num=num))
+            else:
+                if num := self.close_rifts(message.author, Limited(message=message)):
+                    return await message.channel.send(_("{num} rifts closed.").format(num=num))
         futures = [
-            asyncio.ensure_future(self.process_discord_message(message, d))
-            for d in deduplicate_iterables(
-                self.rifts.get(Limited(message=message), ()), self.rifts.get(channel, ())
-            )
+            asyncio.ensure_future(self.process_discord_message(message, d)) for d in destinations
         ]
         if not futures:
             return
