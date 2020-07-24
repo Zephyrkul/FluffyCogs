@@ -14,7 +14,7 @@ import discord
 from proxyembed import ProxyEmbed
 from redbot.core import Config, checks, commands
 from redbot.core import version_info as red_version
-from redbot.core.utils.chat_formatting import box, escape, pagify
+from redbot.core.utils.chat_formatting import box, escape, humanize_list, pagify
 from sans.api import Api
 
 # pylint: disable=E0611
@@ -104,12 +104,14 @@ class NationStates(commands.Cog):
     async def initialize(self):
         agent = await self.config.agent()
         if not agent:
-            if not self.bot.owner_id:
-                # always False but forces owner_id to be filled
+            if not self.bot.owner_ids:
+                # always False but forces owner_ids to be filled
                 await self.bot.is_owner(discord.Object(id=None))
-            owner_id = self.bot.owner_id
+            owner_ids = self.bot.owner_ids
             # only make the user_info request if necessary
-            agent = str(self.bot.get_user(owner_id) or await self.bot.fetch_user(owner_id))
+            agent = humanize_list(
+                [str(self.bot.get_user(id) or await self.bot.fetch_user(id)) for id in owner_ids]
+            )
         Api.agent = f"{agent} Red-DiscordBot/{red_version}"
         self.db_cache = await self.config.custom("NATION").all()
 
