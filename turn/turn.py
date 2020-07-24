@@ -86,7 +86,7 @@ class Turn(Cog):
         """Manage turns in a channel."""
 
     @turn.command()
-    @checks.mod()
+    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
     async def add(self, ctx, *members: discord.Member):
         """Add members to the queue."""
@@ -96,7 +96,7 @@ class Turn(Cog):
         await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
 
     @turn.command()
-    @checks.mod()
+    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
     @gamecheck(False)
     async def load(self, ctx, *, name: standstr):
@@ -110,7 +110,7 @@ class Turn(Cog):
         await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
 
     @turn.command()
-    @checks.mod()
+    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
     @skipcheck()
     async def pause(self, ctx):
@@ -121,7 +121,7 @@ class Turn(Cog):
         await ctx.tick()
 
     @turn.command()
-    @checks.mod()
+    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
     async def remove(self, ctx, all: typing.Optional[is_all] = False, *, member: discord.Member):
         """Remove a member from the queue.
@@ -140,7 +140,7 @@ class Turn(Cog):
         await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
 
     @turn.command()
-    @checks.mod()
+    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
     @gamecheck(False)
     async def save(self, ctx, *, name: standstr):
@@ -149,13 +149,13 @@ class Turn(Cog):
         await ctx.tick()
 
     @turn.group(name="set")
-    @checks.mod()
+    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
     async def turn_set(self, ctx):
         """Configure turn settings."""
 
     @turn_set.command()
-    @checks.mod()
+    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
     async def destination(self, ctx, *, channel: discord.TextChannel = None):
         """Change where the bot announces turns."""
@@ -166,7 +166,7 @@ class Turn(Cog):
         await ctx.tick()
 
     @turn_set.command()
-    @checks.mod()
+    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
     async def source(self, ctx, *, channel: discord.TextChannel = None):
         """Change where the bot will look for messages."""
@@ -177,7 +177,7 @@ class Turn(Cog):
         await ctx.tick()
 
     @turn_set.command()
-    @checks.mod()
+    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
     async def time(self, ctx, *, time: nonnegative_int):
         """Change how long the bot will wait for a message.
@@ -202,7 +202,7 @@ class Turn(Cog):
         await ctx.tick()
 
     @turn.command()
-    @checks.mod()
+    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
     @gamecheck(False)
     async def start(self, ctx):
@@ -218,7 +218,7 @@ class Turn(Cog):
         await ctx.tick()
 
     @turn.command()
-    @checks.mod()
+    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
     @gamecheck()
     async def stop(self, ctx):
