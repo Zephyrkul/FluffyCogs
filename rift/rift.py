@@ -455,7 +455,6 @@ class Rift(commands.Cog):
         for source, dest in self.rifts.vectors():
             if (dest, source) in processed:
                 continue
-            print((source, dest))
             if source in unique:
                 asyncio.ensure_future(dest.send(fmt.format(closer=closer, source=source)))
                 num_closed += 1
