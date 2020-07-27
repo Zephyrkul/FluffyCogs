@@ -5,8 +5,8 @@
     ],
     "install_msg": "Usage: `[p]help InVoice`",
     "name": "InVoice",
-    "short": "Automatically role VC users according to various settings.",
-    "description": "Automatically role VC users according to various settings.",
+    "short": "Create and manage microphoneless text channels for VC users with no microphone.",
+    "description": "Create and manage microphoneless text channels for VC users with no microphone.",
     "requirements": [
         "git+https://github.com/zephyrkul/proxyembed"
     ],
