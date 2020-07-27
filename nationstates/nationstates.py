@@ -8,7 +8,7 @@ from functools import partial, reduce
 from html import unescape
 from io import BytesIO
 from operator import or_
-from typing import Generic, Optional, Type, TypeVar, Union
+from typing import Generic, List, Optional, Type, TypeVar, Union
 
 import discord
 from proxyembed import ProxyEmbed
@@ -24,7 +24,7 @@ from sans.utils import pretty_string
 
 class Options(Flag):
     @classmethod
-    def convert(cls, argument: str) -> "Options":
+    async def convert(cls, ctx, argument: str) -> "Options":
         argument = argument.upper().rstrip("S")
         try:
             return cls[argument]
@@ -115,16 +115,13 @@ class NationStates(commands.Cog):
         Api.agent = f"{agent} Red-DiscordBot/{red_version}"
         self.db_cache = await self.config.custom("NATION").all()
 
-    def cog_check(self, ctx):
-        if not ctx.channel.permissions_for(ctx.me).send_messages:
-            raise commands.BotMissingPermissions(["send_messages"])
+    def cog_before_invoke(self, ctx):
         # this will also cause `[p]agent` to be blocked but this is intended
         if ctx.cog is not self:
-            return True
+            return
         xra = Api.xra
         if xra:
             raise commands.CommandOnCooldown(None, time.time() - xra)
-        return True
 
     def cog_command_error(self, ctx, error):
         # not a coro but returns one anyway
@@ -172,7 +169,7 @@ class NationStates(commands.Cog):
                 )
                 continue
             ctx.invoked_with = match.group(1).lower()
-            await ctx.invoke(self.wa, int(res_id))
+            await ctx.invoke(self.wa, int(res_id), WA.NONE)
 
     # __________ STANDARD __________
 
@@ -430,10 +427,11 @@ class NationStates(commands.Cog):
             value=box(root.MARKET_VALUE.text, lang="swift"),
             inline=False,
         )
-        sellers, buyers = [], []
+        sellers: List[str] = []
+        buyers: List[str] = []
         for market in root.MARKETS.iterchildren():
-            # negative price to reverse sorting
             if market.TYPE.text == "bid":
+                # negative price to reverse sorting
                 bisect.insort(
                     buyers, (-market.PRICE.pyval, market.NATION.text.replace("_", " ").title())
                 )
@@ -518,7 +516,7 @@ class NationStates(commands.Cog):
     # __________ ASSEMBLY __________
 
     @commands.command(aliases=["ga", "sc"])
-    async def wa(self, ctx, resolution_id: Optional[int] = None, *options: WA.convert):
+    async def wa(self, ctx, resolution_id: Optional[int] = None, *options: WA):
         """
         Retrieves general info about World Assembly resolutions.
 
