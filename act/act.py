@@ -6,32 +6,13 @@ import aiohttp
 import discord
 import inflection
 from redbot.core import Config, checks, commands
-from redbot.core.bot import Red
 from redbot.core.i18n import get_locale
 from redbot.core.utils.chat_formatting import italics
 
 from .helpers import *
 
-Cog = getattr(commands, "Cog", object)
-listener = getattr(Cog, "listener", lambda: lambda x: x)
 
-
-get_shared_api_tokens = getattr(Red, "get_shared_api_tokens", None)
-if not get_shared_api_tokens:
-    # pylint: disable=function-redefined
-    async def get_shared_api_tokens(bot: Red, service_name: str):
-        return await bot.db.api_tokens.get_raw(service_name, default={})
-
-
-set_shared_api_tokens = getattr(Red, "set_shared_api_tokens", None)
-if not set_shared_api_tokens:
-    # pylint: disable=function-redefined
-    async def set_shared_api_tokens(bot: Red, service_name: str, **tokens: str):
-        async with bot.db.api_tokens.get_attr(service_name)() as method_abuse:
-            method_abuse.update(**tokens)
-
-
-class Act(Cog):
+class Act(commands.Cog):
     """
     This cog makes all commands, e.g. [p]fluff, into valid commands if 
     you command the bot to act on a user, e.g. [p]fluff [botname].
@@ -52,7 +33,7 @@ class Act(Cog):
         key = await self.config.tenorkey()
         if not key:
             return
-        await set_shared_api_tokens(bot, "tenor", api_key=key)
+        await bot.set_shared_api_tokens("tenor", api_key=key)
         await self.config.tenorkey.clear()
 
     @commands.command(hidden=True)
@@ -107,7 +88,7 @@ class Act(Cog):
             return await ctx.send(message)
         if not await ctx.embed_requested():
             return await ctx.send(message)
-        key = (await get_shared_api_tokens(ctx.bot, "tenor")).get("api_key")
+        key = (await ctx.bot.get_shared_api_tokens("tenor")).get("api_key")
         if not key:
             return await ctx.send(message)
         async with aiohttp.request(
@@ -231,7 +212,7 @@ class Act(Cog):
         instructions = [f"**{i}.** {v}" for i, v in enumerate(instructions, 1)]
         await ctx.maybe_send_embed("\n".join(instructions))
 
-    @listener()
+    @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
             return

@@ -5,8 +5,6 @@ import discord
 from proxyembed import ProxyEmbed
 from redbot.core import Config, checks, commands
 
-listener = getattr(commands.Cog, "listener", lambda name=None: (lambda f: f))
-
 
 class InVoice(commands.Cog):
     def __init__(self):
@@ -187,7 +185,7 @@ class InVoice(commands.Cog):
                 "Text channel for {vc} set to {channel}".format(vc=vc, channel=role_or_channel)
             )
 
-    @listener()
+    @commands.Cog.listener()
     async def on_guild_channel_create(self, vc):
         if not isinstance(vc, discord.VoiceChannel):
             return
@@ -222,7 +220,7 @@ class InVoice(commands.Cog):
         )
         await self.config.channel(vc).channel.set(text.id)
 
-    @listener()
+    @commands.Cog.listener()
     async def on_guild_channel_delete(self, vc):
         if not isinstance(vc, discord.VoiceChannel):
             return
@@ -239,7 +237,7 @@ class InVoice(commands.Cog):
         if channel:
             await channel.delete(reason="Dynamic channel for {vc}".format(vc=vc))
 
-    @listener()
+    @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         if member.bot:
             return

@@ -10,8 +10,6 @@ from redbot.core.utils import mod
 
 from .namedlist import NamedList
 
-Cog = getattr(commands, "Cog", object)
-
 
 class Game(NamedList):
     __slots__ = "queue", "destination", "source", "time", "paused", "task"
@@ -57,7 +55,7 @@ def gamecheck(is_running=True):
     return commands.check(predicate)
 
 
-class Turn(Cog):
+class Turn(commands.Cog):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot

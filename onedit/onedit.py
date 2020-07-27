@@ -1,8 +1,6 @@
 import discord
 from redbot.core import Config, checks, commands
 
-listener = getattr(commands.Cog, "listener", lambda: lambda x: x)
-
 
 class OnEdit(commands.Cog):
     def __init__(self, bot):
@@ -32,7 +30,7 @@ class OnEdit(commands.Cog):
         self.timeout = timeout
         await ctx.tick()
 
-    @listener()
+    @commands.Cog.listener()
     async def on_message_edit(self, before, after):
         if not after.edited_at:
             return

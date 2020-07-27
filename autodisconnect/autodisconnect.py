@@ -3,8 +3,6 @@ import asyncio
 import discord
 from redbot.core import Config, commands
 
-listener = getattr(commands.Cog, "listener", lambda: (lambda y: y))
-
 
 class AutoDisconnect(commands.Cog):
     def __init__(self, bot):
@@ -24,7 +22,7 @@ class AutoDisconnect(commands.Cog):
         await self.config.guild(ctx.guild).timeout.set(time)
         await ctx.tick()
 
-    @listener()
+    @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         def check(m, b, a):
             if m != member:

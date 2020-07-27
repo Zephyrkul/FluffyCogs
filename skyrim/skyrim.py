@@ -3,10 +3,8 @@ from random import randrange
 from redbot.core import commands
 from redbot.core.data_manager import bundled_data_path
 
-Cog = getattr(commands, "Cog", object)
 
-
-class Skyrim(Cog):
+class Skyrim(commands.Cog):
     """
     Says a random line from Skyrim.
     """

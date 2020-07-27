@@ -6,9 +6,6 @@ from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils.chat_formatting import bold, italics, pagify, warning
 from redbot.core.utils.menus import menu
 
-Cog = getattr(commands, "Cog", object)
-
-
 _ = Translator("Theme", __file__)
 
 
@@ -17,7 +14,7 @@ def theme_strip(argument):
 
 
 @cog_i18n(_)
-class Theme(Cog):
+class Theme(commands.Cog):
     """
     Allows you to set themes to easily play accross all servers.
     """
