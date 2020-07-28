@@ -11,6 +11,7 @@ from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils import common_filters, deduplicate_iterables, mod
 from redbot.core.utils.chat_formatting import humanize_list, pagify
 from redbot.core.utils.menus import DEFAULT_CONTROLS, menu
+from redbot.core.utils.predicates import MessagePredicate
 
 from .graph import SimpleGraph, Vector
 
@@ -86,6 +87,23 @@ class Rift(commands.Cog):
         )
 
     # COMMANDS
+
+    @commands.command()
+    async def send(self, ctx: commands.Context, *rifts: Messageable):
+        """
+        Send a message to the specified destinations.
+        """
+        if not rifts:
+            raise commands.UserInputError()
+        unique_rifts = deduplicate_iterables(rifts)
+        await ctx.send("What would you like to say?")
+        p = MessagePredicate.same_context(ctx=ctx)
+        message = ctx.bot.wait_for("message", check=p)
+        for rift in unique_rifts:
+            try:
+                await self.process_discord_message(message, rift)
+            except Exception:
+                await ctx.send(f"I couldn't send your message to {rift}.")
 
     @commands.group()
     async def rift(self, ctx: commands.Context):
