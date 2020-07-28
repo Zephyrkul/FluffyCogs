@@ -115,7 +115,7 @@ class NationStates(commands.Cog):
         Api.agent = f"{agent} Red-DiscordBot/{red_version}"
         self.db_cache = await self.config.custom("NATION").all()
 
-    def cog_before_invoke(self, ctx):
+    async def cog_before_invoke(self, ctx):
         # this will also cause `[p]agent` to be blocked but this is intended
         if ctx.cog is not self:
             return
