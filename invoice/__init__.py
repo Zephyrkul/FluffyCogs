@@ -1,5 +1,7 @@
 from .invoice import InVoice
 
 
-def setup(bot):
-    bot.add_cog(InVoice())
+async def setup(bot):
+    cog = InVoice()
+    await cog.initialize()
+    bot.add_cog(cog)

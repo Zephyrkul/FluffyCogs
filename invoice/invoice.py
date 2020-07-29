@@ -1,18 +1,32 @@
 import inspect
 import typing
+from collections import defaultdict
+from typing import Any, Dict
 
 import discord
 from proxyembed import ProxyEmbed
 from redbot.core import Config, checks, commands
 
+Cache = Dict[int, Dict[str, Any]]
+
 
 class InVoice(commands.Cog):
     def __init__(self):
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
-        self.config.register_guild(
-            role=None, dynamic=False, mute=False, deaf=False, self_deaf=False
-        )
-        self.config.register_channel(role=None, channel=None)
+        self.config.register_guild(**self._guild_defaults())
+        self.guild_cache: Cache = None
+        self.config.register_channel(**self._channel_defaults())
+        self.channel_cache: Cache = None
+
+    async def initialize(self):
+        self.guild_cache = defaultdict(self._guild_defaults, await self.config.all_guilds())
+        self.channel_cache = defaultdict(self._channel_defaults, await self.config.all_channels())
+
+    def _guild_defaults(self):
+        return dict(role=None, dynamic=False, mute=False, deaf=False, self_deaf=False)
+
+    def _channel_defaults(self):
+        return dict(role=None, channel=None)
 
     @commands.group()
     @commands.guild_only()
@@ -26,7 +40,7 @@ class InVoice(commands.Cog):
         color = await ctx.embed_colour()
 
         embed = ProxyEmbed(title=f"Current settings", color=color)
-        g_settings = await self.config.guild(ctx.guild).all()
+        g_settings = self.guild_cache[ctx.guild.id]
         g_msg = []
         for key, value in g_settings.items():
             if value is not None and key == "role":
@@ -38,7 +52,7 @@ class InVoice(commands.Cog):
 
         vc = ctx.author.voice.channel if ctx.author.voice else None
         if vc:
-            c_settings = await self.config.channel(vc).all()
+            c_settings = self.channel_cache[ctx.channel.id]
             c_msg = []
             for key, value in c_settings.items():
                 if value is not None:
@@ -56,13 +70,14 @@ class InVoice(commands.Cog):
     @invoice.command()
     @commands.guild_only()
     @checks.admin_or_permissions(manage_guild=True)
-    async def dynamic(self, ctx, *, true_or_false: bool = None):
+    async def dynamic(self, ctx: commands.Context, *, true_or_false: bool = None):
         """
         Toggle whether to dynamically create a role and channel for new voice channels when they're created.
         """
         if true_or_false is None:
-            true_or_false = not await self.config.guild(ctx.guild).dynamic()
+            true_or_false = not self.guild_cache[ctx.guild.id]["dynamic"]
         await self.config.guild(ctx.guild).dynamic.set(true_or_false)
+        self.guild_cache[ctx.guild.id]["dynamic"] = true_or_false
         await ctx.send(
             "I will {} dynamically create roles and channels for new VCs.".format(
                 "now" if true_or_false else "no longer"
@@ -72,7 +87,7 @@ class InVoice(commands.Cog):
     @invoice.command()
     @commands.guild_only()
     @checks.admin_or_permissions(manage_guild=True)
-    async def mute(self, ctx, *, true_or_false: bool = None):
+    async def mute(self, ctx: commands.Context, *, true_or_false: bool = None):
         """
         Toggle whether to modify permissions when a user is server muted.
 
@@ -81,8 +96,9 @@ class InVoice(commands.Cog):
         Self mutes are unaffected by this setting.
         """
         if true_or_false is None:
-            true_or_false = not await self.config.guild(ctx.guild).mute()
+            true_or_false = not self.guild_cache[ctx.guild.id]["mute"]
         await self.config.guild(ctx.guild).mute.set(true_or_false)
+        self.guild_cache[ctx.guild.id]["mute"] = true_or_false
         await ctx.send(
             "I will {} modify permissions when a user is server muted.".format(
                 "now" if true_or_false else "no longer"
@@ -92,7 +108,7 @@ class InVoice(commands.Cog):
     @invoice.command()
     @commands.guild_only()
     @checks.admin_or_permissions(manage_guild=True)
-    async def deaf(self, ctx, *, true_or_false: bool = None):
+    async def deaf(self, ctx: commands.Context, *, true_or_false: bool = None):
         """
         Toggle whether to modify permissions when a user is server deafened.
 
@@ -101,8 +117,9 @@ class InVoice(commands.Cog):
         Self deafens are unaffected by this setting.
         """
         if true_or_false is None:
-            true_or_false = not await self.config.guild(ctx.guild).deaf()
+            true_or_false = not self.guild_cache[ctx.guild.id]["deaf"]
         await self.config.guild(ctx.guild).deaf.set(true_or_false)
+        self.guild_cache[ctx.guild.id]["deaf"] = true_or_false
         await ctx.send(
             "I will {} modify permissions when a user is server deafened.".format(
                 "now" if true_or_false else "no longer"
@@ -112,7 +129,7 @@ class InVoice(commands.Cog):
     @invoice.command()
     @commands.guild_only()
     @checks.admin_or_permissions(manage_guild=True)
-    async def selfdeaf(self, ctx, *, true_or_false: bool = None):
+    async def selfdeaf(self, ctx: commands.Context, *, true_or_false: bool = None):
         """
         Toggle whether to modify permissions when a user is self deafened.
 
@@ -121,8 +138,9 @@ class InVoice(commands.Cog):
         Server deafens are unaffected by this setting.
         """
         if true_or_false is None:
-            true_or_false = not await self.config.guild(ctx.guild).self_deaf()
+            true_or_false = not self.guild_cache[ctx.guild.id]["self_deaf"]
         await self.config.guild(ctx.guild).self_deaf.set(true_or_false)
+        self.guild_cache[ctx.guild.id]["self_deaf"] = true_or_false
         await ctx.send(
             "I will {} modify permissions when a user is self deafened.".format(
                 "now" if true_or_false else "no longer"
@@ -132,15 +150,17 @@ class InVoice(commands.Cog):
     @invoice.command(aliases=["server"])
     @commands.guild_only()
     @checks.admin_or_permissions(manage_guild=True)
-    async def guild(self, ctx, *, role: discord.Role = None):
+    async def guild(self, ctx: commands.Context, *, role: discord.Role = None):
         """
         Set a guild-wide role for users who are in any non-AFK voice channel.
         """
         if not role:
             await self.config.guild(ctx.guild).role.clear()
+            self.guild_cache[ctx.guild.id]["role"] = self._guild_defaults()["role"]
             await ctx.send("Role cleared.")
         else:
             await self.config.guild(ctx.guild).role.set(role.id)
+            self.guild_cache[ctx.guild.id]["role"] = role.id
             await ctx.send("Role set to {role}.".format(role=role))
 
     @invoice.command()
@@ -173,14 +193,17 @@ class InVoice(commands.Cog):
             vc = ctx.author.voice.channel
         if not role_or_channel:
             await self.config.channel(vc).clear()
+            del self.channel_cache[vc.id]
             await ctx.send("Link(s) for {vc} cleared.".format(vc=vc))
         elif isinstance(role_or_channel, discord.Role):
             await self.config.channel(vc).role.set(role_or_channel.id)
+            self.channel_cache[vc.id]["role"] = role_or_channel.id
             await ctx.send("Role for {vc} set to {role}.".format(vc=vc, role=role_or_channel))
         else:
             if vc == ctx.guild.afk_channel:
                 return await ctx.send("Text channels cannot be linked to the guild's AFK channel.")
             await self.config.channel(vc).channel.set(role_or_channel.id)
+            self.channel_cache[vc.id]["channel"] = role_or_channel.id
             await ctx.send(
                 "Text channel for {vc} set to {channel}".format(vc=vc, channel=role_or_channel)
             )
@@ -190,12 +213,13 @@ class InVoice(commands.Cog):
         if not isinstance(vc, discord.VoiceChannel):
             return
         guild = vc.guild
-        if not await self.config.guild(guild).dynamic():
+        if not self.guild_cache[guild.id]["dynamic"]:
             return
-        guild_role = await self.config.guild(guild).role()
+        guild_role = self.guild_cache[guild.id]["role"]
         name = "🔊 " + vc.name
         role = await guild.create_role(name=name, reason="Dynamic role for {vc}".format(vc=vc))
         await self.config.channel(vc).role.set(role.id)
+        self.channel_cache[vc.id]["role"] = role.id
         if vc.category:
             overs = vc.category.overwrites
         else:
@@ -219,6 +243,7 @@ class InVoice(commands.Cog):
             reason="Dynamic channel for {vc}".format(vc=vc),
         )
         await self.config.channel(vc).channel.set(text.id)
+        self.channel_cache[vc.id]["channel"] = text.id
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, vc):
@@ -228,7 +253,7 @@ class InVoice(commands.Cog):
         async with self.config.channel(vc).all() as conf:
             settings = conf.copy()
             conf.clear()
-        if not await self.config.guild(guild).dynamic():
+        if not self.guild_cache[guild.id]["dynamic"]:
             return
         role = guild.get_role(settings["role"])
         if role:
@@ -253,38 +278,38 @@ class InVoice(commands.Cog):
             await self.self_deaf_update(member, before, after)
 
     async def channel_update(self, m, b, a):
-        guild_role = m.guild.get_role(await self.config.guild(m.guild).role())
+        guild_role = m.guild.get_role(self.guild_cache[m.guild.id]["role"])
         if b.channel:
             reason = "Left channel {vc}".format(vc=b.channel)
             to_remove = []
-            role = m.guild.get_role(await self.config.channel(b.channel).role())
+            role = m.guild.get_role(self.channel_cache[b.channel.id]["role"])
             if role:
                 to_remove.append(role)
             if guild_role and (not a.channel or a.afk):
                 to_remove.append(guild_role)
             if to_remove:
                 await m.remove_roles(*to_remove, reason=reason)
-            tc = m.guild.get_channel(await self.config.channel(b.channel).channel())
+            tc = m.guild.get_channel(self.channel_cache[b.channel.id]["channel"])
             if tc and m in tc.overwrites:
                 await tc.set_permissions(target=m, overwrite=None, reason=reason)
         if a.channel:
             reason = "Joined channel {vc}".format(vc=a.channel)
             to_add = []
-            role = m.guild.get_role(await self.config.channel(a.channel).role())
+            role = m.guild.get_role(self.channel_cache[a.channel.id]["role"])
             if role:
                 to_add.append(role)
             if guild_role and not a.afk:
                 to_add.append(guild_role)
             if to_add:
                 await m.add_roles(*to_add, reason=reason)
-            tc = m.guild.get_channel(await self.config.channel(a.channel).channel())
+            tc = m.guild.get_channel(self.channel_cache[a.channel.id]["channel"])
             if tc and m in tc.overwrites:
                 await tc.set_permissions(target=m, overwrite=None, reason=reason)
 
     async def mute_update(self, m, b, a):
-        if not await self.config.guild(m.guild).mute():
+        if not self.guild_cache[m.guild.id]["mute"]:
             return
-        tc = m.guild.get_channel(await self.config.channel(a.channel).channel())
+        tc = m.guild.get_channel(self.channel_cache[a.channel.id]["channel"])
         if tc:
             overs = tc.overwrites_for(m)
             overs.send_messages = False if a.mute else None
@@ -300,25 +325,25 @@ class InVoice(commands.Cog):
                 await self._add_roles(m, a.channel, reason="Server unmuted")
 
     async def deaf_update(self, m, b, a):
-        if not await self.config.guild(m.guild).deaf():
+        if not self.guild_cache[m.guild.id]["deaf"]:
             return
         await self._deaf_update(m, b, a, reason="Server {un}deafened", is_deaf=a.deaf)
 
     async def self_deaf_update(self, m, b, a):
-        if not await self.config.guild(m.guild).self_deaf():
+        if not self.guild_cache[m.guild.id]["self_deaf"]:
             return
         await self._deaf_update(m, b, a, reason="Self {un}deafened", is_deaf=a.self_deaf)
 
     async def _deaf_update(self, m, b, a, *, reason, is_deaf):
         reason = reason.format(un="" if is_deaf else "un")
-        role = m.guild.get_role(await self.config.channel(a.channel).role())
+        role = m.guild.get_role(self.channel_cache[a.channel.id]["role"])
         if role:
             if is_deaf:
                 await self._remove_roles(m, a.channel, reason=reason, role_id=role.id)
             else:
                 await self._add_roles(m, a.channel, reason=reason, role_id=role.id)
         else:
-            tc = m.guild.get_channel(await self.config.channel(a.channel).channel())
+            tc = m.guild.get_channel(self.channel_cache[a.channel.id]["channel"])
             if tc:
                 overs = tc.overwrites_for(m)
                 overs.read_messages = False if is_deaf else None
@@ -326,22 +351,22 @@ class InVoice(commands.Cog):
                     target=m, overwrite=None if overs.is_empty() else overs, reason=reason
                 )
 
-    async def _add_roles(self, m, c, *, reason, role_id=None, guild_role_id=None):
+    async def _add_roles(self, m, c, *, reason):
         guild = m.guild
         roles = (
-            guild_role_id or await self.config.guild(guild).role(),
-            role_id or await self.config.channel(c).role(),
+            self.guild_cache[guild.id]["role"],
+            self.channel_cache[c.id]["role"],
         )
         roles = map(guild.get_role, roles)
         roles = tuple(filter(bool, roles))
         if roles:
             await m.add_roles(*roles, reason=reason)
 
-    async def _remove_roles(self, m, c, *, reason, role_id=None, guild_role_id=None):
+    async def _remove_roles(self, m, c, *, reason):
         guild = m.guild
         roles = (
-            guild_role_id or await self.config.guild(guild).role(),
-            role_id or await self.config.channel(c).role(),
+            self.guild_cache[guild.id]["role"],
+            self.channel_cache[c.id]["role"],
         )
         roles = map(guild.get_role, roles)
         roles = tuple(filter(bool, roles))
