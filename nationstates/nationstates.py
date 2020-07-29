@@ -12,8 +12,7 @@ from typing import Generic, List, Optional, Type, TypeVar, Union
 
 import discord
 from proxyembed import ProxyEmbed
-from redbot.core import Config, checks, commands
-from redbot.core import version_info as red_version
+from redbot.core import Config, checks, commands, version_info as red_version
 from redbot.core.utils.chat_formatting import box, escape, humanize_list, pagify
 from sans.api import Api
 
