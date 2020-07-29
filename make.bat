@@ -22,24 +22,25 @@ goto %1
 
 :lint
 flake8 --count --select=E9,F7,F82 --show-source !PYIFILES!
-exit /B %ERRORLEVEL%
+goto :eof
 
 :stylecheck
-autoflake --check --imports aiohttp,discord,redbot !PYFILES!
-isort --check --profile black --line-length 99 !PYFILES!
-black --check --target-version py38 --line-length 99 !PYIFILES!
-exit /B %ERRORLEVEL%
+autoflake --check --imports aiohttp,discord,redbot !PYFILES! || goto :eof
+isort --check-only !PYFILES! || goto :eof
+black --check !PYIFILES!
+goto :eof
 
 :reformat
-autoflake --in-place --imports=aiohttp,discord,redbot !PYFILES!
-isort --profile black --line-length 99 !PYFILES!
-black --target-version py38 --line-length 99 !PYIFILES!
-exit /B %ERRORLEVEL%
+autoflake --in-place --imports=aiohttp,discord,redbot !PYFILES! || goto :eof
+isort !PYFILES! || goto :eof
+black !PYIFILES!
+goto :eof
 
 :help
 echo Usage:
 echo   make ^<command^>
 echo.
 echo Commands:
+echo   lint                         Lints .py files using flake8
 echo   stylecheck                   Check that all .py files meet style guidelines.
 echo   reformat                     Reformat all .py files being tracked by git.
