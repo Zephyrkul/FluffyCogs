@@ -1,39 +1,40 @@
 @echo off
 
-if "%1"=="" goto help
+if [%1]==[] goto help
 
 REM This allows us to expand variables at execution
 setlocal ENABLEDELAYEDEXPANSION
 
-REM This will set PYFILES as a list of tracked .py files
-set PYFILES=
-for /F "tokens=* USEBACKQ" %%A in (`git ls-files "*.py"`) do (
-    set PYFILES=!PYFILES! %%A
+REM This will set DIFF as a list of staged files
+set DIFF=
+for /F "tokens=* USEBACKQ" %%A in (`git diff --name-only --staged "*.py" "*.pyi"`) do (
+    set DIFF=!DIFF! %%A
 )
 
-REM This will set PYIFILES as a list of tracked .pyi? files
-set PYIFILES=
-for /F "tokens=* USEBACKQ" %%A in (`git ls-files "*.py" "*.pyi"`) do (
-    set PYIFILES=!PYIFILES! %%A
+REM This will set DIFF as a list of files tracked by git
+if [!DIFF!]==[] (
+    set DIFF=
+    for /F "tokens=* USEBACKQ" %%A in (`git ls-files "*.py" "*.pyi"`) do (
+        set DIFF=!DIFF! %%A
+    )
 )
-
 
 goto %1
 
 :lint
-flake8 --count --select=E9,F7,F82 --show-source !PYIFILES!
+flake8 --count --select=E9,F7,F82 --show-source !DIFF!
 goto :eof
 
 :stylecheck
-autoflake --check --imports aiohttp,discord,redbot !PYFILES! || goto :eof
-isort --check-only !PYFILES! || goto :eof
-black --check !PYIFILES!
+autoflake --check --imports aiohttp,discord,redbot !DIFF! || goto :eof
+isort --check-only !DIFF! || goto :eof
+black --check !DIFF!
 goto :eof
 
 :reformat
-autoflake --in-place --imports=aiohttp,discord,redbot !PYFILES! || goto :eof
-isort !PYFILES! || goto :eof
-black !PYIFILES!
+autoflake --in-place --imports=aiohttp,discord,redbot !DIFF! || goto :eof
+isort !DIFF! || goto :eof
+black !DIFF!
 goto :eof
 
 :help

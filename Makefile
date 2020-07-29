@@ -1,10 +1,20 @@
+PYTHON ?= python3.8
+DIFF := $(shell git diff --name-only --staged "*.py" "*.pyi")
+ifeq ($(DIFF),)
+	DIFF := $(shell git ls-files "*.py" "*.pyi")
+endif
+
 lint:
-	flake8 --count --select=E9,F7,F82 --show-source `git ls-files "*.py"`
+	$(PYTHON) -m flake8 --count --select=E9,F7,F82 --show-source $(DIFF)
 stylecheck:
-	autoflake --check --imports aiohttp,discord,redbot `git ls-files "*.py"`
-	isort --check-only `git ls-files "*.py"`
-	black --check `git ls-files "*.py" "*.pyi"`
+	$(PYTHON) -m autoflake --check --imports aiohttp,discord,redbot $(DIFF)
+	$(PYTHON) -m isort --check-only $(DIFF)
+	$(PYTHON) -m black --check $(DIFF)
+stylecheck_staged:
+	$(PYTHON) -m autoflake --check --imports aiohttp,discord,redbot $(DIFF)
+	$(PYTHON) -m isort --check-only $(DIFF)
+	$(PYTHON) -m black --check $(DIFF)
 reformat:
-	autoflake --in-place --imports=aiohttp,discord,redbot `git ls-files "*.py"`
-	isort `git ls-files "*.py"`
-	black `git ls-files "*.py" "*.pyi"`
+	$(PYTHON) -m autoflake --in-place --imports=aiohttp,discord,redbot $(DIFF)
+	$(PYTHON) -m isort $(DIFF)
+	$(PYTHON) -m black $(DIFF)
