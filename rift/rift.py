@@ -111,27 +111,27 @@ class Rift(commands.Cog):
         Communicate with other channels through Red.
         """
 
-    @rift.group()
-    @check_can_close
-    async def blacklist(self, ctx: commands.Context):
+    @rift.group(aliases=["blocklist", "blacklist"])
+    @check_can_close()
+    async def denylist(self, ctx: commands.Context):
         """
-        Configures blacklists.
+        Configures denylists.
 
         Blacklisted destinations cannot have rifts opened to them.
         """
 
-    @blacklist.command(name="channel")
-    @check_can_close
-    async def blacklist_channel(
+    @denylist.command(name="channel")
+    @check_can_close()
+    async def denylist_channel(
         self, ctx: commands.Context, *, channel: discord.TextChannel = None
     ):
         """
-        Blacklists the current channel or the specified channel.
+        Denylists the current channel or the specified channel.
 
-        Can also blacklist DM channels.
+        Can also denylist DM channels.
         """
         if channel and not ctx.guild:
-            raise commands.BadArgument(_("You cannot blacklist a channel in DMs."))
+            raise commands.BadArgument(_("You cannot denylist a channel in DMs."))
         if not ctx.guild:
             channel = ctx.author
             group = self.config.user(channel)
@@ -141,27 +141,25 @@ class Rift(commands.Cog):
         blacklisted = not await group.blacklisted()
         await group.blacklisted.set(blacklisted)
         await ctx.send(
-            _("Channel is {} blacklisted.").format("now" if blacklisted else "no longer")
+            _("Channel is {} denylisted.").format("now" if blacklisted else "no longer")
         )
         if blacklisted:
             self.close_rifts(ctx.author, channel)
 
-    @blacklist.command(name="server", aliases=["guild"])
+    @denylist.command(name="server", aliases=["guild"])
     @commands.guild_only()
     @checks.admin_or_permissions(manage_guild=True)
-    async def blacklist_server(self, ctx: commands.Context):
+    async def denylistlist_server(self, ctx: commands.Context):
         """
-        Blacklists the current server.
+        Denylists the current server.
 
-        All channels and members in a server are considered blacklisted if the server is blacklisted.
-        Members can still be reached if they are in another, non-blacklisted server.
+        All channels and members in a server are considered denylisted if the server is denylisted.
+        Members can still be reached if they are in another, non-denylisted server.
         """
         group = self.config.guild(ctx.guild)
         blacklisted = not await group.blacklisted()
         await group.blacklisted.set(blacklisted)
-        await ctx.send(
-            _("Server is {} blacklisted.").format("now" if blacklisted else "no longer")
-        )
+        await ctx.send(_("Server is {} denylisted.").format("now" if blacklisted else "no longer"))
         if blacklisted:
             self.close_rifts(ctx.author, *ctx.guild.text_channels)
 
@@ -182,7 +180,7 @@ class Rift(commands.Cog):
 
     @rift_close.command(name="guild", aliases=["server"])
     @commands.guild_only()
-    @check_can_close
+    @check_can_close()
     async def close_guild(self, ctx: commands.Context):
         """
         Closes all rifts that lead to this server.
@@ -252,7 +250,7 @@ class Rift(commands.Cog):
         )
 
     @rift.command(name="link")
-    @check_can_close
+    @check_can_close()
     async def rift_link(
         self, ctx: commands.Context, one_way: Optional[bool] = None, *rifts: Messageable
     ):
