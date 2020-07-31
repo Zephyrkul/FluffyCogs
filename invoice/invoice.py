@@ -1,3 +1,4 @@
+import contextlib
 import inspect
 import typing
 from collections import defaultdict
@@ -268,14 +269,18 @@ class InVoice(commands.Cog):
             return
         if not before.channel and not after.channel:
             return  # I doubt this could happen, but just in case
-        if before.channel != after.channel:
-            await self.channel_update(member, before, after)
-        elif before.mute != after.mute:
-            await self.mute_update(member, before, after)
-        elif before.deaf != after.deaf:
-            await self.deaf_update(member, before, after)
-        elif before.self_deaf != after.self_deaf:
-            await self.self_deaf_update(member, before, after)
+        # This event gets triggered when a member leaves the server,
+        # but before the on_member_leave event updates the cache.
+        # So, I suppress the exception to save Dav's logs.
+        with contextlib.suppress(discord.NotFound):
+            if before.channel != after.channel:
+                await self.channel_update(member, before, after)
+            elif before.mute != after.mute:
+                await self.mute_update(member, before, after)
+            elif before.deaf != after.deaf:
+                await self.deaf_update(member, before, after)
+            elif before.self_deaf != after.self_deaf:
+                await self.self_deaf_update(member, before, after)
 
     async def channel_update(self, m, b, a):
         guild_role = m.guild.get_role(self.guild_cache[m.guild.id]["role"])
