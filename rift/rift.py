@@ -117,7 +117,7 @@ class Rift(commands.Cog):
         """
         Configures denylists.
 
-        Blacklisted destinations cannot have rifts opened to them.
+        Denylisted destinations cannot have rifts opened to them.
         """
 
     @denylist.command(name="channel")
