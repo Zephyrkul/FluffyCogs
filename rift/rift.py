@@ -493,7 +493,6 @@ class Rift(commands.Cog):
                 name=self.xbytes(a.size), value=f"[{a.filename}]({a.url})", inline=True
             )
         embed.set_image(url=attachments[0].url)
-        embed._video = {"url": attachments[0].url}
         return embed
 
     @staticmethod
