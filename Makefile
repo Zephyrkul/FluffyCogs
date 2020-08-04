@@ -10,10 +10,6 @@ stylecheck:
 	$(PYTHON) -m autoflake --check --imports aiohttp,discord,redbot $(DIFF)
 	$(PYTHON) -m isort --check-only $(DIFF)
 	$(PYTHON) -m black --check $(DIFF)
-stylecheck_staged:
-	$(PYTHON) -m autoflake --check --imports aiohttp,discord,redbot $(DIFF)
-	$(PYTHON) -m isort --check-only $(DIFF)
-	$(PYTHON) -m black --check $(DIFF)
 reformat:
 	$(PYTHON) -m autoflake --in-place --imports=aiohttp,discord,redbot $(DIFF)
 	$(PYTHON) -m isort $(DIFF)
