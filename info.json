@@ -1,8 +1,12 @@
 {
-    "author" : ["Zephyrkul (Zephyrkul#1089)"],
-    "install_msg" : "Thank you and commiserations for installing FluffyCogs.\nIf you need support, find me in #support-othercogs at Red's cog support server: https://discord.gg/GET4DVk\nPlease feel free to ping me there since I don't monitor that channel.\nYes, I am aware of the shared libraries deprecation in 3.4 and am working to resolve it.",
-    "name" : "FluffyCogs",
-    "short" : "Only the fluffiest of cogs go here.",
-    "description" : "My cogs for utility, requests, or proof-of-concepts. Or memes, as is the case with the skyrim cog.",
-    "tags" : ["fluffy"]
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "Thank you and commiserations for installing FluffyCogs.\nIf you need support, find me in #support-othercogs at Red's cog support server: https://discord.gg/GET4DVk",
+    "name": "FluffyCogs",
+    "short": "Only the fluffiest of cogs go here.",
+    "description": "My cogs for utility, requests, or proof-of-concepts. Or memes, as is the case with the skyrim cog.",
+    "tags": [
+        "fluffy"
+    ]
 }
