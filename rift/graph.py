@@ -1,5 +1,6 @@
 from itertools import chain
 from typing import (
+    TYPE_CHECKING,
     ClassVar,
     DefaultDict,
     Dict,
@@ -12,11 +13,10 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    TYPE_CHECKING,
     TypeVar,
     Union,
 )
-from weakref import WeakKeyDictionary, WeakSet
+from weakref import WeakKeyDictionary
 
 __all__ = ["GraphError", "SimpleGraph", "Vector", "WeakKeyGraph"]
 T = TypeVar("T", bound=Hashable)
