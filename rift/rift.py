@@ -13,7 +13,7 @@ from redbot.core.utils.chat_formatting import humanize_list, pagify
 from redbot.core.utils.menus import DEFAULT_CONTROLS, menu
 from redbot.core.utils.predicates import MessagePredicate
 
-from .graph import SimpleGraph, Vector
+from .graph import SimpleGraph, Vector, WeakKeyGraph
 
 if TYPE_CHECKING:
     from discord.abc import Messageable
@@ -77,7 +77,7 @@ class Rift(commands.Cog):
         super().__init__()
         self.bot = bot
         self.rifts = SimpleGraph[Messageable]()
-        self.messages = SimpleGraph[discord.Message]()
+        self.messages = WeakKeyGraph[discord.Message]()
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_channel(blacklisted=False)
         self.config.register_guild(blacklisted=False)
@@ -99,11 +99,7 @@ class Rift(commands.Cog):
         await ctx.send("What would you like to say?")
         p = MessagePredicate.same_context(ctx=ctx)
         message = ctx.bot.wait_for("message", check=p)
-        for rift in unique_rifts:
-            try:
-                await self.process_discord_message(message, rift)
-            except Exception:
-                await ctx.send(f"I couldn't send your message to {rift}.")
+        await self._send(message, unique_rifts)
 
     @commands.group()
     async def rift(self, ctx: commands.Context):
@@ -458,6 +454,32 @@ class Rift(commands.Cog):
             data = await destination._state.http.request(route, json=payload)
             return destination._state.create_message(channel=destination, data=data)
 
+    async def _send(self, message, destinations):
+        futures = [
+            asyncio.ensure_future(self.process_discord_message(message, d)) for d in destinations
+        ]
+        if len(futures) == 1:
+            fs = futures  # no need to wrap this up in as_completed
+        else:
+            fs = asyncio.as_completed(futures)
+        for fut in fs:
+            try:
+                m = await fut
+            except Exception as exc:
+                destination = None
+                for fr, _line in walk_tb(exc.__traceback__):
+                    destination = fr.f_locals.get("destination", destination)
+                if not destination:
+                    continue
+                log.exception(f"Couldn't send {message.id} to {destination}.")
+                if isinstance(exc, (RiftError, discord.HTTPException)):
+                    reason = " ".join(exc.args)
+                else:
+                    reason = f"{type(exc).__name__}. Check your console or logs for details."
+                await channel.send(f"I couldn't send your message to {destination}: {reason}")
+            else:
+                self.messages.add_vectors(message, m)
+
     def close_rifts(self, closer: discord.abc.User, *destinations: Messageable):
         unique = set()
         for destination in destinations:
@@ -599,28 +621,7 @@ class Rift(commands.Cog):
             else:
                 if num := self.close_rifts(message.author, Limited(message=message)):
                     return await message.channel.send(_("{num} rifts closed.").format(num=num))
-        futures = [
-            asyncio.ensure_future(self.process_discord_message(message, d)) for d in destinations
-        ]
-        if not futures:
-            return
-        for fut in asyncio.as_completed(futures):
-            try:
-                m = await fut
-            except Exception as exc:
-                destination = None
-                for fr, _line in walk_tb(exc.__traceback__):
-                    destination = fr.f_locals.get("destination", destination)
-                if not destination:
-                    continue
-                log.exception(f"Couldn't send {message.id} to {destination}.")
-                if isinstance(exc, (RiftError, discord.HTTPException)):
-                    reason = " ".join(exc.args)
-                else:
-                    reason = f"{type(exc).__name__}. Check your console or logs for details."
-                await channel.send(f"I couldn't send your message to {destination}: {reason}")
-            else:
-                self.messages.add_vectors(message, m)
+        await self._send(message, destinations)
 
     @commands.Cog.listener()
     async def on_message_delete(self, message):
