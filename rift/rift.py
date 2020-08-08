@@ -476,7 +476,9 @@ class Rift(commands.Cog):
                     reason = " ".join(exc.args)
                 else:
                     reason = f"{type(exc).__name__}. Check your console or logs for details."
-                await channel.send(f"I couldn't send your message to {destination}: {reason}")
+                await message.channel.send(
+                    f"I couldn't send your message to {destination}: {reason}"
+                )
             else:
                 self.messages.add_vectors(message, m)
 

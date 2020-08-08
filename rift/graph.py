@@ -89,7 +89,7 @@ class GraphMixin(_Base[T]):
 
     @classmethod
     def from_json(cls, json):
-        return cls((k, self._set(v)) for k, v in json.items())
+        return cls((k, cls._set(v)) for k, v in json.items())
 
 
 class SimpleGraph(GraphMixin, Dict[T, MutableSet[T]]):
