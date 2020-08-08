@@ -600,7 +600,13 @@ class Rift(commands.Cog):
                 content = common_filters.filter_invites(content)
             if not both_perms.mention_everyone:
                 allowed_types = ["user"]
-        return await self.clean_send(destination, content=content, embed=embed)
+        try:
+            return await self.clean_send(destination, content=content, embed=embed)
+        except discord.Forbidden:
+            # we can't send here anymore, may as well remove it
+            if not channel.permissions_for(me).send_messages:
+                self.rifts.remove_vertices(getattr(channel, "recipient", channel))
+            raise
 
     # EVENTS
 
