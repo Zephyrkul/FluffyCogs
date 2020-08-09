@@ -9,7 +9,7 @@ from typing import (
     Hashable,
     Iterable,
     MutableMapping,
-    MutableSet,
+    Set,
     Optional,
     Tuple,
     Type,
@@ -28,13 +28,13 @@ class GraphError(Exception):
 
 
 if TYPE_CHECKING:
-    _Base = MutableMapping[T, MutableSet[T]]
+    _Base = MutableMapping[T, Set[T]]
 else:
-    _Base = Generic[T]
+    _Base = Generic
 
 
 class GraphMixin(_Base[T]):
-    _set: ClassVar[Type[MutableSet[T]]]
+    _set: ClassVar[Type[Set[T]]]
 
     def add_web(self, *vertices: T) -> None:
         """
@@ -75,7 +75,7 @@ class GraphMixin(_Base[T]):
             return b in self.get(a, ()) and a in self.get(b, ())
         return b in self.get(a, ())
 
-    def vertices(self) -> MutableSet[T]:
+    def vertices(self) -> Set[T]:
         keys = set(filter(self.__getitem__, self.keys()))
         return keys.union(chain.from_iterable(self.values()))
 
@@ -92,9 +92,9 @@ class GraphMixin(_Base[T]):
         return cls((k, cls._set(v)) for k, v in json.items())
 
 
-class SimpleGraph(GraphMixin, Dict[T, MutableSet[T]]):
+class SimpleGraph(GraphMixin[T], dict):
     _set = set
 
 
-class WeakKeyGraph(GraphMixin, WeakKeyDictionary[T, MutableSet[T]]):
+class WeakKeyGraph(GraphMixin[T], WeakKeyDictionary):
     _set = set
