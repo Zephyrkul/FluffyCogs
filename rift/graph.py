@@ -18,7 +18,7 @@ from typing import (
 )
 from weakref import WeakKeyDictionary
 
-__all__ = ["GraphError", "SimpleGraph", "Vector", "WeakKeyGraph"]
+__all__ = ["GraphError", "SimpleGraph", "Vector"]
 T = TypeVar("T", bound=Hashable)
 Vector = Tuple[T, T]  # ORDER MATTERS
 
@@ -93,8 +93,4 @@ class GraphMixin(_Base[T]):
 
 
 class SimpleGraph(GraphMixin[T], dict):
-    _set = set
-
-
-class WeakKeyGraph(GraphMixin[T], WeakKeyDictionary):
     _set = set

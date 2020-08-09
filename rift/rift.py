@@ -13,7 +13,7 @@ from redbot.core.utils.chat_formatting import humanize_list, pagify
 from redbot.core.utils.menus import DEFAULT_CONTROLS, menu
 from redbot.core.utils.predicates import MessagePredicate
 
-from .graph import SimpleGraph, Vector, WeakKeyGraph
+from .graph import SimpleGraph, Vector
 
 if TYPE_CHECKING:
     from discord.abc import Messageable
@@ -77,7 +77,7 @@ class Rift(commands.Cog):
         super().__init__()
         self.bot = bot
         self.rifts = SimpleGraph[Messageable]()
-        self.messages = WeakKeyGraph[discord.Message]()
+        self.messages = SimpleGraph[discord.Message]()
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_channel(blacklisted=False)
         self.config.register_guild(blacklisted=False)
