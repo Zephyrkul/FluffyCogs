@@ -16,7 +16,6 @@ from typing import (
     TypeVar,
     Union,
 )
-from weakref import WeakKeyDictionary
 
 __all__ = ["GraphError", "SimpleGraph", "Vector"]
 T = TypeVar("T", bound=Hashable)
