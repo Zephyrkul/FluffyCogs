@@ -1,4 +1,5 @@
 import warnings
+
 from redbot.core.errors import CogLoadError
 
 warnings.filterwarnings("ignore", module=r"sans.*")
