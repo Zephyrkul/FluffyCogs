@@ -101,7 +101,7 @@ class Rift(commands.Cog):
         unique_rifts = deduplicate_iterables(rifts)
         await ctx.send("What would you like to say?")
         p = MessagePredicate.same_context(ctx=ctx)
-        message = ctx.bot.wait_for("message", check=p)
+        message = await ctx.bot.wait_for("message", check=p)
         await self._send(message, unique_rifts)
 
     @commands.group()
