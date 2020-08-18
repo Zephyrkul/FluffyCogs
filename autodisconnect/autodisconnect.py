@@ -9,6 +9,9 @@ class AutoDisconnect(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
         self.config.register_guild(timeout=-1)
+        
+    async def red_delete_data_for_user(self,*,requester,user_id):
+        pass #This cog stores no EUD
 
     @commands.command(aliases=["autodisconnect"])
     @commands.guild_only()
