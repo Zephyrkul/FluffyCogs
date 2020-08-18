@@ -11,5 +11,5 @@
         "audio",
         "fun"
     ],
-    "end_user_data_statement": "This cog persistently stores user-provided theme songs for ease of use with Audio."
+    "end_user_data_statement": "This cog stores data provided via command by users for the purposes of replaying."
 }

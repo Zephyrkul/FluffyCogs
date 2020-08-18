@@ -1,9 +1,14 @@
 {
-    "author" : ["Zephyrkul (Zephyrkul#1089)"],
-    "install_msg" : "Usage: `[p]help clocks`\n**NOTE:** This cog is mainly used for Forged in the Dark tabletop RPGs.\nIt will likely make no sense outside of this context.",
-    "name" : "Clocks",
-    "short" : "Track FitD projects with clocks.",
-    "description" : "Track projects with clocks. Mainly used for Forged in the Dark tabletop RPGs.",
-    "tags" : ["utility"],
-    "hidden": false
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "Usage: `[p]help clocks`\n**NOTE:** This cog is mainly used for Forged in the Dark tabletop RPGs.\nIt will likely make no sense outside of this context.",
+    "name": "Clocks",
+    "short": "Track FitD projects with clocks.",
+    "description": "Track projects with clocks. Mainly used for Forged in the Dark tabletop RPGs.",
+    "tags": [
+        "utility"
+    ],
+    "hidden": false,
+    "end_user_data_statement": "This cog stores data provided via command by users for the express purpose of redisplaying. Users may remove this data via data request or via command."
 }
