@@ -21,8 +21,12 @@ if [!DIFF!]==[] (
 
 goto %1
 
+:installreqs
+pip install --upgrade flake8 autoflake isort black
+goto :eof
+
 :lint
-flake8 --count --select=E9,F7,F82 --show-source !DIFF!
+flake8 --count --select=E9,F63,F7,F82 --show-source --statistics !DIFF!
 goto :eof
 
 :stylecheck
