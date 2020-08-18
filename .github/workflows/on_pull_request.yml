@@ -1,4 +1,4 @@
-name: build
+name: pull
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
       - master
 
 jobs:
-  build:
+  pull:
     runs-on: ubuntu-latest
 
     steps:

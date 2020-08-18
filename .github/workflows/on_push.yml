@@ -1,4 +1,4 @@
-name: style
+name: build
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - master
 
 jobs:
-  style:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -32,6 +32,7 @@ jobs:
           # reviewers: ${{ github.repository_owner }}
           labels: Automated, Style
           branch: automated/style
-      - name: Mark style failure
-        if: env.PULL_REQUEST_NUMBER
-        run: exit 1
+      # The PR will mark style failures, this build will mark build failures
+      # - name: Mark style failure
+      #   if: env.PULL_REQUEST_NUMBER
+      #  run: exit 1
