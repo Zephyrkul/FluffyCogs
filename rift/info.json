@@ -5,6 +5,7 @@
     ],
     "install_msg": "Usage: `[p]help rift`",
     "name": "Rift",
+    "min_bot_version": "3.4.0",
     "short": "Allows cross-server communication through Red",
     "description": "Communicate with other servers through Red! Works to and from DMs as well.",
     "tags": [

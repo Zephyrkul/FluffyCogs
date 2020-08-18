@@ -402,61 +402,6 @@ class Rift(commands.Cog):
 
     # UTILITIES
 
-    # Temporary patch until d.py is updated to support the new allowed_mentions feature
-    @staticmethod
-    async def clean_send(
-        destination: Union[discord.abc.Messageable, discord.Message],
-        content: str = None,
-        *,
-        embed: discord.Embed = None,
-        allowed_types: List[Literal["roles", "users", "everyone"]] = None,
-        allowed_users: List[discord.User] = None,
-        allowed_roles: List[discord.Role] = None,
-    ) -> discord.Message:
-        if allowed_types is None:
-            allowed_types = ["users"]
-        if "users" in allowed_types and allowed_users:
-            raise ValueError("Invalid configuration")
-        if "roles" in allowed_types and allowed_roles:
-            raise ValueError("Invalid configuration")
-        if discord.version_info >= (1, 4):
-            mentions = discord.AllowedMentions(
-                everyone="everyone" in allowed_types,
-                users="users" in allowed_types or allowed_users,
-                roles="roles" in allowed_types or allowed_roles,
-            )
-            if isinstance(destination, discord.Message):
-                await destination.edit(content=content, embed=embed, allowed_mentions=mentions)
-                return destination
-            return await destination.send(content=content, embed=embed, allowed_mentions=mentions)
-        payload: dict = {"allowed_mentions": {"parse": allowed_types}}
-        if allowed_users:
-            payload["allowed_mentions"]["users"] = [str(u.id) for u in allowed_users]
-        if allowed_roles:
-            payload["allowed_mentions"]["roles"] = [str(r.id) for r in allowed_roles]
-        if content:
-            payload["content"] = content
-        if embed:
-            payload["embed"] = embed.to_dict()
-        if isinstance(destination, discord.Message):
-            raw_channel = destination.channel
-            route = discord.http.Route(
-                "PATCH",
-                "/channels/{channel_id}/messages/{message_id}",
-                channel_id=raw_channel.id,
-                message_id=destination.id,
-            )
-            data = await destination._state.http.request(route, json=payload)
-            destination._update(data)
-            return destination
-        else:
-            raw_channel = await destination._get_channel()
-            route = discord.http.Route(
-                "POST", "/channels/{channel_id}/messages", channel_id=raw_channel.id
-            )
-            data = await destination._state.http.request(route, json=payload)
-            return destination._state.create_message(channel=destination, data=data)
-
     async def _send(self, message, destinations):
         futures = [
             asyncio.ensure_future(self.process_discord_message(message, d)) for d in destinations
@@ -593,6 +538,7 @@ class Rift(commands.Cog):
         if not content and not embed:
             raise RiftError(_("No content to send."))
         allowed_types = ["everyone", "roles", "users"]
+        allowed_mentions = discord.AllowedMentions()
         if not is_owner:
             top_role = getattr(author, "top_role", None)
             if top_role and top_role != top_role.guild.default_role:
@@ -602,12 +548,18 @@ class Rift(commands.Cog):
             if not both_perms.administrator:
                 content = common_filters.filter_invites(content)
             if not both_perms.mention_everyone:
-                allowed_types = ["user"]
+                allowed_mentions = discord.AllowedMentions(users=True, everyone=True, roles=True)
+            else:
+                allowed_mentions = discord.AllowedMentions(users=True)
         try:
-            return await self.clean_send(destination, content=content, embed=embed)
+            if isinstance(destination, discord.Message):
+                coro = destination.edit
+            else:
+                coro = destination.send
+            return await coro(content=content, embed=embed, allowed_mentions=allowed_mentions)
         except discord.Forbidden:
-            # we can't send here anymore, may as well remove it
             if not channel.permissions_for(me).send_messages:
+                # we can't send here anymore, may as well remove it
                 self.rifts.remove_vertices(getattr(channel, "recipient", channel))
             raise
 
