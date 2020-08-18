@@ -1,3 +1,4 @@
+from io import BytesIO
 from random import choice
 
 import discord
@@ -18,6 +19,22 @@ class Theme(commands.Cog):
     """
     Allows you to set themes to easily play accross all servers.
     """
+
+    async def red_get_data_for_user(self, *, user_id):
+        if themes := await self.config.user_from_id(user_id).themes():
+            themes_text = "\n".join(themes)
+            bio = BytesIO(
+                (f"You currently have the following theme songs saved:\n{themes_text}").encode(
+                    "utf-8"
+                )
+            )
+            bio.seek(0)
+            return {f"{self.__class__.__name__}.txt": bio}
+        return {}  # No data to get
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        # Nothing here is operational, so just delete it all
+        await self.config.user_from_id(user_id).clear()
 
     def __init__(self):
         super().__init__()

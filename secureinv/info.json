@@ -8,5 +8,6 @@
     "description": "Set up secure invites.",
     "tags": [
         "utility"
-    ]
+    ],
+    "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
 }

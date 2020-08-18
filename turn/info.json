@@ -1,8 +1,13 @@
 {
-    "author" : ["Zephyrkul (Zephyrkul#1089)"],
-    "install_msg" : "Usage: `[p]help turn`",
-    "name" : "Turn",
-    "short" : "Track turns for posting in a channel.",
-    "description" : "Track turns for posting in a channel, and bugs the next person in line until they start typing.",
-    "tags" : ["utility"]
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "Usage: `[p]help turn`",
+    "name": "Turn",
+    "short": "Track turns for posting in a channel.",
+    "description": "Track turns for posting in a channel, and bugs the next person in line until they start typing.",
+    "tags": [
+        "utility"
+    ],
+    "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
 }

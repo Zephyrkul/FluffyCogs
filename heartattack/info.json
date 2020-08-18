@@ -6,6 +6,7 @@
     "name": "HeartAttack",
     "short": "Injects a stack tracer on heartbeat failure.",
     "description": "Injects a stack tracer on heartbeat failure.",
+    "max_bot_version": "3.3.12",
     "hidden": true,
     "tags": [
         "dev",

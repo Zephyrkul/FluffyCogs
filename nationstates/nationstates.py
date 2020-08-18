@@ -88,6 +88,14 @@ class Link(str, Generic[T]):
 
 class NationStates(commands.Cog):
 
+    # __________ DATA API __________
+
+    async def red_get_data_for_user(self, *, user_id):
+        return {}  # No data to get
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        pass  # No data to delete
+
     # __________ INIT __________
 
     def __init__(self, bot):

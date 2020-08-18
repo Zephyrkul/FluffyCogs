@@ -20,6 +20,12 @@ class Act(commands.Cog):
 
     __author__ = "Zephyrkul"
 
+    async def red_get_data_for_user(self, *, user_id):
+        return {}  # No data to get
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        pass  # No data to delete
+
     def __init__(self, bot):
         super().__init__()
         self.bot = bot

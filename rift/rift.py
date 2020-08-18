@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from io import BytesIO
 from itertools import chain
 from traceback import walk_tb
 from types import SimpleNamespace
@@ -72,6 +73,27 @@ class Rift(commands.Cog):
     """
     Communicate with other servers/channels.
     """
+
+    async def red_get_data_for_user(self, *, user_id):
+        if await self.config.user_from_id(user_id).blacklisted():
+            bio = BytesIO(
+                (
+                    "You are currently blocked from being able to receive rifts "
+                    "in your DMs, at your request."
+                ).encode("utf-8")
+            )
+            bio.seek(0)
+            return {f"{self.__class__.__name__}.txt": bio}
+        return {}  # No data to get
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        if requester == "discord_deleted_user":
+            await self.config.user_from_id(user_id).clear()
+        else:
+            log.warning(
+                "Ignoring deletion request %r, as rift blocklists are designed for anti-abuse.",
+                requester,
+            )
 
     def __init__(self, bot):
         super().__init__()

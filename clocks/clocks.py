@@ -22,6 +22,13 @@ def nonzero_int(argument):
 
 
 class Clocks(commands.Cog):
+
+    # TODO: async def red_get_data_for_user(self, *, user_id):
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        # Nothing here is operational, so just delete it all
+        await self.config.user_from_id(user_id).clear()
+
     def __init__(self):
         super().__init__()
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)

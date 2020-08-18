@@ -3,6 +3,7 @@ import collections
 import contextlib
 import functools
 import typing
+from io import BytesIO
 
 import discord
 from redbot.core import Config, checks, commands
@@ -32,7 +33,7 @@ def is_all(argument):
     raise commands.BadArgument()
 
 
-def skipcheck():
+def skipcheck(func=None, /, **perms: bool):
     async def predicate(ctx):
         cog = ctx.bot.get_cog("Turn")
         if not cog:
@@ -40,8 +41,12 @@ def skipcheck():
         queue = cog.get(ctx).queue
         if queue and queue[0] == ctx.author:
             return True
-        return await mod.is_mod_or_superior(ctx.bot, ctx.author)
+        if await mod.is_mod_or_superior(ctx.bot, ctx.author):
+            return True
+        return perms and await mod.check_permissions(ctx, perms)
 
+    if func:
+        return commands.check(predicate)(func)
     return commands.check(predicate)
 
 
@@ -56,6 +61,38 @@ def gamecheck(is_running=True):
 
 
 class Turn(commands.Cog):
+    async def red_get_data_for_user(self, *, user_id):
+        bio = BytesIO()
+        all_guilds = await self.config.all_guilds()
+        for guild_id, data in all_guilds.items():
+            for name, game in data["games"].items():
+                if user_id in game[0]:
+                    if guild := self.bot.get_guild(guild_id):
+                        guild_name = guild.name
+                    else:
+                        guild_name = f"ID {guild_id}"
+                    bio.write(
+                        f"You are currently saved as a member of game {name!r} in guild {guild_name}".encode(
+                            "utf-8"
+                        )
+                    )
+        if bio.tell():
+            bio.seek(0)
+            return {f"{self.__class__.__name__}.txt": bio}
+        return {}  # No data to get
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        # Nothing here is operational, so just delete it all
+        async with self.config.get_guilds_lock():
+            all_guilds = await self.config.all_guilds()
+            for guild_id, data in all_guilds.items():
+                for name, game in data["games"].items():
+                    if user_id in game[0]:
+                        game[0].remove(user_id)
+                        await self.config.guild_from_id(guild_id).set_raw(
+                            "games", name, value=game
+                        )
+
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
@@ -108,9 +145,8 @@ class Turn(commands.Cog):
         await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
 
     @turn.command()
-    @checks.mod_or_permissions(manage_channels=True)
     @commands.guild_only()
-    @skipcheck()
+    @skipcheck(manage_channels=True)
     async def pause(self, ctx):
         """Pauses the timer.
 

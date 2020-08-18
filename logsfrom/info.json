@@ -10,5 +10,10 @@
         "logging",
         "utility"
     ],
-    "min_python_version": [3, 7, 0]
+    "min_python_version": [
+        3,
+        7,
+        0
+    ],
+    "end_user_data_statement": "This cog enables logging messages for bot owners and admins. The bot itself does not persistently store this data."
 }

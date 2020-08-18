@@ -5,6 +5,12 @@ from redbot.core import Config, commands
 
 
 class AutoDisconnect(commands.Cog):
+    async def red_get_data_for_user(self, *, user_id):
+        return {}  # No data to get
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        pass  # No data to delete
+
     def __init__(self, bot):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)

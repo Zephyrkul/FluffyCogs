@@ -57,6 +57,12 @@ MaybeMessage = Optional[Union[int, discord.Message]]  # yes, this order is inten
 
 @cog_i18n(_T)
 class LogsFrom(commands.Cog):
+    async def red_get_data_for_user(self, *, user_id):
+        return {}  # No data to get
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        pass  # No data to delete
+
     @commands.command(usage="[bounds...] [channel]")
     async def logsfrom(
         self,

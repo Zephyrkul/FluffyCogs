@@ -14,5 +14,6 @@
         "fun",
         "trolling",
         "impersonation"
-    ]
+    ],
+    "end_user_data_statement": "This cog stores user IDs for operation data, i.e. blocklists."
 }

@@ -12,5 +12,6 @@
     "description": "Access information from NationStates.net.",
     "tags": [
         "utility"
-    ]
+    ],
+    "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
 }

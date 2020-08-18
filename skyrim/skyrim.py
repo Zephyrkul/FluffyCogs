@@ -9,6 +9,12 @@ class Skyrim(commands.Cog):
     Says a random line from Skyrim.
     """
 
+    async def red_get_data_for_user(self, *, user_id):
+        return {}  # No data to get
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        pass  # No data to delete
+
     @commands.command()
     async def guard(self, ctx):
         """
