@@ -3,7 +3,7 @@ import logging
 from itertools import chain
 from traceback import walk_tb
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, List, Literal, Optional, Set, Union, overload
+from typing import TYPE_CHECKING, List, Optional, Set, Union, overload
 
 import discord
 from redbot.core import Config, checks, commands
