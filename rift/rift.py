@@ -7,7 +7,9 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, List, Optional, Set, Union, overload
 
 import discord
+from discord.ext import tasks
 from redbot.core import Config, checks, commands
+from redbot.core.bot import Red
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils import common_filters, deduplicate_iterables, mod
 from redbot.core.utils.chat_formatting import humanize_list, pagify
@@ -95,7 +97,7 @@ class Rift(commands.Cog):
                 requester,
             )
 
-    def __init__(self, bot):
+    def __init__(self, bot: Red):
         super().__init__()
         self.bot = bot
         self.rifts = SimpleGraph[Messageable]()
@@ -107,6 +109,26 @@ class Rift(commands.Cog):
         self.config.register_global(
             notify=True,  # format="[{role}] {author}", format_no_guild="{author}"
         )
+        self._cache_invalidator.start()
+
+    @tasks.loop(minutes=5)
+    async def _cache_invalidator(self):
+        # discord.Message doesn't have __weakref__, so
+        # longer-running bots need to remove expired cached messages
+        oldest_id = self.bot.cached_messages[0].id
+        for message in list(self.messages.keys()):  # iterate over a copy, not a view
+            if message.id < oldest_id:
+                self.messages.pop(message)
+            else:
+                # dicts are ordered in Python
+                break
+
+    @_cache_invalidator.before_loop
+    async def _before_cache(self):
+        await self.bot.wait_until_ready()
+
+    def cog_unload(self):
+        self._cache_invalidator.cancel()
 
     # COMMANDS
 
