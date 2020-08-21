@@ -258,6 +258,9 @@ class Rift(commands.Cog):
     ):
         """
         Opens a rift to the specified destination(s).
+
+        Only your messages will be forwarded to the specified destinations,
+        and all replies will be sent back to you.
         """
         if not rifts:
             raise commands.UserInputError()
@@ -281,7 +284,7 @@ class Rift(commands.Cog):
             if notify:
                 asyncio.ensure_future(
                     rift.send(
-                        _("{} has linked a rift to here from {}.").format(ctx.author, ctx.channel)
+                        _("{} has opened a rift to here from {}.").format(ctx.author, ctx.channel)
                     )
                 )
         await ctx.send(
@@ -298,7 +301,10 @@ class Rift(commands.Cog):
         self, ctx: commands.Context, one_way: Optional[bool] = None, *rifts: Messageable
     ):
         """
-        Opens a rift to the specified destination(s).
+        Links this channel to the specified destination(s).
+
+        Anything anyone says in this channel will be forwarded.
+        All replies will be relayed back here.
         """
         if not rifts:
             raise commands.UserInputError()
@@ -327,7 +333,7 @@ class Rift(commands.Cog):
                 )
         await ctx.send(
             _(
-                "A rift has been opened to {}! Everything you say will be relayed there.\n"
+                "A link has been created to {}! Everything said in this channel will be relayed there.\n"
                 "Responses will be relayed here.\n"
                 "Type `exit` to quit."
             ).format(humanize_list(list(map(str, unique_rifts))))
