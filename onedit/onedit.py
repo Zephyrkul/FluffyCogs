@@ -1,3 +1,4 @@
+import asyncio
 import discord
 from redbot.core import Config, checks, commands
 
@@ -20,8 +21,10 @@ class OnEdit(commands.Cog):
         if not message.author.bot:
             ctx = await self.bot.get_context(message)
             await self.bot.invoke(ctx)
-            if not ctx.valid and (alias := self.bot.get_cog("Alias")):
-                await alias.on_message_without_command(message)
+            if ctx.valid is False:
+                for allowed_names in ("Alias", "CustomCommands", "Act"):
+                    if cog := self.bot.get_cog(allowed_names):
+                        asyncio.ensure_future(cog.on_message_without_command(message))
 
     @commands.command()
     @checks.is_owner()
