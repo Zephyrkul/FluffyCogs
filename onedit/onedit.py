@@ -20,6 +20,8 @@ class OnEdit(commands.Cog):
         if not message.author.bot:
             ctx = await self.bot.get_context(message)
             await self.bot.invoke(ctx)
+            if not ctx.valid and (alias := self.bot.get_cog("Alias")):
+                await alias.on_message_without_command(message)
 
     @commands.command()
     @checks.is_owner()
