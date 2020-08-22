@@ -22,9 +22,11 @@ class OnEdit(commands.Cog):
             ctx = await self.bot.get_context(message)
             await self.bot.invoke(ctx)
             if ctx.valid is False:
-                for allowed_names in ("Alias", "CustomCommands", "Act"):
-                    if cog := self.bot.get_cog(allowed_names):
-                        asyncio.ensure_future(cog.on_message_without_command(message))
+                for allowed_name in ("Alias", "CustomCommands"):
+                    if listener := getattr(
+                        self.bot.get_cog(allowed_name), "on_message_without_command", None
+                    ):
+                        asyncio.ensure_future(listener(message))
 
     @commands.command()
     @checks.is_owner()
