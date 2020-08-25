@@ -494,10 +494,12 @@ class Rift(commands.Cog):
             if (dest, source) in processed:
                 continue
             if source in unique:
-                asyncio.ensure_future(dest.send(fmt.format(closer=closer, source=source)))
+                if await self.config.notify():
+                    asyncio.ensure_future(dest.send(fmt.format(closer=closer, source=source)))
                 num_closed += 1
             elif dest in unique:
-                asyncio.ensure_future(source.send(fmt.format(closer=closer, source=dest)))
+                if await self.config.notify():
+                    asyncio.ensure_future(source.send(fmt.format(closer=closer, source=dest)))
                 num_closed += 1
             processed.add((source, dest))
 
