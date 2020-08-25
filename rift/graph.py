@@ -2,19 +2,14 @@ from itertools import chain
 from typing import (
     TYPE_CHECKING,
     ClassVar,
-    DefaultDict,
-    Dict,
     Generator,
     Generic,
     Hashable,
-    Iterable,
     MutableMapping,
-    Optional,
     Set,
     Tuple,
     Type,
     TypeVar,
-    Union,
 )
 
 __all__ = ["GraphError", "SimpleGraph", "Vector"]

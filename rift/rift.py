@@ -587,7 +587,6 @@ class Rift(commands.Cog):
                 content += "\n".join(f"({self.xbytes(a.size)}) {a.url}" for a in attachments)
         if not content and not embed:
             raise RiftError(_("No content to send."))
-        allowed_types = ["everyone", "roles", "users"]
         allowed_mentions = discord.AllowedMentions()
         if not is_owner:
             top_role = getattr(author, "top_role", None)
@@ -648,7 +647,6 @@ class Rift(commands.Cog):
     async def on_message_edit(self, _b, message):
         if message.author.bot:
             return
-        channel = message.channel if message.guild else message.author
         await asyncio.gather(
             *(self.process_discord_message(message, m) for m in self.messages.get(message, ())),
             return_exceptions=True,
