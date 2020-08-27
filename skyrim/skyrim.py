@@ -33,7 +33,7 @@ class Skyrim(commands.Cog):
     async def nazeem(self, ctx):
         """
         Do you get to the Cloud District very often?
-        
+
         Oh, what am I saying, of course you don't.
         """
         await ctx.maybe_send_embed(
