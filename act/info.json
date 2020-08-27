@@ -5,6 +5,7 @@
     "install_msg": "Please note that custom commands that take arguments will still trigger this cog.",
     "name": "Act",
     "short": "Command the bot to perform an action on a fellow user.",
+    "min_bot_version": "3.4.0",
     "requirements": [
         "inflection"
     ],

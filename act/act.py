@@ -111,17 +111,23 @@ class Act(commands.Cog):
                 "locale": get_locale(),
             },
         ) as response:
+            json: dict
             if response.status == 429:
                 self.try_after = ctx.message.created_at + 30
-                json: dict = {}
+                json = {}
             elif response.status >= 400:
-                json: dict = {}
+                json = {}
             else:
                 json = await response.json()
         if not json.get("results"):
             return await ctx.send(message)
         message = f"{message}\n\n{random.choice(json['results'])['itemurl']}"
-        await ctx.send(message)
+        await ctx.send(
+            message,
+            allowed_mentions=discord.AllowedMentions(
+                users=False if target in ctx.message.mentions else [target]
+            ),
+        )
 
     @commands.group()
     @checks.is_owner()
