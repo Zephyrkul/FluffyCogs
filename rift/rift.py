@@ -640,7 +640,8 @@ class Rift(commands.Cog):
         if message.author.bot:
             return
         return asyncio.gather(
-            *(m.delete() for m in self.messages.pop(message, ())), return_exceptions=True,
+            *(m.delete() for m in self.messages.pop(message, ())),
+            return_exceptions=True,
         )
 
     @commands.Cog.listener()

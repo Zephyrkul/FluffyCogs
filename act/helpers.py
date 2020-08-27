@@ -1,5 +1,16 @@
 LY_VERBS = frozenset(
-    ("ally", "apply", "fly", "imply", "multiply", "ply", "rally", "sully", "supply", "tally",)
+    (
+        "ally",
+        "apply",
+        "fly",
+        "imply",
+        "multiply",
+        "ply",
+        "rally",
+        "sully",
+        "supply",
+        "tally",
+    )
 )
 NOLY_ADV = frozenset(
     (

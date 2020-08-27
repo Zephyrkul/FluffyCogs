@@ -5,7 +5,7 @@ from itertools import chain, repeat
 # from https://stackoverflow.com/questions/2970608/what-are-named-tuples-in-python
 class NamedList(Sequence):
     """Abstract Base Class for objects that work like mutable
-    namedtuples. Subclass and define your named fields with 
+    namedtuples. Subclass and define your named fields with
     __slots__ and away you go.
     """
 
