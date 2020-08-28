@@ -187,7 +187,7 @@ class Rift(commands.Cog):
             _("Channel is {} blocklisted.").format("now" if blacklisted else "no longer")
         )
         if blacklisted:
-            self.close_rifts(ctx.author, channel)
+            await self.close_rifts(ctx.author, channel)
 
     @blocklist.command(name="server", aliases=["guild"])
     @commands.guild_only()
@@ -204,7 +204,7 @@ class Rift(commands.Cog):
         await group.blacklisted.set(blacklisted)
         await ctx.send(_("Server is {} denylisted.").format("now" if blacklisted else "no longer"))
         if blacklisted:
-            self.close_rifts(ctx.author, *ctx.guild.text_channels)
+            await self.close_rifts(ctx.author, *ctx.guild.text_channels)
 
     @rift.group(name="close", invoke_without_command=True)
     async def rift_close(self, ctx: commands.Context):
@@ -213,9 +213,9 @@ class Rift(commands.Cog):
         """
         channel = ctx.channel if ctx.guild else ctx.author
         if await can_close(ctx):
-            num = self.close_rifts(ctx.author, channel)
+            num = await self.close_rifts(ctx.author, channel)
         else:
-            num = self.close_rifts(ctx.author, Limited(message=ctx.message))
+            num = await self.close_rifts(ctx.author, Limited(message=ctx.message))
         if num:
             await ctx.send(f"{num} rifts that lead here have been closed.")
         else:
@@ -228,7 +228,7 @@ class Rift(commands.Cog):
         """
         Closes all rifts that lead to this server.
         """
-        num = self.close_rifts(ctx.author, *ctx.guild.text_channels)
+        num = await self.close_rifts(ctx.author, *ctx.guild.text_channels)
         if num:
             await ctx.send(f"{num} rifts that lead here have been closed.")
         else:
@@ -480,13 +480,17 @@ class Rift(commands.Cog):
             else:
                 self.messages.add_vectors(message, m)
 
-    def close_rifts(self, closer: discord.abc.User, *destinations: Messageable):
+    async def close_rifts(self, closer: discord.abc.User, *destinations: Messageable):
         unique = set()
         for destination in destinations:
             unique.add(destination)
             if not isinstance(destination, (Limited, discord.abc.User)):
                 unique.add(Limited(author=closer, channel=destination))
         fmt = _("{closer} has closed a rift to here from {source}.")
+        if await self.bot.is_owner(closer):
+            notify = await self.config.notify()
+        else:
+            notify = True
 
         processed: Set[Vector[Messageable]] = set()
         num_closed = 0
@@ -494,10 +498,12 @@ class Rift(commands.Cog):
             if (dest, source) in processed:
                 continue
             if source in unique:
-                asyncio.ensure_future(dest.send(fmt.format(closer=closer, source=source)))
+                if notify:
+                    asyncio.ensure_future(dest.send(fmt.format(closer=closer, source=source)))
                 num_closed += 1
             elif dest in unique:
-                asyncio.ensure_future(source.send(fmt.format(closer=closer, source=dest)))
+                if notify:
+                    asyncio.ensure_future(source.send(fmt.format(closer=closer, source=dest)))
                 num_closed += 1
             processed.add((source, dest))
 
@@ -628,10 +634,10 @@ class Rift(commands.Cog):
             return
         if message.content.casefold() == "exit":
             if await can_close(message, self.bot):
-                if num := self.close_rifts(message.author, channel):
+                if num := await self.close_rifts(message.author, channel):
                     return await message.channel.send(_("{num} rifts closed.").format(num=num))
             else:
-                if num := self.close_rifts(message.author, Limited(message=message)):
+                if num := await self.close_rifts(message.author, Limited(message=message)):
                     return await message.channel.send(_("{num} rifts closed.").format(num=num))
         await self._send(message, destinations)
 
