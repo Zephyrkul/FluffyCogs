@@ -126,6 +126,8 @@ class Rift(commands.Cog):
     @_cache_invalidator.before_loop
     async def _before_cache(self):
         await self.bot.wait_until_ready()
+        # I can't be arsed to check for IndexErrors
+        await self.bot.wait_for("message")
 
     def cog_unload(self):
         self._cache_invalidator.cancel()
