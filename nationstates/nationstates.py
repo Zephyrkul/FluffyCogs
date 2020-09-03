@@ -180,7 +180,7 @@ class NationStates(commands.Cog):
 
     # __________ STANDARD __________
 
-    @commands.command()
+    @commands.command(cooldown_after_parsing=True)
     @commands.cooldown(2, 3600)
     @checks.is_owner()
     async def agent(self, ctx, *, agent: str):
