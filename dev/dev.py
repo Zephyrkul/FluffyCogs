@@ -1,17 +1,17 @@
 import asyncio
 import builtins
 import contextlib
-from copy import copy
 import importlib
 import inspect
 import io
 import traceback
 import types
+from copy import copy
 from typing import Any, List, Optional
+
 import discord
 from redbot.core import commands, dev_commands
 from redbot.core.utils.predicates import MessagePredicate
-
 
 _ = dev_commands._
 

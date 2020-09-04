@@ -1,7 +1,8 @@
-from .dev import Dev
 from redbot.core import dev_commands
-from redbot.core.errors import CogLoadError
 from redbot.core.bot import Red
+from redbot.core.errors import CogLoadError
+
+from .dev import Dev
 
 
 def setup(bot: Red):
