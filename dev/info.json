@@ -1,0 +1,16 @@
+{
+    "author": [
+        "Cog-Creators",
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "Note that this cog requires the `--dev` flag, or it will refuse to load.",
+    "name": "Dev",
+    "short": "Custom fork of Red's Dev cog.",
+    "min_bot_version": "3.4.0",
+    "description": "A fork of Red's Dev cog containing various features that wouldn't make it into core Red.",
+    "tags": [
+        "dev"
+    ],
+    "end_user_data_statement": "This cog does not persistently store any data or metadata about users.",
+    "note_for_red_devs": "If any of these features or changes interest you, feel free to let me know."
+}
