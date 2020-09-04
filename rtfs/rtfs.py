@@ -14,9 +14,12 @@ from redbot.core.utils.chat_formatting import box, pagify
 class Env(dict):
     def __missing__(self, key):
         try:
-            return importlib.import_module(key)
+            module = importlib.import_module(key)
         except ImportError:
             raise KeyError(key) from None
+        else:
+            self[key] = module
+            return module
 
 
 class RTFS(commands.Cog):
