@@ -4,10 +4,11 @@ import contextlib
 import importlib
 import inspect
 import io
+import textwrap
 import traceback
 import types
 from copy import copy
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 import discord
 from redbot.core import commands, dev_commands
@@ -16,16 +17,16 @@ from redbot.core.utils.predicates import MessagePredicate
 _ = dev_commands._
 
 
-class Env(dict):
+class Env(Dict[str, Any]):
     def __init__(self, *args, **kwargs):
         self.imported = []
         super().__init__(*args, **kwargs)
 
     @classmethod
-    def from_context(cls, ctx: commands.Context, **kwargs):
+    def from_context(cls, ctx: commands.Context, **kwargs: Any) -> "Env":
         self = cls(
             {
-                # "_": None,
+                # "_": None,  # let __builtins__ handle this one
                 "ctx": ctx,
                 "bot": ctx.bot,
                 "message": ctx.message,
@@ -57,9 +58,9 @@ class Env(dict):
             self[key] = module
             return module
 
-    def get_formatted_imports(self):
+    def get_formatted_imports(self) -> Optional[str]:
         if not self.imported:
-            return
+            return None
         message = list(map("import {}".format, self.imported))
         self.imported.clear()
         return "\n".join(message)
@@ -87,17 +88,17 @@ class Dev(dev_commands.Dev):
         self,
         source,
         ctx: commands.Context,
-        env: Env,
+        env: Dict[str, Any],
         *modes: str,
+        run: str = None,
         **environ: Any,
-    ) -> Any:
+    ) -> None:
         if not modes:
             modes = ("single",)
-        # [Imports, Prints, Errors]
-        ret: List[Optional[str]] = [None, None, None]
+        # [Imports, Prints, Errors, Result]
+        ret: List[Optional[str]] = [None, None, None, None]
         env.update(environ)
         stdout = io.StringIO()
-        output = None
         try:
             with contextlib.redirect_stdout(stdout):
                 exc = None
@@ -109,8 +110,13 @@ class Dev(dev_commands.Dev):
                         exc = e
                         continue
                     else:
-                        # _ is automatically filled by python itself if absent
+                        # _ is automatically filled by __builtins__ if absent
                         env.pop("_", None)
+                        if runner := env.get(run):
+                            output = await self.maybe_await(runner())
+                            if output is not None:
+                                env["_"] = output
+                                ret[3] = "# Result:\n" + repr(output)
                         break
                 else:
                     if exc:
@@ -119,18 +125,19 @@ class Dev(dev_commands.Dev):
             ret[2] = "# Exception:\n" + self.get_syntax_error(e)
         except BaseException:
             ret[2] = "# Exception:\n" + traceback.format_exc()
-        if env.imported:
-            ret[0] = "# Imported:\n" + env.get_formatted_imports()
+        if getattr(env, "imported", None):
+            assert isinstance(env, Env)
+            ret[0] = "# Imported:\n" + str(env.get_formatted_imports())
         printed = stdout.getvalue().strip()
         if printed:
             ret[1] = "# Output:\n" + printed
         asyncio.ensure_future(self.send_interactive(ctx, *ret))
-        return output
 
     async def send_interactive(self, ctx: commands.Context, *items: Optional[str]) -> None:
         try:
             if not any(items):
-                await ctx.tick()
+                if not ctx.channel.permissions_for(ctx.me).add_reactions or not await ctx.tick():
+                    await ctx.send("Done.")
                 return
             for item in filter(None, items):
                 await ctx.send_interactive(
@@ -140,10 +147,8 @@ class Dev(dev_commands.Dev):
                     box_lang="py",
                 )
         except discord.Forbidden:
-            try:
-                self.sessions.pop(ctx.channel.id)
-            except AttributeError:
-                self.sessions.remove(ctx.channel.id)
+            # if this is repl, stop it
+            self.sessions.pop(ctx.channel.id, None)
 
     @commands.command()
     @commands.is_owner()
@@ -166,10 +171,40 @@ class Dev(dev_commands.Dev):
 
         await self.my_exec(code, ctx, env, "single")
         output = eval("_", env)
-        if output:
+        if output is not None:
             self._last_result = output
 
-    # eval can stay as it is
+    @commands.command(name="eval")
+    @commands.is_owner()
+    async def _eval(self, ctx, *, body: str):
+        """Execute asynchronous code.
+
+        This command wraps code into the body of an async function and then
+        calls and awaits it. The bot will respond with anything printed to
+        stdout, as well as the return value of the function.
+
+        The code can be within a codeblock, inline code or neither, as long
+        as they are not mixed and they are formatted correctly.
+
+        Environment Variables:
+            ctx      - command invokation context
+            bot      - bot object
+            channel  - the current channel object
+            author   - command author's member object
+            message  - the command's message object
+            commands - redbot.core.commands
+            _        - The result of the last dev command.
+        """
+        env = Env.from_context(ctx, commands=commands, _=self._last_result)
+        body = self.cleanup_code(body)
+        stdout = io.StringIO()
+
+        to_compile = "async def func():\n" + textwrap.indent(body, "  ")
+        await self.my_exec(to_compile, ctx, env, "exec", run="func")
+
+        output = eval("_", env)
+        if output is not None:
+            self._last_result = output
 
     @commands.group(invoke_without_command=True)
     @commands.is_owner()
