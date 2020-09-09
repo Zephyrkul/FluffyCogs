@@ -154,7 +154,7 @@ class Dev(dev_commands.Dev):
             commands - redbot.core.commands
             _        - The result of the last dev command.
         """
-        env = Env.from_context(ctx, commands=commands, _=self._last_result)
+        env = Env.from_context(ctx, commands=commands)
         code = self.cleanup_code(code)
 
         await self.my_exec(code, ctx, env, "single")
@@ -180,7 +180,7 @@ class Dev(dev_commands.Dev):
             commands - redbot.core.commands
             _        - The result of the last dev command.
         """
-        env = Env.from_context(ctx, commands=commands, _=self._last_result)
+        env = Env.from_context(ctx, commands=commands)
         body = self.cleanup_code(body)
         stdout = io.StringIO()
 
@@ -206,7 +206,7 @@ class Dev(dev_commands.Dev):
             )
             return
 
-        variables = Env.from_context(ctx, _=self._last_result)
+        variables = Env.from_context(ctx)
 
         self.sessions[ctx.channel.id] = True
         await ctx.send(_("Enter code to execute or evaluate. `exit()` or `quit` to exit."))
