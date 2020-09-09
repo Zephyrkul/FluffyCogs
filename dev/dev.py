@@ -1,4 +1,5 @@
 import asyncio
+import bisect
 import builtins
 import contextlib
 import importlib
@@ -19,8 +20,8 @@ _ = dev_commands._
 
 class Env(Dict[str, Any]):
     def __init__(self, *args, **kwargs):
-        self.imported = []
         super().__init__(*args, **kwargs)
+        self.imported = []
 
     @classmethod
     def from_context(cls, ctx: commands.Context, **kwargs: Any) -> "Env":
@@ -54,16 +55,16 @@ class Env(Dict[str, Any]):
         except ImportError:
             raise KeyError(key) from None
         else:
-            self.imported.append(key)
+            bisect.insort(self.imported, key)
             self[key] = module
             return module
 
     def get_formatted_imports(self) -> Optional[str]:
         if not self.imported:
             return None
-        message = list(map("import {}".format, self.imported))
+        message = "\n".join(map("import {}".format, self.imported))
         self.imported.clear()
-        return "\n".join(message)
+        return message
 
 
 class Dev(dev_commands.Dev):
@@ -71,18 +72,8 @@ class Dev(dev_commands.Dev):
 
     def __init__(self):
         super().__init__()
+        del self._last_result  # we don't need this anymore
         self.sessions = {}
-
-    @staticmethod
-    def get_syntax_error(e):
-        """
-        Format a syntax error to send to the user.
-
-        Returns a string representation of the error formatted as a codeblock.
-        """
-        if e.text is None:
-            return "{0.__class__.__name__}: {0}".format(e)
-        return "{0.text}\n{1:>{0.offset}}\n{2}: {0}".format(e, "^", type(e).__name__)
 
     async def my_exec(
         self,
@@ -92,7 +83,7 @@ class Dev(dev_commands.Dev):
         *modes: str,
         run: str = None,
         **environ: Any,
-    ) -> None:
+    ) -> Any:
         if not modes:
             modes = ("single",)
         # [Imports, Prints, Errors, Result]
@@ -104,25 +95,21 @@ class Dev(dev_commands.Dev):
                 exc = None
                 for mode in modes:
                     try:
-                        compiled = self.async_compile(source + "\n\n", f"<{ctx.command}>", mode)
+                        compiled = self.async_compile(source, f"<{ctx.command}>", mode)
                         await self.maybe_await(types.FunctionType(compiled, env)())
                     except SyntaxError as e:
                         exc = e
                         continue
                     else:
-                        # _ is automatically filled by __builtins__ if absent
-                        env.pop("_", None)
                         if runner := env.get(run):
                             output = await self.maybe_await(runner())
                             if output is not None:
-                                env["_"] = output
+                                setattr(builtins, "_", output)
                                 ret[3] = "# Result:\n" + repr(output)
                         break
                 else:
                     if exc:
                         raise exc
-        except SyntaxError as e:
-            ret[2] = "# Exception:\n" + self.get_syntax_error(e)
         except BaseException:
             ret[2] = "# Exception:\n" + traceback.format_exc()
         if getattr(env, "imported", None):
@@ -132,6 +119,7 @@ class Dev(dev_commands.Dev):
         if printed:
             ret[1] = "# Output:\n" + printed
         asyncio.ensure_future(self.send_interactive(ctx, *ret))
+        return getattr(builtins, "_", None)
 
     async def send_interactive(self, ctx: commands.Context, *items: Optional[str]) -> None:
         try:
@@ -170,9 +158,6 @@ class Dev(dev_commands.Dev):
         code = self.cleanup_code(code)
 
         await self.my_exec(code, ctx, env, "single")
-        output = eval("_", env)
-        if output is not None:
-            self._last_result = output
 
     @commands.command(name="eval")
     @commands.is_owner()
@@ -202,9 +187,8 @@ class Dev(dev_commands.Dev):
         to_compile = "async def func():\n" + textwrap.indent(body, "  ")
         await self.my_exec(to_compile, ctx, env, "exec", run="func")
 
-        output = eval("_", env)
-        if output is not None:
-            self._last_result = output
+    def cog_unload(self):
+        self.sessions.clear()
 
     @commands.group(invoke_without_command=True)
     @commands.is_owner()
@@ -230,9 +214,8 @@ class Dev(dev_commands.Dev):
         while True:
             response = await ctx.bot.wait_for("message", check=MessagePredicate.regex(r"^`", ctx))
 
-            if self is not ctx.bot.get_cog("Dev"):
+            if ctx.channel.id not in self.sessions:
                 return
-
             if not self.sessions[ctx.channel.id]:
                 continue
 
