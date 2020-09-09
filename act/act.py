@@ -6,7 +6,7 @@ from typing import Union
 import aiohttp
 import discord
 import inflection
-from redbot.core import bot, Config, checks, commands
+from redbot.core import Config, bot, checks, commands
 from redbot.core.i18n import get_locale
 from redbot.core.utils.chat_formatting import italics
 
