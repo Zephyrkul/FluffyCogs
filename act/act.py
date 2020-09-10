@@ -1,7 +1,7 @@
 import functools
 import random
 import re
-from typing import Union
+from typing import Union, TYPE_CHECKING
 
 import aiohttp
 import discord
@@ -13,6 +13,10 @@ from redbot.core.utils.chat_formatting import italics
 from .helpers import *
 
 fmt_re = re.compile(r"{(?:0|user)(?:\.([^\{]+))?}")
+if TYPE_CHECKING:
+    Lower = str
+else:
+    Lower = str.lower
 
 
 class Act(commands.Cog):
@@ -155,7 +159,7 @@ class Act(commands.Cog):
     @actset.group(aliases=["custom"], invoke_without_command=True)
     @checks.admin_or_permissions(manage_guild=True)
     @commands.guild_only()
-    async def customize(self, ctx: commands.Context, command: str.lower, *, response: str = None):
+    async def customize(self, ctx: commands.Context, command: Lower, *, response: str = None):
         """
         Customize the response to an action.
 
@@ -175,7 +179,7 @@ class Act(commands.Cog):
     @customize.command(name="global")
     @checks.is_owner()
     async def customize_global(
-        self, ctx: commands.Context, command: str.lower, *, response: str = None
+        self, ctx: commands.Context, command: Lower, *, response: str = None
     ):
         """
         Globally customize the response to an action.
@@ -192,7 +196,7 @@ class Act(commands.Cog):
     @actset.group(invoke_without_command=True)
     @checks.admin_or_permissions(manage_guild=True)
     @commands.guild_only()
-    async def ignore(self, ctx: commands.Context, command: str.lower):
+    async def ignore(self, ctx: commands.Context, command: Lower):
         """
         Ignore or unignore the specified action.
 
@@ -211,7 +215,7 @@ class Act(commands.Cog):
 
     @ignore.command(name="global")
     @checks.is_owner()
-    async def ignore_global(self, ctx: commands.Context, command: str.lower):
+    async def ignore_global(self, ctx: commands.Context, command: Lower):
         """
         Globally ignore or unignore the specified action.
 
