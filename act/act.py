@@ -1,7 +1,7 @@
 import functools
 import random
 import re
-from typing import TYPE_CHECKING, Union
+from typing import Union, TYPE_CHECKING
 
 import aiohttp
 import discord
