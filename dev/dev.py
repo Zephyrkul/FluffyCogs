@@ -2,7 +2,6 @@ import asyncio
 import builtins
 import contextlib
 import importlib
-import inspect
 import io
 import re
 import textwrap
