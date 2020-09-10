@@ -19,19 +19,28 @@ jobs:
       - name: Lint with Flake8
         run: make lint
       - name: Reformat with black, etc.
+        continue-on-error: true
         run: make reformat
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v2
+      - name: Commit changes
+        continue-on-error: true
+        run: |
+          git add .
+          git commit -m "style"
+      - name: Push changes
+        uses: ad-m/github-push-action@v0.6.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: style
-          title: Style
-          body: |
-            Automated style check
-          assignees: ${{ github.repository_owner }}
-          # reviewers: ${{ github.repository_owner }}
-          labels: Automated, Style
-          branch: automated/style
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Create Pull Request
+      #   uses: peter-evans/create-pull-request@v2
+      #   with:
+      #     token: ${{ secrets.GITHUB_TOKEN }}
+      #     commit-message: style
+      #     title: Style
+      #     body: |
+      #       Automated style check
+      #     assignees: ${{ github.repository_owner }}
+      #     labels: Automated, Style
+      #     branch: automated/style
       # The PR will mark style failures, this build will mark build failures
       # - name: Mark style failure
       #   if: env.PULL_REQUEST_NUMBER
