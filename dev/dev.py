@@ -1,10 +1,10 @@
 import asyncio
-import bisect
 import builtins
 import contextlib
 import importlib
 import inspect
 import io
+import re
 import textwrap
 import traceback
 import types
@@ -16,6 +16,7 @@ from redbot.core import commands, dev_commands
 from redbot.core.utils.predicates import MessagePredicate
 
 _ = dev_commands._
+func_re = re.compile(r"await|return|yield")
 
 
 class Env(Dict[str, Any]):
@@ -34,13 +35,14 @@ class Env(Dict[str, Any]):
                 "guild": ctx.guild,
                 "channel": ctx.channel,
                 "author": ctx.author,
+                "discord": discord,  # not necessary, but people generally assume this
                 "asyncio": asyncio,  # not including this can cause errors with async-compile
                 "__name__": "__main__",  # not including this can cause errors with typing (#3648)
                 # eval and exec automatically put this in, but types.FunctionType does not
                 "__builtins__": builtins,
                 # fill in various other environment keys that some code might expect
                 "__builtin__": builtins,
-                "__doc__": inspect.cleandoc(ctx.cog.__doc__),
+                "__doc__": ctx.command.help,
                 "__package__": None,
                 "__loader__": None,
                 "__spec__": None,
@@ -55,13 +57,14 @@ class Env(Dict[str, Any]):
         except ImportError:
             raise KeyError(key) from None
         else:
-            bisect.insort(self.imported, key)
+            self.imported.append(key)
             self[key] = module
             return module
 
     def get_formatted_imports(self) -> Optional[str]:
         if not self.imported:
             return None
+        self.imported.sort()
         message = "\n".join(map("import {}".format, self.imported))
         self.imported.clear()
         return message
@@ -84,6 +87,13 @@ class Dev(dev_commands.Dev):
         run: str = None,
         **environ: Any,
     ) -> Any:
+        original_message = discord.utils.get(
+            ctx.bot.cached_messages, id=ctx.message.id
+        ) or await ctx.fetch_message(ctx.message.id)
+        if original_message:
+            is_alias = not original_message.content.startswith(ctx.prefix + ctx.invoked_with)
+        else:
+            is_alias = False
         if not modes:
             modes = ("single",)
         # [Imports, Prints, Errors, Result]
@@ -96,25 +106,26 @@ class Dev(dev_commands.Dev):
                 for mode in modes:
                     try:
                         compiled = self.async_compile(source, f"<{ctx.command}>", mode)
-                        await self.maybe_await(types.FunctionType(compiled, env)())
+                        output = await self.maybe_await(types.FunctionType(compiled, env)())
                     except SyntaxError as e:
                         exc = e
                         continue
                     else:
                         if runner := env.get(run):
                             output = await self.maybe_await(runner())
-                            if output is not None:
-                                setattr(builtins, "_", output)
-                                ret[3] = "# Result:\n" + repr(output)
+                        if output is not None:
+                            setattr(builtins, "_", output)
+                            ret[3] = f"# Result:\n{output!r}"
                         break
                 else:
                     if exc:
                         raise exc
-        except BaseException:
-            ret[2] = "# Exception:\n" + traceback.format_exc()
-        if getattr(env, "imported", None):
+        except BaseException as e:
+            ret[2] = "\n".join(("# Exception:", *traceback.format_exception_only(type(e), e)))
+        # don't export imports on aliases
+        if not is_alias and getattr(env, "imported", None):
             assert isinstance(env, Env)
-            ret[0] = "# Imported:\n" + str(env.get_formatted_imports())
+            ret[0] = f"# Imported:\n{env.get_formatted_imports()}"
         printed = stdout.getvalue().strip()
         if printed:
             ret[1] = "# Output:\n" + printed
@@ -157,12 +168,13 @@ class Dev(dev_commands.Dev):
         env = Env.from_context(ctx, commands=commands)
         code = self.cleanup_code(code)
 
-        await self.my_exec(code, ctx, env, "single")
+        await self.my_exec(code, ctx, env, "eval", "single")
 
     @commands.command(name="eval")
     @commands.is_owner()
     async def _eval(self, ctx, *, body: str):
-        """Execute asynchronous code.
+        """
+        Execute asynchronous code.
 
         This command wraps code into the body of an async function and then
         calls and awaits it. The bot will respond with anything printed to
@@ -226,7 +238,7 @@ class Dev(dev_commands.Dev):
                 await ctx.send(_("Exiting."))
                 return
 
-            await self.my_exec(cleaned, ctx, variables, "single", "exec", message=response)
+            await self.my_exec(cleaned, ctx, variables, "eval", "single", "exec", message=response)
 
     # The below command is unchanged from NeuroAssassin's code.
     # It is present here mainly as a backport for previous versions of Red.
