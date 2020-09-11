@@ -1,5 +1,5 @@
 import asyncio
-from typing import Dict
+from typing import Dict, Union
 
 import discord
 from redbot.core import Config, bot, commands
@@ -21,12 +21,14 @@ class AutoDisconnect(commands.Cog):
     @commands.command(aliases=["autodisconnect"])
     @commands.guild_only()
     @commands.mod_or_permissions(manage_guild=True)
-    async def afkdisconnect(self, ctx: commands.Context, *, time: int):
+    async def afkdisconnect(self, ctx: commands.Context, *, time: Union[int, bool]):
         """
         Sets how long to wait before disconnecting an AFK member, in seconds.
 
         Set to -1 to disable.
         """
+        if isinstance(time, bool):
+            time = 0 if time else -1
         if time < -1:
             raise commands.UserFeedbackCheckFailure(
                 "Time must be 0 or greater, or -1 to disable the feature"
@@ -70,6 +72,6 @@ class AutoDisconnect(commands.Cog):
             else:
                 return  # the member moved on their own
         try:
-            await member.move_to(discord.Object(id=None))
+            await member.move_to(None)
         except discord.HTTPException:
             return
