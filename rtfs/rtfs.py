@@ -1,7 +1,6 @@
 import asyncio
 import importlib
 import inspect
-from lib2to3.pytree import Base
 import traceback
 from typing import Any
 
