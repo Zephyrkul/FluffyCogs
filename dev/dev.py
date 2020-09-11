@@ -3,12 +3,11 @@ import builtins
 import contextlib
 import importlib
 import io
-import re
 import textwrap
 import traceback
 import types
 from copy import copy
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 import discord
 from redbot.core import commands, dev_commands
