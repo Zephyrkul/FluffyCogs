@@ -7,7 +7,7 @@ import textwrap
 import traceback
 import types
 from copy import copy
-from typing import Any, Dict, List, Optional
+from typing import Dict, Any, List, Optional
 
 import discord
 from redbot.core import commands, dev_commands
