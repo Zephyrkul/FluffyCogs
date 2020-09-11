@@ -1,6 +1,7 @@
 import asyncio
 import importlib
 import inspect
+from lib2to3.pytree import Base
 import traceback
 from typing import Any
 
@@ -121,7 +122,8 @@ class RTFS(commands.Cog):
         """
         Read the source code for a cog or command.
 
-        The bot owner may additionally supply any valid Python object.
+        The bot owner may additionally supply any valid Python object,
+        if developer mode is enabled.
         """
         is_owner = await ctx.bot.is_owner(ctx.author)
         try:
@@ -150,9 +152,9 @@ class RTFS(commands.Cog):
         )
         try:
             obj = eval(thing, env)
-        except:
-            return await ctx.send_interactive(
-                pagify(traceback.format_exc(), shorten_by=10), box_lang="py"
+        except BaseException as be:
+            return await ctx.send(
+                box("".join(traceback.format_exception_only(type(be), be)), lang="py")
             )
         try:
             return await self.format_and_send(ctx, obj, is_owner=is_owner)

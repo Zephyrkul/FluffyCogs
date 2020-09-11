@@ -6,7 +6,7 @@
     "name": "RTFS",
     "min_bot_version": "3.4.0",
     "short": "Read The Source™️",
-    "description": "Allows users to read the source of publicly-sourced commands. The bot owner can also read the source of any Python object if `--dev` is enabled.",
+    "description": "Allows users to read the source of publicly-sourced commands. The bot owner can also read the source of any Python object if developer mode is enabled.",
     "tags": [
         "dev",
         "utilities"
