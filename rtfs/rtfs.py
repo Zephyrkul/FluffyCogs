@@ -2,6 +2,7 @@ import asyncio
 import importlib
 import inspect
 import traceback
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 import discord
@@ -82,17 +83,24 @@ class RTFS(commands.Cog):
             if full_module.startswith("discord."):
                 is_installed = True
                 if discord.__version__[-1].isdigit():
-                    header = f"<https://github.com/Rapptz/discord.py/blob/v{discord.__version__}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
+                    dpy_commit = "v" + discord.__version__
                 else:
                     assert discord.__version__.startswith("1.")
-                    header = f"<https://github.com/Rapptz/discord.py/tree/master/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
+                    try:
+                        dpy_version = version("discord.py").split("+g")
+                    except PackageNotFoundError:
+                        dpy_commit = "master"
+                    else:
+                        dpy_commit = dpy_version[1] if len(dpy_version) == 2 else "master"
+                header = f"<https://github.com/Rapptz/discord.py/blob/{dpy_commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
             elif full_module.startswith("redbot."):
                 is_installed = True
                 if "dev" in redbot.__version__:
                     assert redbot.__version__.startswith("3.")
-                    header = f"<https://github.com/Cog-Creators/Red-DiscordBot/tree/V3/develop/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
+                    red_commit = "V3/develop"
                 else:
-                    header = f"<https://github.com/Cog-Creators/Red-DiscordBot/blob/{redbot.__version__}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
+                    red_commit = redbot.__version__
+                header = f"<https://github.com/Cog-Creators/Red-DiscordBot/blob/{red_commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
             elif dl := ctx.bot.get_cog("Downloader"):
                 is_installed, installable = await dl.is_installed(full_module.split(".")[0])
                 if is_installed:
@@ -103,14 +111,14 @@ class RTFS(commands.Cog):
                         if url.user or url.password:
                             is_installed = False
                         header = f"<{installable.repo.clean_url.rstrip('/')}/blob/{installable.commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
-        if not header and not is_installed and is_owner:
-            if module:
-                header = box(f"File {source_file!r}, line {line}, in module {module}", lang="py")
-            else:
-                header = box(f"File {source_file!r}, line {line}", lang="py")
-        elif not is_installed:
+        if not is_installed and not is_owner:
             # don't disclose the source of private cogs
             raise OSError()
+        if not header:
+            if module:
+                header = box(f"File {source_file}, line {line}, in module {module}", lang="py")
+            else:
+                header = box(f"File {source_file}, line {line}", lang="py")
         raw_pages = list(
             pagify(
                 "".join(lines).replace("```", "`\u200b`\u200b`"), shorten_by=10, page_length=1024
