@@ -8,14 +8,13 @@ import textwrap
 import traceback
 import types
 from copy import copy
-from typing import Any, Dict, List, Optional
+from typing import Dict, Any, List, Optional
 
 import discord
 from redbot.core import commands, dev_commands
 from redbot.core.utils.predicates import MessagePredicate
 
 _ = dev_commands._
-func_re = re.compile(r"await|return|yield")
 
 
 class Env(Dict[str, Any]):
