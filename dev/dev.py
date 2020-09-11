@@ -2,6 +2,7 @@ import asyncio
 import builtins
 import contextlib
 import importlib
+import inspect
 import io
 import textwrap
 import traceback
@@ -14,6 +15,10 @@ from redbot.core import commands, dev_commands
 from redbot.core.utils.predicates import MessagePredicate
 
 _ = dev_commands._
+try:
+    fetch_message = discord.abc.Messageable.fetch_message_fast
+except AttributeError:
+    fetch_message = discord.abc.Messageable.fetch_message
 
 
 class Env(Dict[str, Any]):
@@ -27,13 +32,14 @@ class Env(Dict[str, Any]):
             {
                 # "_": None,  # let __builtins__ handle this one
                 "ctx": ctx,
-                "bot": ctx.bot,
-                "message": ctx.message,
-                "guild": ctx.guild,
-                "channel": ctx.channel,
                 "author": ctx.author,
-                "discord": discord,  # not necessary, but people generally assume this
+                "bot": ctx.bot,
+                "channel": ctx.channel,
+                "guild": ctx.guild,
+                "me": ctx.me,
+                "message": ctx.message,
                 "asyncio": asyncio,  # not including this can cause errors with async-compile
+                "discord": discord,  # not necessary, but people generally assume this
                 "__name__": "__main__",  # not including this can cause errors with typing (#3648)
                 # eval and exec automatically put this in, but types.FunctionType does not
                 "__builtins__": builtins,
@@ -86,7 +92,7 @@ class Dev(dev_commands.Dev):
     ) -> Any:
         original_message = discord.utils.get(
             ctx.bot.cached_messages, id=ctx.message.id
-        ) or await ctx.fetch_message(ctx.message.id)
+        ) or await fetch_message(ctx, ctx.message.id)
         if original_message:
             is_alias = not original_message.content.startswith(ctx.prefix + ctx.invoked_with)
         else:
@@ -109,7 +115,7 @@ class Dev(dev_commands.Dev):
                         continue
                     else:
                         if runner := env.get(run):
-                            output = await self.maybe_await(runner())
+                            output = await self.maybe_await(runner)
                         if output is not None:
                             setattr(builtins, "_", output)
                             ret[3] = f"# Result:\n{output!r}"
@@ -145,6 +151,26 @@ class Dev(dev_commands.Dev):
         except discord.Forbidden:
             # if this is repl, stop it
             self.sessions.pop(ctx.channel.id, None)
+
+    @staticmethod
+    async def maybe_await(coro):
+        if inspect.isroutine(coro):
+            coro = coro()
+
+        if inspect.isawaitable(coro):
+            return await coro
+        elif inspect.isasyncgen(coro):
+            async for obj in coro:
+                if obj is not None:
+                    setattr(builtins, "_", obj)
+                    print(repr(obj))
+        elif inspect.isgenerator(coro):
+            for obj in coro:
+                if obj is not None:
+                    setattr(builtins, "_", obj)
+                    print(repr(obj))
+        else:
+            return coro
 
     @commands.command()
     @commands.is_owner()
