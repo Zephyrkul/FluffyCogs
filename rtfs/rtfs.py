@@ -111,7 +111,11 @@ class RTFS(commands.Cog):
         elif not is_installed:
             # don't disclose the source of private cogs
             raise OSError()
-        raw_pages = list(pagify("".join(lines), shorten_by=10, page_length=1024))
+        raw_pages = list(
+            pagify(
+                "".join(lines).replace("```", "`\u200b`\u200b`"), shorten_by=10, page_length=1024
+            )
+        )
         await menus.MenuPages(
             SourceSource(raw_pages, per_page=1, header=header), delete_message_after=True
         ).start(ctx)
