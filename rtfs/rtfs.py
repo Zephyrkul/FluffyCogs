@@ -10,6 +10,20 @@ import yarl
 from redbot.core import commands
 from redbot.core.utils.chat_formatting import box, pagify
 
+try:
+    from discord.ext import menus
+except ImportError:
+    from redbot.vendored.discord.ext import menus
+
+
+class SourceSource(menus.ListPageSource):
+    def __init__(self, *args, header: str, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.header = header
+
+    async def format_page(self, menu, page):
+        return f"{self.header}\n{box(page, lang='py')}\nPage {menu.current_page + 1} / {self.get_max_pages()}"
+
 
 class Env(dict):
     def __missing__(self, key):
@@ -63,29 +77,22 @@ class RTFS(commands.Cog):
         else:
             full_module = module
         is_installed = False
+        header: str = ""
         if full_module:
             if full_module.startswith("discord."):
                 is_installed = True
                 if discord.__version__[-1].isdigit():
-                    await ctx.send(
-                        f"https://github.com/Rapptz/discord.py/blob/v{discord.__version__}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}"
-                    )
+                    header = f"<https://github.com/Rapptz/discord.py/blob/v{discord.__version__}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
                 else:
                     assert discord.__version__.startswith("1.")
-                    await ctx.send(
-                        f"https://github.com/Rapptz/discord.py/tree/master/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}"
-                    )
+                    header = f"<https://github.com/Rapptz/discord.py/tree/master/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
             elif full_module.startswith("redbot."):
                 is_installed = True
                 if "dev" in redbot.__version__:
                     assert redbot.__version__.startswith("3.")
-                    await ctx.send(
-                        f"https://github.com/Cog-Creators/Red-DiscordBot/tree/V3/develop/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}"
-                    )
+                    header = f"<https://github.com/Cog-Creators/Red-DiscordBot/tree/V3/develop/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
                 else:
-                    await ctx.send(
-                        f"https://github.com/Cog-Creators/Red-DiscordBot/blob/{redbot.__version__}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}"
-                    )
+                    header = f"<https://github.com/Cog-Creators/Red-DiscordBot/blob/{redbot.__version__}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
             elif dl := ctx.bot.get_cog("Downloader"):
                 is_installed, installable = await dl.is_installed(full_module.split(".")[0])
                 if is_installed:
@@ -95,23 +102,19 @@ class RTFS(commands.Cog):
                         url = yarl.URL(installable.repo.url)
                         if url.user or url.password:
                             is_installed = False
-                        else:
-                            await ctx.send(
-                                f"{installable.repo.url.rstrip('/')}/blob/{installable.repo.commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}"
-                            )
-        if not is_installed and is_owner:
+                        header = f"<{installable.repo.clean_url.rstrip('/')}/blob/{installable.commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
+        if not header and not is_installed and is_owner:
             if module:
-                await ctx.send(
-                    box(f"File {source_file!r}, line {line}, in module {module}", lang="py")
-                )
+                header = box(f"File {source_file!r}, line {line}, in module {module}", lang="py")
             else:
-                await ctx.send(box(f"File {source_file!r}, line {line}", lang="py"))
+                header = box(f"File {source_file!r}, line {line}", lang="py")
         elif not is_installed:
             # don't disclose the source of private cogs
             raise OSError()
-        await ctx.send_interactive(
-            pagify("".join(lines), shorten_by=10), box_lang="py", timeout=300
-        )
+        raw_pages = list(pagify("".join(lines), shorten_by=10, page_length=1024))
+        await menus.MenuPages(
+            SourceSource(raw_pages, per_page=1, header=header), delete_message_after=True
+        ).start(ctx)
 
     @commands.command(aliases=["rts", "source"])
     async def rtfs(self, ctx: commands.Context, *, thing: str):
