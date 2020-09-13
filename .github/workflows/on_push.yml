@@ -31,22 +31,4 @@ jobs:
           git config --local author.name "{{ github.actor }}"
           git add -A
           git commit -m "style"
-      - name: Push changes
-        uses: ad-m/github-push-action@v0.6.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      # - name: Create Pull Request
-      #   uses: peter-evans/create-pull-request@v2
-      #   with:
-      #     token: ${{ secrets.GITHUB_TOKEN }}
-      #     commit-message: style
-      #     title: Style
-      #     body: |
-      #       Automated style check
-      #     assignees: ${{ github.repository_owner }}
-      #     labels: Automated, Style
-      #     branch: automated/style
-      # The PR will mark style failures, this build will mark build failures
-      # - name: Mark style failure
-      #   if: env.PULL_REQUEST_NUMBER
-      #  run: exit 1
+          git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:${GITHUB_REF#refs/heads/}
