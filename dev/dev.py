@@ -1,3 +1,6 @@
+import __future__
+
+import ast
 import asyncio
 import builtins
 import contextlib
@@ -14,11 +17,31 @@ import discord
 from redbot.core import commands, dev_commands
 from redbot.core.utils.predicates import MessagePredicate
 
+# From stdlib's codeop
+_features = [getattr(__future__, fname) for fname in __future__.all_feature_names]
+
 _ = dev_commands._
 try:
     fetch_message = discord.abc.Messageable.fetch_message_fast
 except AttributeError:
     fetch_message = discord.abc.Messageable.fetch_message
+
+
+# This is taken straight from stdlib's codeop,
+# but with some modifications for this usecase
+class Compiler:
+    default_flags = ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
+
+    def __init__(self, flags: int = 0):
+        self.flags = self.default_flags | flags
+
+    def __call__(self, source, filename, mode, flags: int = 0):
+        self.flags |= flags
+        codeob = compile(source, filename, mode, self.flags, 1, 0)
+        for feature in _features:
+            if codeob.co_flags & feature.compiler_flag:
+                self.flags |= feature.compiler_flag
+        return codeob
 
 
 class Env(Dict[str, Any]):
@@ -76,10 +99,20 @@ class Env(Dict[str, Any]):
 class Dev(dev_commands.Dev):
     """Various development focused utilities."""
 
+    # Schema: [my version] <[targeted bot version]>
+    __version__ = "0.0.1 <3.4.1dev>"
+
     def __init__(self):
         super().__init__()
         del self._last_result  # we don't need this anymore
         self.sessions = {}
+
+    def format_help_for_context(self, ctx: commands.Context) -> str:
+        pre = super().format_help_for_context(ctx)
+        if pre:
+            return f"{pre}\nCog Version: {self.__version__}"
+        else:
+            return f"Cog Version: {self.__version__}"
 
     async def my_exec(
         self,
@@ -88,8 +121,10 @@ class Dev(dev_commands.Dev):
         env: Dict[str, Any],
         *modes: str,
         run: str = None,
+        compiler: Compiler = None,
         **environ: Any,
-    ) -> Any:
+    ) -> None:
+        compiler = compiler or Compiler()
         original_message = discord.utils.get(
             ctx.bot.cached_messages, id=ctx.message.id
         ) or await fetch_message(ctx, ctx.message.id)
@@ -97,25 +132,28 @@ class Dev(dev_commands.Dev):
             is_alias = not original_message.content.startswith(ctx.prefix + ctx.invoked_with)
         else:
             is_alias = False
+        message = environ.get("message", ctx.message)
         if not modes:
             modes = ("single",)
         # [Imports, Prints, Errors, Result]
         ret: List[Optional[str]] = [None, None, None, None]
         env.update(environ)
         stdout = io.StringIO()
+        filename = f"<{ctx.command}>"
         try:
-            with contextlib.redirect_stdout(stdout):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stdout):
                 exc = None
                 for mode in modes:
                     try:
-                        compiled = self.async_compile(source, f"<{ctx.command}>", mode)
+                        compiled = compiler(source, filename, mode)
                         output = await self.maybe_await(types.FunctionType(compiled, env)())
                     except SyntaxError as e:
                         exc = e
                         continue
                     else:
-                        if runner := env.get(run):
-                            output = await self.maybe_await(runner)
+                        if run:
+                            # don't call the func here, leave it to maybe_await
+                            output = await self.maybe_await(env[run])
                         if output is not None:
                             setattr(builtins, "_", output)
                             ret[3] = f"# Result:\n{output!r}"
@@ -124,7 +162,20 @@ class Dev(dev_commands.Dev):
                     if exc:
                         raise exc
         except BaseException as e:
-            ret[2] = "\n".join(("# Exception:", *traceback.format_exception_only(type(e), e)))
+            # return only frames that are part of provided code
+            i, j = -1, 0
+            for j, (frame, _) in enumerate(traceback.walk_tb(e.__traceback__)):
+                if i < 0 and frame.f_code.co_filename == filename:
+                    i = j
+            if i < 0:
+                # this shouldn't ever happen but python allows for some weirdness
+                limit = 0
+            elif run:
+                # the func frame isn't needed
+                limit = i - j
+            else:
+                limit = i - j - 1
+            ret[2] = "# Exception:\n" + traceback.format_exc(limit=limit)
         # don't export imports on aliases
         if not is_alias and getattr(env, "imported", None):
             assert isinstance(env, Env)
@@ -132,14 +183,24 @@ class Dev(dev_commands.Dev):
         printed = stdout.getvalue().strip()
         if printed:
             ret[1] = "# Output:\n" + printed
-        asyncio.ensure_future(self.send_interactive(ctx, *ret))
-        return getattr(builtins, "_", None)
+        asyncio.ensure_future(self.send_interactive(ctx, *ret, message=message))
 
-    async def send_interactive(self, ctx: commands.Context, *items: Optional[str]) -> None:
+    async def send_interactive(
+        self,
+        ctx: commands.Context,
+        *items: Optional[str],
+        message: discord.Message = None,
+    ) -> None:
+        message = message or ctx.message
+        if message.channel != ctx.channel:
+            raise RuntimeError("\N{THINKING FACE} how did this happen")
         try:
             if not any(items):
-                if not ctx.channel.permissions_for(ctx.me).add_reactions or not await ctx.tick():
-                    await ctx.send("Done.")
+                if ctx.channel.permissions_for(ctx.me).add_reactions:
+                    with contextlib.suppress(discord.HTTPException):
+                        await message.add_reaction("\N{WHITE HEAVY CHECK MARK}")
+                        return
+                await ctx.send("Done.")
                 return
             for item in filter(None, items):
                 await ctx.send_interactive(
@@ -155,7 +216,8 @@ class Dev(dev_commands.Dev):
     @staticmethod
     async def maybe_await(coro):
         if inspect.isroutine(coro):
-            coro = coro()
+            with contextlib.suppress(TypeError):
+                coro = coro()
 
         if inspect.isawaitable(coro):
             return await coro
@@ -189,9 +251,21 @@ class Dev(dev_commands.Dev):
             _        - The result of the last dev command.
         """
         env = Env.from_context(ctx, commands=commands)
-        code = self.cleanup_code(code)
+        code = self.cleanup_code(code).strip()
 
-        await self.my_exec(code, ctx, env, "eval", "single")
+        compiler = Compiler()
+        if code.startswith("from __future__ import"):
+            try:
+                code = self.handle_future(code, compiler)
+            except SyntaxError as e:
+                await self.send_interactive(
+                    ctx,
+                    "# Exception:\nTraceback (most recent call last):\n"
+                    + "".join(traceback.format_exception_only(type(e), e)),
+                )
+                return
+
+        await self.my_exec(code, ctx, env, "eval", "single", compiler=compiler)
 
     @commands.command(name="eval")
     @commands.is_owner()
@@ -216,11 +290,38 @@ class Dev(dev_commands.Dev):
             _        - The result of the last dev command.
         """
         env = Env.from_context(ctx, commands=commands)
-        body = self.cleanup_code(body)
-        stdout = io.StringIO()
+        body = self.cleanup_code(body).strip()
+
+        compiler = Compiler()
+        if body.startswith("from __future__ import"):
+            try:
+                body = self.handle_future(body, compiler)
+            except SyntaxError as e:
+                await self.send_interactive(
+                    ctx,
+                    "# Exception:\nTraceback (most recent call last):\n"
+                    + "".join(traceback.format_exception_only(type(e), e)),
+                )
+                return
 
         to_compile = "async def func():\n" + textwrap.indent(body, "  ")
-        await self.my_exec(to_compile, ctx, env, "exec", run="func")
+        await self.my_exec(to_compile, ctx, env, "exec", compiler=compiler, run="func")
+
+    @staticmethod
+    def handle_future(code: str, compiler: Compiler) -> str:
+        exc = None
+        lines = code.splitlines(keepends=True)
+        for i in range(len(lines)):
+            try:
+                compiler("".join(lines[: i + 1]), "<future>", "exec")
+            except SyntaxError as e:
+                if e.msg != "unexpected EOF while parsing":
+                    raise
+                exc = e
+            else:
+                return "".join(lines[i + 1 :])
+        # it couldn't be compiled out for whatever reason
+        raise exc or RuntimeError("\N{THINKING FACE} how did this happen")
 
     def cog_unload(self):
         self.sessions.clear()
@@ -242,6 +343,7 @@ class Dev(dev_commands.Dev):
             return
 
         variables = Env.from_context(ctx)
+        compiler = Compiler()
 
         self.sessions[ctx.channel.id] = True
         await ctx.send(_("Enter code to execute or evaluate. `exit()` or `quit` to exit."))
@@ -254,14 +356,36 @@ class Dev(dev_commands.Dev):
             if not self.sessions[ctx.channel.id]:
                 continue
 
-            cleaned = self.cleanup_code(response.content)
+            cleaned = self.cleanup_code(response.content).strip()
 
-            if cleaned.rstrip("()") in ("quit", "exit", "stop"):
+            if cleaned.rstrip("( )") in ("quit", "exit", "stop"):
                 del self.sessions[ctx.channel.id]
                 await ctx.send(_("Exiting."))
                 return
 
-            await self.my_exec(cleaned, ctx, variables, "eval", "single", "exec", message=response)
+            if cleaned.startswith("from __future__ import"):
+                try:
+                    cleaned = self.handle_future(cleaned, compiler)
+                except SyntaxError as e:
+                    asyncio.ensure_future(
+                        self.send_interactive(
+                            ctx,
+                            "# Exception:\nTraceback (most recent call last):\n"
+                            + "".join(traceback.format_exception_only(type(e), e)),
+                        )
+                    )
+                    continue
+
+            await self.my_exec(
+                cleaned,
+                ctx,
+                variables,
+                "eval",
+                "single",
+                "exec",
+                compiler=compiler,
+                message=response,
+            )
 
     # The below command is unchanged from NeuroAssassin's code.
     # It is present here mainly as a backport for previous versions of Red.
