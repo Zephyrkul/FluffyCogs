@@ -62,6 +62,8 @@ class SecureInv(commands.Cog):
         Defaults can be set with `[p]inv set`.
         If no defaults are found, channel defaults to the current channel,
         days defaults to 1, and uses defaults to 0 (infinite).
+
+        Uses will always be finite if days is infinite.
         """
         settings = await self.config.guild(ctx.guild).all()
         if not channel:
@@ -74,7 +76,10 @@ class SecureInv(commands.Cog):
         if days is None:
             days = settings["days"]
         if uses is None:
-            uses = 0 if days else 1
+            if days:
+                uses = settings["uses"]
+            else:
+                uses = settings["uses"] or 1
         generated = []
         for i in range(amount or 1):
             generated.append(
