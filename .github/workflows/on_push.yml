@@ -23,6 +23,7 @@ jobs:
         continue-on-error: true
         run: make reformat
       - name: Commit changes
+        if: ${{ success() }}
         continue-on-error: true
         run: |
           git config --local committer.email "noreply@github.com"
