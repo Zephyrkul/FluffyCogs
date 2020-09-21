@@ -515,12 +515,16 @@ class Rift(commands.Cog):
     async def get_embed(self, destination, attachments):
         if not attachments:
             return
+        attachment = attachments[0]
         embed = discord.Embed(colour=await self.bot.get_embed_color(destination))
-        for a in attachments:
+        if attachment.url.lower().endswith(("png", "jpeg", "jpg", "gif", "webp")):
+            embed.set_image(url=attachment.url)
+        else:
             embed.add_field(
-                name=self.xbytes(a.size), value=f"[{a.filename}]({a.url})", inline=True
+                name=self.xbytes(attachment.size),
+                value=f"[{attachment.filename}]({attachment.url})",
+                inline=True,
             )
-        embed.set_image(url=attachments[0].url)
         return embed
 
     @staticmethod
