@@ -1,10 +1,11 @@
 import asyncio
 import logging
+from functools import partial
 from io import BytesIO
 from itertools import chain
 from traceback import walk_tb
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, List, Optional, Set, Union, overload
+from typing import TYPE_CHECKING, List, Optional, Set, Tuple, Union, overload
 
 import discord
 from discord.ext import tasks
@@ -101,7 +102,7 @@ class Rift(commands.Cog):
         super().__init__()
         self.bot = bot
         self.rifts = SimpleGraph[Messageable]()
-        self.messages = SimpleGraph[discord.Message]()
+        self.messages = SimpleGraph[Tuple[int, int]]()
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_channel(blacklisted=False)
         self.config.register_guild(blacklisted=False)
@@ -113,12 +114,13 @@ class Rift(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def _cache_invalidator(self):
-        # discord.Message doesn't have __weakref__, so
         # longer-running bots need to remove expired cached messages
         oldest_id = self.bot.cached_messages[0].id
-        for message in list(self.messages.keys()):  # iterate over a copy, not a view
-            if message.id < oldest_id:
-                self.messages.pop(message)
+        for channel_id, message_id in list(
+            self.messages.keys()
+        ):  # iterate over a copy, not a view
+            if message_id < oldest_id:
+                self.messages.pop((channel_id, message_id))
             else:
                 # dicts are ordered in Python
                 break
@@ -480,7 +482,7 @@ class Rift(commands.Cog):
                     f"I couldn't send your message to {destination}: {reason}"
                 )
             else:
-                self.messages.add_vectors(message, m)
+                self.messages.add_vectors((message.channel.id, message.id), (m.channel.id, m.id))
 
     async def close_rifts(self, closer: discord.abc.User, *destinations: Messageable):
         unique = set()
@@ -527,10 +529,9 @@ class Rift(commands.Cog):
             )
         return embed
 
-    @staticmethod
-    def permissions(destination, user, is_owner=False):
-        if isinstance(destination, discord.User):
-            return destination.dm_channel.permissions_for(user)
+    def permissions(self, destination, user, is_owner=False):
+        if destination.type == discord.ChannelType.private:
+            return destination.permissions_for(self.bot.user)
         if not is_owner:
             member = destination.guild.get_member(user.id)
             if member:
@@ -566,8 +567,10 @@ class Rift(commands.Cog):
         is_owner = await self.bot.is_owner(author)
         if isinstance(destination, discord.Message):
             channel = destination.channel
+        elif method := getattr(destination, "create_dm", None):
+            channel = await method()
         else:
-            channel = getattr(destination, "dm_channel", destination)
+            channel = destination
         guild = getattr(channel, "guild", None)
         me = (guild or channel).me
         if not is_owner and guild:
@@ -578,8 +581,8 @@ class Rift(commands.Cog):
                 is_automod_immune = False
         else:
             is_automod_immune = True
-        author_perms = self.permissions(destination, author, is_owner)
-        bot_perms = self.permissions(destination, me)
+        author_perms = self.permissions(channel, author, is_owner)
+        bot_perms = self.permissions(channel, me)
         both_perms = discord.Permissions(author_perms.value & bot_perms.value)
         content = message.content
         if not is_automod_immune:
@@ -652,7 +655,20 @@ class Rift(commands.Cog):
         if message.author.bot:
             return
         return asyncio.gather(
-            *(m.delete() for m in self.messages.pop(message, ())),
+            *map(
+                discord.Message.delete,
+                filter(
+                    None,
+                    (
+                        discord.utils.get(
+                            self.bot.cached_messages, id=message_id, channel__id=channel_id
+                        )
+                        for channel_id, message_id in self.messages.pop(
+                            (message.channel.id, message.id), ()
+                        )
+                    ),
+                ),
+            ),
             return_exceptions=True,
         )
 
@@ -660,7 +676,21 @@ class Rift(commands.Cog):
     async def on_message_edit(self, _b, message):
         if message.author.bot:
             return
+        process = partial(self.process_discord_message, message)
         await asyncio.gather(
-            *(self.process_discord_message(message, m) for m in self.messages.get(message, ())),
+            *map(
+                process,
+                filter(
+                    None,
+                    (
+                        discord.utils.get(
+                            self.bot.cached_messages, id=message_id, channel__id=channel_id
+                        )
+                        for channel_id, message_id in self.messages.get(
+                            (message.channel.id, message.id), ()
+                        )
+                    ),
+                ),
+            ),
             return_exceptions=True,
         )
