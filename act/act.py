@@ -256,6 +256,10 @@ class Act(commands.Cog):
     ):
         if ctx.command == self.act:
             return
+        if not self.act.enabled:
+            return
+        if await ctx.bot.cog_disabled_in_guild(self, ctx.guild):
+            return
         if isinstance(error, commands.UserFeedbackCheckFailure):
             # UserFeedbackCheckFailure inherits from CheckFailure
             return
