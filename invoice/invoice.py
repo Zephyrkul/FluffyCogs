@@ -1,14 +1,31 @@
 import contextlib
 import inspect
+import re
 import typing
 from collections import defaultdict
-from typing import Any, Dict
+from typing import Dict, Optional, TypedDict
 
 import discord
 from proxyembed import ProxyEmbed
 from redbot.core import Config, checks, commands
 
-Cache = Dict[int, Dict[str, Any]]
+
+class GuildSettings(TypedDict):
+    role: Optional[discord.Role]
+    dynamic: bool
+    dynamic_name: Optional[str]
+    mute: bool
+    deaf: bool
+    self_deaf: bool
+
+
+class ChannelSettings(TypedDict):
+    role: Optional[discord.Role]
+    channel: Optional[discord.TextChannel]
+
+
+GuildCache = Dict[int, GuildSettings]
+ChannelCache = Dict[int, ChannelSettings]
 
 
 class InVoice(commands.Cog):
@@ -21,19 +38,21 @@ class InVoice(commands.Cog):
     def __init__(self):
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
         self.config.register_guild(**self._guild_defaults())
-        self.guild_cache: Cache = None
+        self.guild_cache: GuildCache = None
         self.config.register_channel(**self._channel_defaults())
-        self.channel_cache: Cache = None
+        self.channel_cache: ChannelCache = None
 
     async def initialize(self):
         self.guild_cache = defaultdict(self._guild_defaults, await self.config.all_guilds())
         self.channel_cache = defaultdict(self._channel_defaults, await self.config.all_channels())
 
     def _guild_defaults(self):
-        return dict(role=None, dynamic=False, mute=False, deaf=False, self_deaf=False)
+        return GuildSettings(
+            role=None, dynamic=False, dynamic_name=None, mute=False, deaf=False, self_deaf=False
+        )
 
     def _channel_defaults(self):
-        return dict(role=None, channel=None)
+        return ChannelSettings(role=None, channel=None)
 
     @commands.group()
     @commands.guild_only()
@@ -66,7 +85,7 @@ class InVoice(commands.Cog):
                     if key == "role":
                         value = ctx.guild.get_role(value)
                         value = value.name if value else "<Deleted role>"
-                    if key == "channel":
+                    elif key == "channel":
                         value = ctx.guild.get_channel(value)
                         value = value.name if value else "<Deleted channel>"
                 key = key.replace("_", " ").title()
@@ -74,7 +93,7 @@ class InVoice(commands.Cog):
             embed.add_field(name=f"Channel {vc} settings", value="\n".join(c_msg))
         await embed.send_to(ctx)
 
-    @invoice.command()
+    @invoice.group(invoke_without_command=True)
     @commands.guild_only()
     @checks.admin_or_permissions(manage_guild=True)
     async def dynamic(self, ctx: commands.Context, *, true_or_false: bool = None):
@@ -90,6 +109,36 @@ class InVoice(commands.Cog):
                 "now" if true_or_false else "no longer"
             )
         )
+
+    @dynamic.command()
+    @commands.guild_only()
+    @checks.admin_or_permissions(manage_guild=True)
+    async def name(self, ctx: commands.Context, *, new_name: str = None):
+        """
+        Set the name of the dynamic role and text channel when they're generated.
+
+        You can use `{vc}` as a placeholder, which will be replaced by the voice channel's name.
+        Defaults to `\N{SPEAKER WITH THREE SOUND WAVES} {vc}`
+        """
+        if not new_name:
+            async with self.config.guild(ctx.guild).all() as guild_settings:
+                old_name = guild_settings.pop("dynamic_name", None)
+                self.guild_cache[ctx.guild.id]["dynamic_name"] = None
+            if old_name:
+                return await ctx.send(f"Name reset to default.\nPrevious name: `{old_name}`")
+            else:
+                return await ctx.send("Name reset to default.")
+        async with self.config.guild(ctx.guild).all() as guild_settings:
+            old_name = guild_settings["dynamic_name"]
+            dynamic_enabled = guild_settings["dynamic"]
+            guild_settings["dynamic_name"] = new_name
+            self.guild_cache[ctx.guild.id]["dynamic_name"] = new_name
+        msg = [f"Name set to `{new_name}`"]
+        if old_name:
+            msg.append(f"Previous name: `{old_name}`")
+        if not dynamic_enabled:
+            msg.append("Remember to enable dynamic channel creation for this to take effect.")
+        await ctx.send("\n".join(msg))
 
     @invoice.command()
     @commands.guild_only()
@@ -223,7 +272,10 @@ class InVoice(commands.Cog):
         if not self.guild_cache[guild.id]["dynamic"]:
             return
         guild_role = self.guild_cache[guild.id]["role"]
-        name = "🔊 " + vc.name
+        if dynamic_name := self.guild_cache[guild.id]["dynamic_name"]:
+            name = re.sub(r"(?i){vc}", vc.name, dynamic_name)
+        else:
+            name = "\N{SPEAKER WITH THREE SOUND WAVES} " + vc.name
         role = await guild.create_role(name=name, reason="Dynamic role for {vc}".format(vc=vc))
         await self.config.channel(vc).role.set(role.id)
         self.channel_cache[vc.id]["role"] = role.id
