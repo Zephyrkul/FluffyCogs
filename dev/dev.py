@@ -190,11 +190,13 @@ class Dev(dev_commands.Dev):
                 limit = i - j
             else:
                 limit = i - j - 1
-            ret[2] = "# Exception:\n" + traceback.format_exc(limit=limit)
+            tb = e.__traceback__ if limit else None
+            ret[2] = "".join(
+                ["# Exception:\n"] + traceback.format_exception(type(e), e, tb, limit)
+            )
         # don't export imports on aliases
-        if not is_alias and getattr(env, "imported", None):
-            assert isinstance(env, Env)
-            ret[0] = f"# Imported:\n{env.get_formatted_imports()}"
+        if not is_alias and (method := getattr(env, "get_formatted_imports", None)):
+            ret[0] = f"# Imported:\n{method()}"
         printed = stdout.getvalue().strip()
         if printed:
             ret[1] = "# Output:\n" + printed
