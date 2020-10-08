@@ -7,10 +7,12 @@ import contextlib
 import importlib
 import inspect
 import io
+import sys
 import textwrap
 import traceback
 import types
 from copy import copy
+from itertools import chain
 from typing import Any, Dict, List, Optional
 
 import discord
@@ -46,7 +48,7 @@ class Env(Dict[str, Any]):
         self.imported = []
 
     @classmethod
-    def from_context(cls, ctx: commands.Context, **kwargs: Any) -> "Env":
+    def from_context(cls, ctx: commands.Context, /, **kwargs: Any) -> "Env":
         self = cls(
             {
                 # "_": None,  # let __builtins__ handle this one
@@ -75,13 +77,28 @@ class Env(Dict[str, Any]):
 
     def __missing__(self, key):
         try:
+            return getattr(builtins, key)
+        except AttributeError:
+            pass
+        try:
             module = importlib.import_module(key)
         except ImportError:
-            raise KeyError(key) from None
+            pass
         else:
             self.imported.append(key)
             self[key] = module
             return module
+        dotkey = "." + key
+        for tlms in ["redbot", "discord"]:
+            modules = [
+                v for k, v in sys.modules.items() if k.endswith(dotkey) and k.startswith(tlms)
+            ]
+            if len(modules) == 1:
+                module = modules[0]
+                self.imported.append(f"{module.__name__} as {key}")
+                self[key] = module
+                return module
+        raise KeyError(key)
 
     def get_formatted_imports(self) -> Optional[str]:
         if not self.imported:
@@ -192,11 +209,15 @@ class Dev(dev_commands.Dev):
                 limit = i - j - 1
             tb = e.__traceback__ if limit else None
             ret[2] = "".join(
-                ["# Exception:\n"] + traceback.format_exception(type(e), e, tb, limit)
+                chain(["# Exception:\n"], traceback.format_exception(type(e), e, tb, limit))
             )
         # don't export imports on aliases
-        if not is_alias and (method := getattr(env, "get_formatted_imports", None)):
-            ret[0] = f"# Imported:\n{method()}"
+        if (
+            not is_alias
+            and (method := getattr(env, "get_formatted_imports", None))
+            and (imported := method())
+        ):
+            ret[0] = f"# Imported:\n{imported}"
         printed = stdout.getvalue().strip()
         if printed:
             ret[1] = "# Output:\n" + printed
