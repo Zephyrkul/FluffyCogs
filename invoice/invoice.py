@@ -1,17 +1,22 @@
+import asyncio
 import contextlib
 import inspect
+import logging
 import re
 import typing
-from collections import defaultdict
-from typing import Dict, Optional, TypedDict
+from datetime import timedelta
+from functools import partial
+from typing import DefaultDict, Dict, Optional, Set, Tuple, TypedDict
 
 import discord
 from proxyembed import ProxyEmbed
 from redbot.core import Config, checks, commands
+from redbot.core.bot import Red
+from redbot.core.utils.antispam import AntiSpam
 
 
 class GuildSettings(TypedDict):
-    role: Optional[discord.Role]
+    role: Optional[int]
     dynamic: bool
     dynamic_name: Optional[str]
     mute: bool
@@ -20,31 +25,44 @@ class GuildSettings(TypedDict):
 
 
 class ChannelSettings(TypedDict):
-    role: Optional[discord.Role]
-    channel: Optional[discord.TextChannel]
+    role: Optional[int]
+    channel: Optional[int]
 
 
-GuildCache = Dict[int, GuildSettings]
-ChannelCache = Dict[int, ChannelSettings]
+GuildCache = DefaultDict[int, GuildSettings]
+ChannelCache = DefaultDict[int, ChannelSettings]
+LOG = logging.getLogger("red.fluffy.invoice")
 
 
 class InVoice(commands.Cog):
+    intervals = [
+        (timedelta(seconds=5), 3),
+        (timedelta(minutes=1), 5),
+        (timedelta(hours=1), 30),
+    ]
+
     async def red_get_data_for_user(self, *, user_id):
         return {}  # No data to get
 
     async def red_delete_data_for_user(self, *, requester, user_id):
         pass  # No data to delete
 
-    def __init__(self):
+    def __init__(self, bot: Red):
+        self.bot = bot
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
         self.config.register_guild(**self._guild_defaults())
         self.guild_cache: GuildCache = None
         self.config.register_channel(**self._channel_defaults())
         self.channel_cache: ChannelCache = None
+        self.guild_as: DefaultDict[int, AntiSpam] = DefaultDict(partial(AntiSpam, self.intervals))
+        self.member_as: DefaultDict[Tuple[int, int], AntiSpam] = DefaultDict(
+            partial(AntiSpam, self.intervals)
+        )
+        self.dynamic_ready: Dict[int, asyncio.Event] = {}
 
     async def initialize(self):
-        self.guild_cache = defaultdict(self._guild_defaults, await self.config.all_guilds())
-        self.channel_cache = defaultdict(self._channel_defaults, await self.config.all_channels())
+        self.guild_cache = DefaultDict(self._guild_defaults, await self.config.all_guilds())
+        self.channel_cache = DefaultDict(self._channel_defaults, await self.config.all_channels())
 
     def _guild_defaults(self):
         return GuildSettings(
@@ -224,7 +242,7 @@ class InVoice(commands.Cog):
     @checks.admin_or_permissions(manage_guild=True)
     async def link(
         self,
-        ctx,
+        ctx: commands.Context,
         vc: typing.Optional[discord.VoiceChannel] = None,
         *,
         role_or_channel: typing.Union[discord.Role, discord.TextChannel, None] = None,
@@ -247,6 +265,7 @@ class InVoice(commands.Cog):
                     inspect.signature(self.link.callback).parameters["vc"]
                 )
             vc = ctx.author.voice.channel
+        assert vc
         if not role_or_channel:
             await self.config.channel(vc).clear()
             del self.channel_cache[vc.id]
@@ -271,6 +290,9 @@ class InVoice(commands.Cog):
         guild = vc.guild
         if not self.guild_cache[guild.id]["dynamic"]:
             return
+        if self.guild_as[guild.id].spammy:
+            return
+        self.dynamic_ready[vc.id] = asyncio.Event()
         guild_role = self.guild_cache[guild.id]["role"]
         if dynamic_name := self.guild_cache[guild.id]["dynamic_name"]:
             name = re.sub(r"(?i){vc}", vc.name, dynamic_name)
@@ -303,6 +325,8 @@ class InVoice(commands.Cog):
         )
         await self.config.channel(vc).channel.set(text.id)
         self.channel_cache[vc.id]["channel"] = text.id
+        self.guild_as[guild.id].stamp()
+        self.dynamic_ready[vc.id].set()
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, vc):
@@ -322,116 +346,83 @@ class InVoice(commands.Cog):
             await channel.delete(reason="Dynamic channel for {vc}".format(vc=vc))
 
     @commands.Cog.listener()
-    async def on_voice_state_update(self, member, before, after):
-        if member.bot:
+    async def on_voice_state_update(
+        self, m: discord.Member, b: discord.VoiceState, a: discord.VoiceState
+    ) -> None:
+        if m.bot:
             return
-        if not before.channel and not after.channel:
+        if not b.channel and not a.channel:
             return  # I doubt this could happen, but just in case
         # This event gets triggered when a member leaves the server,
         # but before the on_member_leave event updates the cache.
         # So, I suppress the exception to save Dav's logs.
-        with contextlib.suppress(discord.NotFound):
-            if before.channel != after.channel:
-                await self.channel_update(member, before, after)
-            elif before.mute != after.mute:
-                await self.mute_update(member, before, after)
-            elif before.deaf != after.deaf:
-                await self.deaf_update(member, before, after)
-            elif before.self_deaf != after.self_deaf:
-                await self.self_deaf_update(member, before, after)
-
-    async def channel_update(self, m, b, a):
+        role_set: Set[Optional[discord.Role]] = set(m.roles)
         guild_role = m.guild.get_role(self.guild_cache[m.guild.id]["role"])
-        if b.channel:
-            reason = "Left channel {vc}".format(vc=b.channel)
-            to_remove = []
-            role = m.guild.get_role(self.channel_cache[b.channel.id]["role"])
-            if role:
-                to_remove.append(role)
-            if guild_role and (not a.channel or a.afk):
-                to_remove.append(guild_role)
-            if to_remove:
-                await m.remove_roles(*to_remove, reason=reason)
-            tc = m.guild.get_channel(self.channel_cache[b.channel.id]["channel"])
-            if tc and m in tc.overwrites:
-                await tc.set_permissions(target=m, overwrite=None, reason=reason)
-        if a.channel:
-            reason = "Joined channel {vc}".format(vc=a.channel)
-            to_add = []
-            role = m.guild.get_role(self.channel_cache[a.channel.id]["role"])
-            if role:
-                to_add.append(role)
-            if guild_role and not a.afk:
-                to_add.append(guild_role)
-            if to_add:
-                await m.add_roles(*to_add, reason=reason)
-            tc = m.guild.get_channel(self.channel_cache[a.channel.id]["channel"])
-            if tc and m in tc.overwrites:
-                await tc.set_permissions(target=m, overwrite=None, reason=reason)
+        if b.channel != a.channel and b.channel:
+            channel_cache = self.channel_cache[b.channel.id]
+            role_set.discard(m.guild.get_role(channel_cache["role"]))
+            if (btc := m.guild.get_channel(channel_cache["channel"])) and m in btc.overwrites:
+                try:
+                    await btc.set_permissions(target=m, overwrite=None, reason="invoice")
+                except discord.NotFound:
+                    return
+        with contextlib.suppress(discord.NotFound):
+            await self.apply_permissions(m, a, guild_role, role_set)
 
-    async def mute_update(self, m, b, a):
-        if not self.guild_cache[m.guild.id]["mute"]:
-            return
-        tc = m.guild.get_channel(self.channel_cache[a.channel.id]["channel"])
-        if tc:
-            overs = tc.overwrites_for(m)
-            overs.send_messages = False if a.mute else None
-            await tc.set_permissions(
-                target=m,
-                overwrite=None if overs.is_empty() else overs,
-                reason="Server {un}muted".format(un="" if a.mute else "un"),
-            )
+    async def apply_permissions(
+        self,
+        m: discord.Member,
+        a: discord.VoiceState,
+        guild_role: Optional[discord.Role],
+        role_set: Set[Optional[discord.Role]],
+    ) -> None:
+        if not a.channel or a.afk:
+            role_set.discard(guild_role)
+            atc, atc_overs = None, None
         else:
-            if a.mute:
-                await self._remove_roles(m, a.channel, reason="Server muted")
+            if event := self.dynamic_ready.get(a.channel.id):
+                await event.wait()
+                if m not in a.channel.members:
+                    return
+                self.dynamic_ready.pop(a.channel.id, None)
+            is_spammy = self.member_as[(m.guild.id, m.id)].spammy
+            if not is_spammy:
+                role_set.add(guild_role)
             else:
-                await self._add_roles(m, a.channel, reason="Server unmuted")
-
-    async def deaf_update(self, m, b, a):
-        if not self.guild_cache[m.guild.id]["deaf"]:
-            return
-        await self._deaf_update(m, b, a, reason="Server {un}deafened", is_deaf=a.deaf)
-
-    async def self_deaf_update(self, m, b, a):
-        if not self.guild_cache[m.guild.id]["self_deaf"]:
-            return
-        await self._deaf_update(m, b, a, reason="Self {un}deafened", is_deaf=a.self_deaf)
-
-    async def _deaf_update(self, m, b, a, *, reason, is_deaf):
-        reason = reason.format(un="" if is_deaf else "un")
-        role = m.guild.get_role(self.channel_cache[a.channel.id]["role"])
-        if role:
-            if is_deaf:
-                await self._remove_roles(m, a.channel, reason=reason, role_id=role.id)
-            else:
-                await self._add_roles(m, a.channel, reason=reason, role_id=role.id)
-        else:
-            tc = m.guild.get_channel(self.channel_cache[a.channel.id]["channel"])
-            if tc:
-                overs = tc.overwrites_for(m)
-                overs.read_messages = False if is_deaf else None
-                await tc.set_permissions(
-                    target=m, overwrite=None if overs.is_empty() else overs, reason=reason
-                )
-
-    async def _add_roles(self, m, c, *, reason):
-        guild = m.guild
-        roles = (
-            self.guild_cache[guild.id]["role"],
-            self.channel_cache[c.id]["role"],
-        )
-        roles = map(guild.get_role, roles)
-        roles = tuple(filter(bool, roles))
-        if roles:
-            await m.add_roles(*roles, reason=reason)
-
-    async def _remove_roles(self, m, c, *, reason):
-        guild = m.guild
-        roles = (
-            self.guild_cache[guild.id]["role"],
-            self.channel_cache[c.id]["role"],
-        )
-        roles = map(guild.get_role, roles)
-        roles = tuple(filter(bool, roles))
-        if roles:
-            await m.remove_roles(*roles, reason=reason)
+                role_set.discard(guild_role)
+            channel_cache = self.channel_cache[a.channel.id]
+            guild_cache = self.guild_cache[m.guild.id]
+            after_role = m.guild.get_role(channel_cache["role"])
+            if not is_spammy:
+                role_set.add(after_role)
+            atc = m.guild.get_channel(channel_cache["channel"])
+            atc_overs = atc.overwrites_for(m) if atc else None
+            mute = (a.mute and guild_cache["mute"]) or is_spammy
+            if atc:
+                assert atc_overs
+                flag = False if mute or is_spammy else None
+                atc_overs.update(send_messages=flag, add_reactions=flag)
+            elif after_role:
+                if mute:
+                    role_set.discard(after_role)
+                else:
+                    role_set.add(after_role)
+            deaf = (a.deaf and guild_cache["deaf"]) or (a.self_deaf and guild_cache["self_deaf"])
+            if after_role:
+                if deaf:
+                    role_set.discard(after_role)
+                else:
+                    role_set.add(after_role)
+            elif atc:
+                assert atc_overs
+                atc_overs.update(read_messages=False if deaf or is_spammy else None)
+        stamp = False
+        role_set.discard(None)
+        if role_set.symmetric_difference(m.roles):
+            await m.edit(roles=role_set)
+            stamp = True
+        if atc and atc_overs and atc.overwrites_for(m) != atc_overs:
+            await atc.set_permissions(m, overwrite=None if atc_overs.is_empty() else atc_overs)
+            stamp = True
+        if stamp:
+            self.member_as[(m.guild.id, m.id)].stamp()

@@ -8,6 +8,6 @@ with open(Path(__file__).parent / "info.json") as fp:
 
 
 async def setup(bot):
-    cog = InVoice()
+    cog = InVoice(bot)
     await cog.initialize()
     bot.add_cog(cog)
