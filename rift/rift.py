@@ -2,7 +2,6 @@ import asyncio
 import logging
 from functools import partial
 from io import BytesIO
-from itertools import chain
 from traceback import walk_tb
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, List, Optional, Set, Tuple, Union, overload
@@ -353,7 +352,7 @@ class Rift(commands.Cog):
         """
         if not rifts:
             raise commands.UserInputError()
-        unique_rifts: List[Messageable] = deduplicate_iterables(self.maybe_chain(rifts))
+        unique_rifts: List[Messageable] = deduplicate_iterables(rifts)
         source = ctx.channel if ctx.guild else ctx.author
         no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
         self.rifts.add_web(source, *unique_rifts)
