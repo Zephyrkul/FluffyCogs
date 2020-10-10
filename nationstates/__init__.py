@@ -19,13 +19,11 @@ except ImportError as e:
     import_failed = e
 
 
-async def setup(bot):
+def setup(bot):
     if import_failed or sans.version_info < type(sans.version_info)("0.0.1b6"):
         raise CogLoadError(
             "The sans library is out of date or not installed.\n"
             "Run this command to update it: [p]pipinstall sans\n"
             "You may have to [p]restart your bot to have the new version take effect."
         ) from import_failed
-    cog = NationStates(bot)
-    await cog.initialize()
-    bot.add_cog(cog)
+    bot.add_cog(NationStates(bot))

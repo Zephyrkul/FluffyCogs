@@ -8,11 +8,12 @@ from functools import partial, reduce
 from html import unescape
 from io import BytesIO
 from operator import or_
-from typing import Generic, List, Optional, Type, TypeVar, Union
+from typing import Dict, Generic, List, Literal, Optional, Tuple, Type, TypeVar, Union
 
 import discord
 from proxyembed import ProxyEmbed
 from redbot.core import Config, checks, commands, version_info as red_version
+from redbot.core.bot import Red
 from redbot.core.utils.chat_formatting import box, escape, humanize_list, pagify
 from sans.api import Api
 
@@ -98,19 +99,22 @@ class NationStates(commands.Cog):
 
     # __________ INIT __________
 
-    def __init__(self, bot):
+    def __init__(self, bot: Red):
         super().__init__()
         Api.loop = bot.loop
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_global(agent=None)
-        self.db_cache = None
+        self.db_cache: Dict[str, Dict[Literal["dbid"], int]] = {}
         self.config.init_custom("NATION", 1)
         self.config.register_custom("NATION", dbid=None)
+        self.cog_ready = asyncio.Event()
+        asyncio.create_task(self.initialize())
 
     async def initialize(self):
         agent = await self.config.agent()
         if not agent:
+            await self.bot.wait_until_red_ready()
             if not self.bot.owner_ids:
                 # always False but forces owner_ids to be filled
                 await self.bot.is_owner(discord.Object(id=None))
@@ -121,11 +125,13 @@ class NationStates(commands.Cog):
             )
         Api.agent = f"{agent} Red-DiscordBot/{red_version}"
         self.db_cache = await self.config.custom("NATION").all()
+        self.cog_ready.set()
 
     async def cog_before_invoke(self, ctx):
         # this will also cause `[p]agent` to be blocked but this is intended
         if ctx.cog is not self:
             return
+        await self.cog_ready.wait()
         xra = Api.xra
         if xra:
             raise commands.CommandOnCooldown(None, time.time() - xra)
@@ -160,9 +166,14 @@ class NationStates(commands.Cog):
     # __________ LISTENERS __________
 
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message_without_command(self, message):
         if message.author.bot:
             return
+        if not await self.bot.message_eligible_as_command(
+            message
+        ) or await self.bot.cog_disabled_in_guild(self, message.guild):
+            return
+        await self.cog_ready.wait()
         ctx = await self.bot.get_context(message)
         if ctx.valid:
             return
@@ -176,7 +187,8 @@ class NationStates(commands.Cog):
                 )
                 continue
             ctx.invoked_with = match.group(1).lower()
-            await ctx.invoke(self.wa, int(res_id), WA.NONE)
+            if await self.wa.can_run(ctx):
+                await ctx.invoke(self.wa, int(res_id), WA.NONE)
 
     # __________ STANDARD __________
 
@@ -434,8 +446,8 @@ class NationStates(commands.Cog):
             value=box(root.MARKET_VALUE.text, lang="swift"),
             inline=False,
         )
-        sellers: List[str] = []
-        buyers: List[str] = []
+        sellers: List[Tuple[int, str]] = []
+        buyers: List[Tuple[int, str]] = []
         for market in root.MARKETS.iterchildren():
             if market.TYPE.text == "bid":
                 # negative price to reverse sorting
