@@ -12,6 +12,7 @@ import discord
 from proxyembed import ProxyEmbed
 from redbot.core import Config, checks, commands
 from redbot.core.bot import Red
+from redbot.core.utils import AsyncIter
 from redbot.core.utils.antispam import AntiSpam
 
 
@@ -51,18 +52,34 @@ class InVoice(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
         self.config.register_guild(**self._guild_defaults())
-        self.guild_cache: GuildCache = None
         self.config.register_channel(**self._channel_defaults())
-        self.channel_cache: ChannelCache = None
+        self.guild_cache: GuildCache = DefaultDict(self._guild_defaults)
+        self.channel_cache: ChannelCache = DefaultDict(self._channel_defaults)
         self.guild_as: DefaultDict[int, AntiSpam] = DefaultDict(partial(AntiSpam, self.intervals))
         self.member_as: DefaultDict[Tuple[int, int], AntiSpam] = DefaultDict(
             partial(AntiSpam, self.intervals)
         )
         self.dynamic_ready: Dict[int, asyncio.Event] = {}
+        self.cog_ready = asyncio.Event()
+        asyncio.create_task(self.initialize())
+
+    async def cleanup_task(self):
+        # Older versions of invoice failed to properly clean up deleted VC settings
+        # This will rectify that
+        channel_id: int
+        settings: ChannelSettings
+        async with self.config.get_channels_lock():
+            async for channel_id, settings in AsyncIter(
+                (await self.config.all_channels()).items(), steps=100
+            ):
+                if not any(settings.values()):
+                    await self.config.channel_from_id(channel_id).clear()
 
     async def initialize(self):
+        await self.cleanup_task()
         self.guild_cache = DefaultDict(self._guild_defaults, await self.config.all_guilds())
         self.channel_cache = DefaultDict(self._channel_defaults, await self.config.all_channels())
+        self.cog_ready.set()
 
     def _guild_defaults(self):
         return GuildSettings(
@@ -71,6 +88,9 @@ class InVoice(commands.Cog):
 
     def _channel_defaults(self):
         return ChannelSettings(role=None, channel=None)
+
+    async def cog_before_invoke(self, ctx: commands.Context) -> None:
+        await self.cog_ready.wait()
 
     @commands.group()
     @commands.guild_only()
@@ -287,6 +307,9 @@ class InVoice(commands.Cog):
     async def on_guild_channel_create(self, vc):
         if not isinstance(vc, discord.VoiceChannel):
             return
+        if await self.bot.cog_disabled_in_guild(self, vc.guild):
+            return
+        await self.cog_ready.wait()
         guild = vc.guild
         if not self.guild_cache[guild.id]["dynamic"]:
             return
@@ -333,9 +356,9 @@ class InVoice(commands.Cog):
         if not isinstance(vc, discord.VoiceChannel):
             return
         guild = vc.guild
-        async with self.config.channel(vc).all() as conf:
-            settings = conf.copy()
-            conf.clear()
+        settings = self.channel_cache.pop(vc.id)
+        await self.config.channel(vc).clear()
+        await self.cog_ready.wait()
         if not self.guild_cache[guild.id]["dynamic"]:
             return
         role = guild.get_role(settings["role"])
@@ -353,9 +376,9 @@ class InVoice(commands.Cog):
             return
         if not b.channel and not a.channel:
             return  # I doubt this could happen, but just in case
-        # This event gets triggered when a member leaves the server,
-        # but before the on_member_leave event updates the cache.
-        # So, I suppress the exception to save Dav's logs.
+        if await self.bot.cog_disabled_in_guild(self, m.guild):
+            return
+        await self.cog_ready.wait()
         role_set: Set[Optional[discord.Role]] = set(m.roles)
         guild_role = m.guild.get_role(self.guild_cache[m.guild.id]["role"])
         if b.channel != a.channel and b.channel:
@@ -366,6 +389,9 @@ class InVoice(commands.Cog):
                     await btc.set_permissions(target=m, overwrite=None, reason="invoice")
                 except discord.NotFound:
                     return
+        # This event gets triggered when a member leaves the server,
+        # but before the on_member_leave event updates the cache.
+        # So, I suppress the exception to save Dav's logs.
         with contextlib.suppress(discord.NotFound):
             await self.apply_permissions(m, a, guild_role, role_set)
 
