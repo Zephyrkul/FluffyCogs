@@ -29,8 +29,12 @@ class Limited(discord.abc.Messageable):
         return hash((self.author, self.channel))
 
     def __eq__(self, o: object) -> bool:
-        if not isinstance(o, Limited):
-            return NotImplemented
+        if isinstance(o, Limited):
+            return (self.author, self.channel) == (o.author, o.channel)
+        if isinstance(o, discord.abc.User):
+            return self.author == o or self.channel == o
+        if isinstance(o, (discord.TextChannel, discord.abc.PrivateChannel)):
+            return self.channel == 0
         return (self.author, self.channel) == (o.author, o.channel)
 
     def __str__(self) -> str:
@@ -76,6 +80,7 @@ class DiscordConverter(commands.Converter):
         cls, ctx, argument: str, *, globally: bool = False
     ) -> List[discord.abc.Messageable]:
         is_owner = await ctx.bot.is_owner(ctx.author)
+        is_nsfw = getattr(ctx.channel, "nsfw", False)
         globally = globally or is_owner
         if not globally and not ctx.guild:
             return []
@@ -95,12 +100,17 @@ class DiscordConverter(commands.Converter):
             for channel in guild.text_channels:
                 if channel == source:
                     continue
+                if getattr(channel, "nsfw", False) != is_nsfw:
+                    continue
                 if channel in results:
                     continue
                 if blacklists[1].get(channel.id, {}).get("blacklisted"):
                     continue
                 if argument.lstrip("#") in (str(channel.id), channel.mention, channel.name):
                     results.add(channel)
+            if is_nsfw:
+                # don't allow rifts from nsfw channels to DMs
+                continue
             for user in guild.members:
                 if user == source:
                     continue
