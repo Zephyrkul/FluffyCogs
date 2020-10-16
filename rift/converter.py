@@ -34,7 +34,7 @@ class Limited(discord.abc.Messageable):
         if isinstance(o, discord.abc.User):
             return self.author == o or self.channel == o
         if isinstance(o, (discord.TextChannel, discord.abc.PrivateChannel)):
-            return self.channel == 0
+            return self.channel == o
         return (self.author, self.channel) == (o.author, o.channel)
 
     def __str__(self) -> str:
