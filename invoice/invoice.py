@@ -330,6 +330,9 @@ class InVoice(commands.Cog):
             overs = {}
         # inherit guild role and remove its overwrites
         default = overs.pop(guild_role, discord.PermissionOverwrite())
+        # prevent any other roles from viewing the channel
+        for overwrite in overs.values():
+            overwrite.update(read_messages=None)
         # vc-specific role, inherited from guild role
         overs.setdefault(role, default).update(read_messages=True, send_messages=True)
         # @everyone, remove read permissions
