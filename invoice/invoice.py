@@ -137,6 +137,9 @@ class InVoice(commands.Cog):
     async def dynamic(self, ctx: commands.Context, *, true_or_false: bool = None):
         """
         Toggle whether to dynamically create a role and channel for new voice channels when they're created.
+
+        The new role will inherit the permissions of the guild-wide role, if there is one,
+        and the text channel will inherit the permissions of the category the new channel is in.
         """
         if true_or_false is None:
             true_or_false = not self.guild_cache[ctx.guild.id]["dynamic"]
@@ -307,21 +310,32 @@ class InVoice(commands.Cog):
     async def on_guild_channel_create(self, vc):
         if not isinstance(vc, discord.VoiceChannel):
             return
-        if await self.bot.cog_disabled_in_guild(self, vc.guild):
+        guild = vc.guild
+        if vc.category:
+            perms = vc.category.permissions_for(guild.me)
+        else:
+            perms = guild.me.guild_permissions
+        # 0x10000010: manage_roles & manage_channels
+        if perms.value & 0x10000010 != 0x10000010:
             return
         await self.cog_ready.wait()
-        guild = vc.guild
         if not self.guild_cache[guild.id]["dynamic"]:
+            return
+        if await self.bot.cog_disabled_in_guild(self, guild):
             return
         if self.guild_as[guild.id].spammy:
             return
         self.dynamic_ready[vc.id] = asyncio.Event()
-        guild_role = self.guild_cache[guild.id]["role"]
+        guild_role = guild.get_role(self.guild_cache[guild.id]["role"])
         if dynamic_name := self.guild_cache[guild.id]["dynamic_name"]:
             name = re.sub(r"(?i){vc}", vc.name, dynamic_name)
         else:
             name = "\N{SPEAKER WITH THREE SOUND WAVES} " + vc.name
-        role = await guild.create_role(name=name, reason="Dynamic role for {vc}".format(vc=vc))
+        role = await guild.create_role(
+            name=name,
+            permissions=guild_role.permissions if guild_role else discord.Permissions.none(),
+            reason="Dynamic role for {vc}".format(vc=vc),
+        )
         await self.config.channel(vc).role.set(role.id)
         self.channel_cache[vc.id]["role"] = role.id
         if vc.category:
