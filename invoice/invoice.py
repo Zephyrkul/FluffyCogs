@@ -359,7 +359,10 @@ class InVoice(commands.Cog):
         if not isinstance(vc, discord.VoiceChannel):
             return
         guild = vc.guild
-        settings = self.channel_cache.pop(vc.id)
+        try:
+            settings = self.channel_cache.pop(vc.id)
+        except KeyError:
+            return
         await self.config.channel(vc).clear()
         await self.cog_ready.wait()
         if not self.guild_cache[guild.id]["dynamic"]:
