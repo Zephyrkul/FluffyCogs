@@ -138,7 +138,10 @@ class RTFS(commands.Cog):
                     if installable.repo is None:
                         is_installed = False
                     else:
-                        if "mikeshardmind" in installable.repo.url.lower() or "sinbad" in installable.repo.url.lower():
+                        if (
+                            "mikeshardmind" in installable.repo.url.lower()
+                            or "sinbad" in installable.repo.url.lower()
+                        ):
                             # Sinbad's license specifically disallows redistribution of code, as per Section 3.
                             #   Ref: https://github.com/mikeshardmind/SinbadCogs/blob/9cdcd042d57cc39c7330fcda50ecf580c055c313/LICENSE#L73-L76
                             # Raising OSError here will prevent even bot owners from viewing the code.
@@ -182,7 +185,9 @@ class RTFS(commands.Cog):
         except OSError:
             return await ctx.send(f"I couldn't find source file for `{thing}`")
         except Unlicensed:
-            return await ctx.send(f"The source code for `{thing}` is copyrighted under too strict a license for me to show it here.")
+            return await ctx.send(
+                f"The source code for `{thing}` is copyrighted under too strict a license for me to show it here."
+            )
         dev = ctx.bot.get_cog("Dev")
         if not is_owner or not dev:
             raise commands.UserFeedbackCheckFailure(
