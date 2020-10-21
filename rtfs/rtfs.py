@@ -21,6 +21,10 @@ except ImportError:
 LOG = logging.getLogger("red.fluffy.rtfs")
 
 
+class Unlicensed(Exception):
+    pass
+
+
 class SourceSource(menus.ListPageSource):
     def __init__(self, *args, header: str, **kwargs):
         super().__init__(*args, **kwargs)
@@ -134,10 +138,16 @@ class RTFS(commands.Cog):
                     if installable.repo is None:
                         is_installed = False
                     else:
-                        url = yarl.URL(installable.repo.url)
-                        if url.user or url.password:
-                            is_installed = False
-                        header = f"<{installable.repo.clean_url.rstrip('/')}/blob/{installable.commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
+                        if "mikeshardmind" in installable.repo.url.lower() or "sinbad" in installable.repo.url.lower():
+                            # Sinbad's license specifically disallows redistribution of code, as per Section 3.
+                            #   Ref: https://github.com/mikeshardmind/SinbadCogs/blob/9cdcd042d57cc39c7330fcda50ecf580c055c313/LICENSE#L73-L76
+                            # Raising OSError here will prevent even bot owners from viewing the code.
+                            raise Unlicensed()
+                        else:
+                            url = yarl.URL(installable.repo.url)
+                            if url.user or url.password:
+                                is_installed = False
+                            header = f"<{installable.repo.clean_url.rstrip('/')}/blob/{installable.commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
         if not is_installed and not is_owner:
             # don't disclose the source of private cogs
             raise OSError()
@@ -171,6 +181,8 @@ class RTFS(commands.Cog):
                 return await self.format_and_send(ctx, obj, is_owner=is_owner)
         except OSError:
             return await ctx.send(f"I couldn't find source file for `{thing}`")
+        except Unlicensed:
+            return await ctx.send(f"The source code for `{thing}` is copyrighted under too strict a license for me to show it here.")
         dev = ctx.bot.get_cog("Dev")
         if not is_owner or not dev:
             raise commands.UserFeedbackCheckFailure(
