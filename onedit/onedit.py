@@ -1,7 +1,7 @@
 import asyncio
 
 import discord
-from redbot.core import Config, checks, commands
+from redbot.core import Config, checks, commands, i18n
 
 
 class OnEdit(commands.Cog):
@@ -54,4 +54,5 @@ class OnEdit(commands.Cog):
             self.timeout = await self.config.timeout()
         if (after.edited_at - after.created_at).total_seconds() > self.timeout:
             return
+        await i18n.set_contextual_locales_from_guild(self.bot, after.guild)
         await self.edit_process_commands(after)
