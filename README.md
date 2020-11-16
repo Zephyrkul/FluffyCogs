@@ -10,9 +10,9 @@ The fluffiest of cogs for utility, requests, or proof-of-concepts. Or memes, as 
 
 To install:
 
-> [p]repo add FluffyCogs <https://github.com/zephyrkul/FluffyCogs>  
-> [p]cog list FluffyCogs  
-> [p]cog install FluffyCogs &lt;cog&gt;  
+> [p]repo add fluffycogs <https://github.com/zephyrkul/FluffyCogs>  
+> [p]cog list fluffycogs  
+> [p]cog install fluffycogs &lt;cog&gt;  
 > [p]load &lt;cog&gt;  
 > [p]help &lt;Cog&gt;  
 
