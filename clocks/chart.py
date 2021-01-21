@@ -1,18 +1,16 @@
 import itertools
 import math
 
-ch = r"•-\|/ "
+ch = "\u2500\u2572\u2502\u2571 "
 
 
 def cch(fil, per, a):
     c = divmod(a, per)
     p = round(per, 2)
     b = round(c[1], 2)
-    if b == p or b == 0:
+    if b == p or b == 0 or c[0] < fil:
         a = (a + 0.25) * 8
-        return ch[round(a) % 4 + 1]
-    if c[0] < fil:
-        return ch[0]
+        return ch[round(a) % 4]
     return ch[-1]
 
 
@@ -32,7 +30,7 @@ def pie(fil, tot):
             elif i > 0:
                 n = ch[-1]
             else:
-                n = ch[round(a * 8) % 4 + 1]
+                n = ch[round(a * 8) % 4]
             final += n
         final = final.rstrip() + "\n"
     return f"**```{final.rstrip()}```**"
