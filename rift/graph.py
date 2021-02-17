@@ -1,17 +1,9 @@
-import discord
 from itertools import chain
-from typing import (
-    Dict,
-    Generator,
-    Hashable,
-    Tuple,
-    TypeVar,
-    Set,
-    Union,
-)
+from typing import Dict, Generator, Hashable, Set, Tuple, TypeVar, Union
+
+import discord
 
 from .irc import IRCMessageable
-
 
 T = TypeVar("T", bound=Hashable)
 Vector = Tuple[T, T]  # ORDER MATTERS

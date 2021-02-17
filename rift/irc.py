@@ -1,11 +1,9 @@
 import inspect
-import keyword
-import pydle
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import wraps
-from typing import Optional
 
+import pydle
 
 log = logging.getLogger("red.fluffy.rift.irc")
 to_log = dict(

@@ -1,21 +1,21 @@
 import asyncio
-import discord
 import logging
 import re
 from contextlib import suppress
 from itertools import chain
 from traceback import walk_tb
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Dict, Set, List, Optional, Union, overload
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union, overload
 
-from redbot.core import commands, checks, Config
-from redbot.core.utils import common_filters, deduplicate_iterables, mod
-from redbot.core.utils.chat_formatting import pagify, humanize_list
-from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
+import discord
+from redbot.core import Config, checks, commands
 from redbot.core.i18n import Translator, cog_i18n
+from redbot.core.utils import common_filters, deduplicate_iterables, mod
+from redbot.core.utils.chat_formatting import humanize_list, pagify
+from redbot.core.utils.menus import DEFAULT_CONTROLS, menu
 
-from .irc import RiftIRCClient, IRCMessageable, IRCMessage
 from .graph import SimpleGraph, Vector
+from .irc import IRCMessage, IRCMessageable, RiftIRCClient
 
 if TYPE_CHECKING:
     URL = str
