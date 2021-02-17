@@ -1,0 +1,13 @@
+{
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "Usage: `[p]help SecureInv`.",
+    "name": "SecureInv",
+    "short": "Set up secure invites.",
+    "description": "Set up secure invites.",
+    "tags": [
+        "utility"
+    ],
+    "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
+}

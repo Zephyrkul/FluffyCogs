@@ -57,12 +57,10 @@ async def can_close(ctx: Union[commands.Context, discord.Message], bot=None):
     if isinstance(ctx, discord.Message):
         if not bot:
             raise TypeError
-        ctx = SimpleNamespace(
-            author=ctx.author, channel=ctx.channel, bot=bot, message=ctx
-        )
-    return await mod.is_admin_or_superior(
-        ctx.bot, ctx.author
-    ) or await mod.check_permissions(ctx, {"manage_channels": True})
+        ctx = SimpleNamespace(author=ctx.author, channel=ctx.channel, bot=bot, message=ctx)
+    return await mod.is_admin_or_superior(ctx.bot, ctx.author) or await mod.check_permissions(
+        ctx, {"manage_channels": True}
+    )
 
 
 def check_can_close(func=None):
@@ -88,9 +86,7 @@ class Rift(commands.Cog):
         self.rifts = SimpleGraph[Destination]()
         self.messages = SimpleGraph[discord.Message]()
         self.irc_clients: Dict[URL, RiftIRCClient] = {}
-        self.config = Config.get_conf(
-            self, identifier=2_113_674_295, force_registration=True
-        )
+        self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_channel(blacklisted=False)
         self.config.register_guild(blacklisted=False)
         self.config.register_user(blacklisted=False)
@@ -105,7 +101,6 @@ class Rift(commands.Cog):
         """
         Communicate with other channels through Red.
         """
-        pass
 
     @rift.group()
     @check_can_close
@@ -115,7 +110,6 @@ class Rift(commands.Cog):
 
         Blacklisted destinations cannot have rifts opened to them.
         """
-        pass
 
     @blacklist.command(name="channel")
     @check_can_close
@@ -136,9 +130,7 @@ class Rift(commands.Cog):
         blacklisted = not await group.blacklisted()
         await group.blacklisted.set(blacklisted)
         await ctx.send(
-            _("Channel is {} blacklisted.").format(
-                "now" if blacklisted else "no longer"
-            )
+            _("Channel is {} blacklisted.").format("now" if blacklisted else "no longer")
         )
         if blacklisted:
             self.close_rifts(ctx.author, channel)
@@ -215,9 +207,7 @@ class Rift(commands.Cog):
             raise commands.UserInputError()
         unique_rifts: List[Destination] = deduplicate_iterables(self.maybe_chain(rifts))
         source = ctx.channel if ctx.guild else ctx.author
-        no_notify = (
-            await self.bot.is_owner(ctx.author) and not await self.config.notify()
-        )
+        no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
         for rift in unique_rifts:
             if (
                 no_notify
@@ -235,9 +225,7 @@ class Rift(commands.Cog):
             if notify:
                 asyncio.ensure_future(
                     rift.send(
-                        _("{} has linked a rift to here from {}.").format(
-                            ctx.author, ctx.channel
-                        )
+                        _("{} has linked a rift to here from {}.").format(ctx.author, ctx.channel)
                     )
                 )
         await ctx.send(
@@ -260,9 +248,7 @@ class Rift(commands.Cog):
             raise commands.UserInputError()
         unique_rifts: List[Destination] = deduplicate_iterables(self.maybe_chain(rifts))
         source = ctx.channel if ctx.guild else ctx.author
-        no_notify = (
-            await self.bot.is_owner(ctx.author) and not await self.config.notify()
-        )
+        no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
         self.rifts.add_web(source, *unique_rifts)
         humanized = humanize_list(list(map(str, (source, *unique_rifts))))
         for rift in unique_rifts:
@@ -308,16 +294,12 @@ class Rift(commands.Cog):
             )[scope.casefold()]
         except KeyError:
             raise commands.BadArgument(
-                _(
-                    "Invalid scope. Scope must be author, channel, guild, server, or global."
-                )
+                _("Invalid scope. Scope must be author, channel, guild, server, or global.")
             )
 
         if not scoped and not await ctx.bot.is_owner(ctx.author):
             raise commands.CheckFailure()
-        if scoped == ctx.guild and not await mod.is_admin_or_superior(
-            ctx.bot, ctx.author
-        ):
+        if scoped == ctx.guild and not await mod.is_admin_or_superior(ctx.bot, ctx.author):
             raise commands.CheckFailure()
 
         def check(vector):
@@ -330,13 +312,8 @@ class Rift(commands.Cog):
             return False
 
         unique_rifts: Set[Vector[Destination]] = set()
-        for source, destination in chain(
-            self.rifts.vectors(), self.user_rifts.vectors()
-        ):
-            if (
-                check((source, destination))
-                and (destination, source) not in unique_rifts
-            ):
+        for source, destination in chain(self.rifts.vectors(), self.user_rifts.vectors()):
+            if check((source, destination)) and (destination, source) not in unique_rifts:
                 unique_rifts.add((source, destination))
         total_rifts = len(unique_rifts)
         if not total_rifts:
@@ -383,9 +360,7 @@ class Rift(commands.Cog):
             except TypeError:
                 yield i
 
-    def close_rifts(
-        self, closer: Destination, *destinations: Union[discord.Guild, Destination]
-    ):
+    def close_rifts(self, closer: Destination, *destinations: Union[discord.Guild, Destination]):
         unique = set(destinations)
         fmt = _("{closer} has closed a rift to here from {source}.")
 
@@ -394,13 +369,9 @@ class Rift(commands.Cog):
             if (dest, source) in processed:
                 continue
             if source in unique:
-                asyncio.ensure_future(
-                    dest.send(fmt.format(closer=closer, source=source))
-                )
+                asyncio.ensure_future(dest.send(fmt.format(closer=closer, source=source)))
             elif dest in unique:
-                asyncio.ensure_future(
-                    source.send(fmt.format(closer=closer, source=dest))
-                )
+                asyncio.ensure_future(source.send(fmt.format(closer=closer, source=dest)))
             processed.add((source, dest))
 
         self.rifts.remove_vertices(*unique)
@@ -496,9 +467,7 @@ class Rift(commands.Cog):
                     content = f"{content}\n\n{_('Attachments:')}\n"
                 else:
                     content = _("Attachments:")
-                content += "\n".join(
-                    f"({self.xbytes(a.size)}) {a.url}" for a in attachments
-                )
+                content += "\n".join(f"({self.xbytes(a.size)}) {a.url}" for a in attachments)
         if not content and not embed:
             raise RiftError(_("No content to send."))
         mentions = discord.AllowedMentions.all()
@@ -531,9 +500,7 @@ class Rift(commands.Cog):
         if filt and await filt.filter_hits(message.content, destination):
             raise RiftError("Your message was filtered at the destination.")
 
-        mentions = discord.AllowedMentions(
-            everyone=is_op and has_everyone, roles=[], users=[]
-        )
+        mentions = discord.AllowedMentions(everyone=is_op and has_everyone, roles=[], users=[])
 
         def sub(m) -> str:
             if not m.group(2):
@@ -597,12 +564,8 @@ class Rift(commands.Cog):
                 if isinstance(exc, (RiftError, discord.HTTPException)):
                     reason = " ".join(exc.args)
                 else:
-                    reason = (
-                        f"{type(exc).__name__}. Check your console or logs for details."
-                    )
-                await channel.send(
-                    f"I couldn't send your message to {destination}: {reason}"
-                )
+                    reason = f"{type(exc).__name__}. Check your console or logs for details."
+                await channel.send(f"I couldn't send your message to {destination}: {reason}")
             else:
                 self.messages.add_vectors(message, m)
 
@@ -630,9 +593,7 @@ class Rift(commands.Cog):
         )
 
     @commands.Cog.listener()
-    async def on_pydle_message(
-        self, client: RiftIRCClient, target: str, by: str, message: str
-    ):
+    async def on_pydle_message(self, client: RiftIRCClient, target: str, by: str, message: str):
         if client.is_same_nick(by, client.nickname):
             return
         if client.is_same_nick(target, client.nickname):
@@ -688,12 +649,8 @@ class Rift(commands.Cog):
                 if isinstance(exc, (RiftError, discord.HTTPException)):
                     reason = " ".join(exc.args)
                 else:
-                    reason = (
-                        f"{type(exc).__name__}. Check your console or logs for details."
-                    )
-                await irc_channel.send(
-                    f"I couldn't send your message to {destination}: {reason}"
-                )
+                    reason = f"{type(exc).__name__}. Check your console or logs for details."
+                await irc_channel.send(f"I couldn't send your message to {destination}: {reason}")
 
     """
     @commands.Cog.listener()

@@ -2,19 +2,16 @@ import asyncio
 import collections
 import io
 import itertools
-import sys
 from copy import copy
 from dataclasses import dataclass
-from datetime import datetime, date, time
+from datetime import datetime
 from typing import Optional, Union
 
 import discord
-
 from redbot.core import commands
 from redbot.core.i18n import Translator, cog_i18n
-from redbot.core.utils.predicates import MessagePredicate
 from redbot.core.utils.mod import check_permissions
-
+from redbot.core.utils.predicates import MessagePredicate
 
 _T = Translator("LogsFrom", __file__)
 
@@ -60,6 +57,12 @@ MaybeMessage = Optional[Union[int, discord.Message]]  # yes, this order is inten
 
 @cog_i18n(_T)
 class LogsFrom(commands.Cog):
+    async def red_get_data_for_user(self, *, user_id):
+        return {}  # No data to get
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        pass  # No data to delete
+
     @commands.command(usage="[bounds...] [channel]")
     async def logsfrom(
         self,

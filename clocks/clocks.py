@@ -1,11 +1,7 @@
 import discord
-
-from redbot.core import commands, Config
+from redbot.core import Config, commands
 
 from .chart import pie
-
-
-Cog = getattr(commands, "Cog", object)
 
 
 def n_or_greater(n):
@@ -25,7 +21,14 @@ def nonzero_int(argument):
     return argument
 
 
-class Clocks(Cog):
+class Clocks(commands.Cog):
+
+    # TODO: async def red_get_data_for_user(self, *, user_id):
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        # Nothing here is operational, so just delete it all
+        await self.config.user_from_id(user_id).clear()
+
     def __init__(self):
         super().__init__()
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
@@ -34,7 +37,6 @@ class Clocks(Cog):
     @commands.group(aliases=["clock"])
     async def clocks(self, ctx):
         """Track projects with clocks"""
-        pass
 
     @clocks.command()
     async def create(

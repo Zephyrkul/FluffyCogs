@@ -2,11 +2,8 @@ import discord
 from itertools import chain
 from typing import (
     Dict,
-    DefaultDict,
     Generator,
     Hashable,
-    Iterable,
-    Optional,
     Tuple,
     TypeVar,
     Set,
@@ -39,7 +36,7 @@ class SimpleGraph(Dict[T, Set[T]]):
         Removes all connections to and from the specified vertices.
         """
         v_set = set(vertices)
-        for vertex, neighbors in self.copy().items():
+        for vertex, neighbors in self.copy().items():  # type: ignore
             if vertex in v_set:
                 self.pop(vertex)
             else:
@@ -81,84 +78,3 @@ class SimpleGraph(Dict[T, Set[T]]):
     @classmethod
     def from_json(cls, json):
         return cls((k, set(v)) for k, v in json.items())
-
-
-"""
-class Graph(SimpleGraph[Messageable]):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._lists = DefaultDict[
-            Optional[Union[Messageable, Vector[Messageable]]],  # None means global
-            Tuple[Set[User], Set[User]],  # False: Blacklist, True: Whitelist
-        ](lambda: (set(), set()))
-        self.messages = SimpleGraph[discord.Message]()
-
-    @staticmethod
-    def _combine(one, many):
-        if one and many:
-            return set((one, *many))
-        if one and not many:
-            return {one}
-        if not one and many:
-            return set(many)
-        return set()
-
-    def _list(self, worb: bool, vector: Vector[Messageable], add, remove):
-        l = self._lists[vector][worb]
-        if add == remove:
-            add, remove = (), ()
-        if add:
-            l.update(add)
-        if remove:
-            l.difference_update(add)
-        return l.copy()
-
-    def is_allowed(self, *args: Messageable, user: User, strict=False):
-        if len(args) > 2:
-            raise TypeError(f"Unexpected number of positional arguments: {len(args)}")
-        vector = args or None
-        if vector:
-            lists = [
-                self._lists[None],
-                *(self._lists[vertex] for vertex in vector),
-                self._lists[vector],
-            ]
-        else:
-            lists = [self._lists[vector]]
-        for l in lists:
-            if l[True]:
-                if user not in l[True]:
-                    return False
-            else:
-                if user in l[False]:
-                    return False
-        return not strict
-
-    def whitelist(
-        self,
-        *args: Messageable,
-        add: User = None,
-        add_all: Iterable[User] = None,
-        remove: User = None,
-        remove_all: Iterable[User] = None,
-    ):
-        if len(args) > 2:
-            raise TypeError(f"Unexpected number of positional arguments: {len(args)}")
-        return self._list(
-            True, args or None, self._combine(add, add_all), self._combine(remove, remove_all)
-        )
-
-    def blacklist(
-        self,
-        *args: Messageable,
-        add: User = None,
-        add_all: Iterable[User] = None,
-        remove: User = None,
-        remove_all: Iterable[User] = None,
-    ):
-        if len(args) > 2:
-            raise TypeError(f"Unexpected number of positional arguments: {len(args)}")
-        return self._list(
-            False, args or None, self._combine(add, add_all), self._combine(remove, remove_all)
-        )
-"""

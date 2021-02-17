@@ -1,16 +1,11 @@
-import asyncio
-import discord
-from contextlib import suppress
+from io import BytesIO
 from random import choice
 
-from redbot.core import commands, Config
-from redbot.core.utils.chat_formatting import pagify, bold, italics, warning
-from redbot.core.utils.menus import menu
+import discord
+from redbot.core import Config, commands
 from redbot.core.i18n import Translator, cog_i18n
-
-
-Cog = getattr(commands, "Cog", object)
-
+from redbot.core.utils.chat_formatting import bold, italics, pagify, warning
+from redbot.core.utils.menus import menu
 
 _ = Translator("Theme", __file__)
 
@@ -20,10 +15,26 @@ def theme_strip(argument):
 
 
 @cog_i18n(_)
-class Theme(Cog):
+class Theme(commands.Cog):
     """
     Allows you to set themes to easily play accross all servers.
     """
+
+    async def red_get_data_for_user(self, *, user_id):
+        if themes := await self.config.user_from_id(user_id).themes():
+            themes_text = "\n".join(themes)
+            bio = BytesIO(
+                (f"You currently have the following theme songs saved:\n{themes_text}").encode(
+                    "utf-8"
+                )
+            )
+            bio.seek(0)
+            return {f"{self.__class__.__name__}.txt": bio}
+        return {}  # No data to get
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        # Nothing here is operational, so just delete it all
+        await self.config.user_from_id(user_id).clear()
 
     def __init__(self):
         super().__init__()

@@ -1,9 +1,17 @@
 {
-    "author" : ["Zephyrkul (Zephyrkul#1089)"],
-    "install_msg" : "Usage: `[p]help NationStates`.",
-    "name" : "NationStates",
-    "short" : "Access information from NationStates.net.",
-    "requirements" : ["sans"],
-    "description" : "Access information from NationStates.net.",
-    "tags" : ["utility"]
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "Usage: `[p]help NationStates`.",
+    "name": "NationStates",
+    "short": "Access information from NationStates.net.",
+    "requirements": [
+        "sans",
+        "git+https://github.com/zephyrkul/proxyembed"
+    ],
+    "description": "Access information from NationStates.net.",
+    "tags": [
+        "utility"
+    ],
+    "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
 }

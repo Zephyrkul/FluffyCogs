@@ -1,17 +1,19 @@
 from random import randrange
-import discord
 
 from redbot.core import commands
 from redbot.core.data_manager import bundled_data_path
 
 
-Cog = getattr(commands, "Cog", object)
-
-
-class Skyrim(Cog):
+class Skyrim(commands.Cog):
     """
     Says a random line from Skyrim.
     """
+
+    async def red_get_data_for_user(self, *, user_id):
+        return {}  # No data to get
+
+    async def red_delete_data_for_user(self, *, requester, user_id):
+        pass  # No data to delete
 
     @commands.command()
     async def guard(self, ctx):
@@ -31,7 +33,7 @@ class Skyrim(Cog):
     async def nazeem(self, ctx):
         """
         Do you get to the Cloud District very often?
-        
+
         Oh, what am I saying, of course you don't.
         """
         await ctx.maybe_send_embed(

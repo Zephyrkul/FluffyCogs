@@ -1,9 +1,17 @@
 {
-    "author" : ["Zephyrkul (Zephyrkul#1089)"],
-    "install_msg" : "Please note that custom commands that take arguments will still trigger this cog.",
-    "name" : "Act",
-    "short" : "Command the bot to perform an action on a fellow user.",
-    "requirements" : ["inflection"],
-    "description" : "Lets you command the bot to perform an action on someone else.",
-    "tags" : ["fun"]
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "Please note that custom commands that take arguments will still trigger this cog.",
+    "name": "Act",
+    "short": "Command the bot to perform an action on a fellow user.",
+    "min_bot_version": "3.4.0",
+    "requirements": [
+        "inflection"
+    ],
+    "description": "Lets you command the bot to perform an action on someone else.",
+    "tags": [
+        "fun"
+    ],
+    "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
 }

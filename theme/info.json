@@ -1,8 +1,15 @@
 {
-    "author" : ["Zephyrkul (Zephyrkul #1089)"],
-    "install_msg" : "Usage: `[p]help theme`. Requires the Audio cog to function.",
-    "name" : "Theme",
-    "short" : "Allows you to set themes to easily play accross all servers.",
-    "description" : "Allows you to set themes to easily play accross all servers.",
-    "tags" : ["music", "audio", "fun"]
+    "author": [
+        "Zephyrkul (Zephyrkul #1089)"
+    ],
+    "install_msg": "Usage: `[p]help theme`. Requires the Audio cog to function.",
+    "name": "Theme",
+    "short": "Allows you to set themes to easily play accross all servers.",
+    "description": "Allows you to set themes to easily play accross all servers.",
+    "tags": [
+        "music",
+        "audio",
+        "fun"
+    ],
+    "end_user_data_statement": "This cog stores data provided via command by users for the purposes of replaying."
 }
