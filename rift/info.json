@@ -8,6 +8,7 @@
     "short": "Allows cross-server communication through Red",
     "description": "Communicate with other servers through Red! Works to and from DMs as well.",
     "requirements": [
+        "pydle",
         "https://github.com/pinterest/urlnorm/archive/master.zip#egg=urlnorm"
     ],
     "tags": [
