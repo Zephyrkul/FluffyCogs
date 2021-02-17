@@ -2,19 +2,16 @@ import asyncio
 import discord
 import logging
 import re
-from copy import copy
 from contextlib import suppress
 from itertools import chain
-from operator import attrgetter
 from traceback import walk_tb
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Dict, Set, List, Literal, Optional, Union, overload
+from typing import TYPE_CHECKING, Dict, Set, List, Optional, Union, overload
 
 from redbot.core import commands, checks, Config
 from redbot.core.utils import common_filters, deduplicate_iterables, mod
 from redbot.core.utils.chat_formatting import pagify, humanize_list
 from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
-from redbot.core.utils.predicates import MessagePredicate
 from redbot.core.i18n import Translator, cog_i18n
 
 from .irc import RiftIRCClient, IRCMessageable, IRCMessage
@@ -60,10 +57,12 @@ async def can_close(ctx: Union[commands.Context, discord.Message], bot=None):
     if isinstance(ctx, discord.Message):
         if not bot:
             raise TypeError
-        ctx = SimpleNamespace(author=ctx.author, channel=ctx.channel, bot=bot, message=ctx)
-    return await mod.is_admin_or_superior(ctx.bot, ctx.author) or await mod.check_permissions(
-        ctx, {"manage_channels": True}
-    )
+        ctx = SimpleNamespace(
+            author=ctx.author, channel=ctx.channel, bot=bot, message=ctx
+        )
+    return await mod.is_admin_or_superior(
+        ctx.bot, ctx.author
+    ) or await mod.check_permissions(ctx, {"manage_channels": True})
 
 
 def check_can_close(func=None):
@@ -89,7 +88,9 @@ class Rift(commands.Cog):
         self.rifts = SimpleGraph[Destination]()
         self.messages = SimpleGraph[discord.Message]()
         self.irc_clients: Dict[URL, RiftIRCClient] = {}
-        self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
+        self.config = Config.get_conf(
+            self, identifier=2_113_674_295, force_registration=True
+        )
         self.config.register_channel(blacklisted=False)
         self.config.register_guild(blacklisted=False)
         self.config.register_user(blacklisted=False)
@@ -135,7 +136,9 @@ class Rift(commands.Cog):
         blacklisted = not await group.blacklisted()
         await group.blacklisted.set(blacklisted)
         await ctx.send(
-            _("Channel is {} blacklisted.").format("now" if blacklisted else "no longer")
+            _("Channel is {} blacklisted.").format(
+                "now" if blacklisted else "no longer"
+            )
         )
         if blacklisted:
             self.close_rifts(ctx.author, channel)
@@ -212,7 +215,9 @@ class Rift(commands.Cog):
             raise commands.UserInputError()
         unique_rifts: List[Destination] = deduplicate_iterables(self.maybe_chain(rifts))
         source = ctx.channel if ctx.guild else ctx.author
-        no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
+        no_notify = (
+            await self.bot.is_owner(ctx.author) and not await self.config.notify()
+        )
         for rift in unique_rifts:
             if (
                 no_notify
@@ -230,7 +235,9 @@ class Rift(commands.Cog):
             if notify:
                 asyncio.ensure_future(
                     rift.send(
-                        _("{} has linked a rift to here from {}.").format(ctx.author, ctx.channel)
+                        _("{} has linked a rift to here from {}.").format(
+                            ctx.author, ctx.channel
+                        )
                     )
                 )
         await ctx.send(
@@ -253,7 +260,9 @@ class Rift(commands.Cog):
             raise commands.UserInputError()
         unique_rifts: List[Destination] = deduplicate_iterables(self.maybe_chain(rifts))
         source = ctx.channel if ctx.guild else ctx.author
-        no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
+        no_notify = (
+            await self.bot.is_owner(ctx.author) and not await self.config.notify()
+        )
         self.rifts.add_web(source, *unique_rifts)
         humanized = humanize_list(list(map(str, (source, *unique_rifts))))
         for rift in unique_rifts:
@@ -299,12 +308,16 @@ class Rift(commands.Cog):
             )[scope.casefold()]
         except KeyError:
             raise commands.BadArgument(
-                _("Invalid scope. Scope must be author, channel, guild, server, or global.")
+                _(
+                    "Invalid scope. Scope must be author, channel, guild, server, or global."
+                )
             )
 
         if not scoped and not await ctx.bot.is_owner(ctx.author):
             raise commands.CheckFailure()
-        if scoped == ctx.guild and not await mod.is_admin_or_superior(ctx.bot, ctx.author):
+        if scoped == ctx.guild and not await mod.is_admin_or_superior(
+            ctx.bot, ctx.author
+        ):
             raise commands.CheckFailure()
 
         def check(vector):
@@ -317,8 +330,13 @@ class Rift(commands.Cog):
             return False
 
         unique_rifts: Set[Vector[Destination]] = set()
-        for source, destination in chain(self.rifts.vectors(), self.user_rifts.vectors()):
-            if check((source, destination)) and (destination, source) not in unique_rifts:
+        for source, destination in chain(
+            self.rifts.vectors(), self.user_rifts.vectors()
+        ):
+            if (
+                check((source, destination))
+                and (destination, source) not in unique_rifts
+            ):
                 unique_rifts.add((source, destination))
         total_rifts = len(unique_rifts)
         if not total_rifts:
@@ -365,51 +383,9 @@ class Rift(commands.Cog):
             except TypeError:
                 yield i
 
-    # Temporary patch until d.py is updated to support the new allowed_mentions feature
-    @staticmethod
-    async def clean_send(
-        destination: Union[discord.abc.Messageable, discord.Message],
-        content: str = None,
-        *,
-        embed: discord.Embed = None,
-        allowed_types: List[Literal["roles", "users", "everyone"]] = None,
-        allowed_users: List[discord.User] = None,
-        allowed_roles: List[discord.Role] = None,
-    ) -> discord.Message:
-        allowed_types = ["users"] if allowed_types is None else [str(t) for t in allowed_types]
-        if "users" in allowed_types and allowed_users:
-            raise ValueError("Invalid configuration")
-        if "roles" in allowed_types and allowed_roles:
-            raise ValueError("Invalid configuration")
-        payload: dict = {"allowed_mentions": {"parse": allowed_types}}
-        if allowed_users:
-            payload["allowed_mentions"]["users"] = [str(u.id) for u in allowed_users]
-        if allowed_roles:
-            payload["allowed_mentions"]["roles"] = [str(r.id) for r in allowed_roles]
-        if content:
-            payload["content"] = content
-        if embed:
-            payload["embed"] = embed.to_dict()
-        if isinstance(destination, discord.Message):
-            raw_channel = destination.channel
-            route = discord.http.Route(
-                "PATCH",
-                "/channels/{channel_id}/messages/{message_id}",
-                channel_id=raw_channel.id,
-                message_id=destination.id,
-            )
-            data = await destination._state.http.request(route, json=payload)
-            destination._update(data)
-            return destination
-        else:
-            raw_channel = await destination._get_channel()
-            route = discord.http.Route(
-                "POST", "/channels/{channel_id}/messages", channel_id=raw_channel.id
-            )
-            data = await destination._state.http.request(route, json=payload)
-            return destination._state.create_message(channel=destination, data=data)
-
-    def close_rifts(self, closer: Destination, *destinations: Union[discord.Guild, Destination]):
+    def close_rifts(
+        self, closer: Destination, *destinations: Union[discord.Guild, Destination]
+    ):
         unique = set(destinations)
         fmt = _("{closer} has closed a rift to here from {source}.")
 
@@ -418,9 +394,13 @@ class Rift(commands.Cog):
             if (dest, source) in processed:
                 continue
             if source in unique:
-                asyncio.ensure_future(dest.send(fmt.format(closer=closer, source=source)))
+                asyncio.ensure_future(
+                    dest.send(fmt.format(closer=closer, source=source))
+                )
             elif dest in unique:
-                asyncio.ensure_future(source.send(fmt.format(closer=closer, source=dest)))
+                asyncio.ensure_future(
+                    source.send(fmt.format(closer=closer, source=dest))
+                )
             processed.add((source, dest))
 
         self.rifts.remove_vertices(*unique)
@@ -516,10 +496,12 @@ class Rift(commands.Cog):
                     content = f"{content}\n\n{_('Attachments:')}\n"
                 else:
                     content = _("Attachments:")
-                content += "\n".join(f"({self.xbytes(a.size)}) {a.url}" for a in attachments)
+                content += "\n".join(
+                    f"({self.xbytes(a.size)}) {a.url}" for a in attachments
+                )
         if not content and not embed:
             raise RiftError(_("No content to send."))
-        allowed_types = ["everyone", "roles", "users"]
+        mentions = discord.AllowedMentions.all()
         if not is_owner:
             top_role = getattr(author, "top_role", None)
             if top_role and top_role != top_role.guild.default_role:
@@ -529,8 +511,9 @@ class Rift(commands.Cog):
             if not both_perms.administrator:
                 content = common_filters.filter_invites(content)
             if not both_perms.mention_everyone:
-                allowed_types = ["user"]
-        return await self.clean_send(destination, content=content, embed=embed)
+                mentions = discord.AllowedMentions(users=True)
+        send = getattr(destination, "send", destination.edit)
+        return await send(content=content, embed=embed, allowed_mentions=mentions)
 
     async def process_irc_message(
         self,
@@ -548,12 +531,9 @@ class Rift(commands.Cog):
         if filt and await filt.filter_hits(message.content, destination):
             raise RiftError("Your message was filtered at the destination.")
 
-        if is_op and has_everyone:
-            allowed_types = ["everyone"]
-        else:
-            allowed_types = []
-        allowed_roles = []
-        allowed_users = []
+        mentions = discord.AllowedMentions(
+            everyone=is_op and has_everyone, roles=[], users=[]
+        )
 
         def sub(m) -> str:
             if not m.group(2):
@@ -565,14 +545,14 @@ class Rift(commands.Cog):
                         role, longest = r, rl
                 if role:
                     if is_op:
-                        allowed_roles.append(role)
+                        mentions.roles.append(role)
                     return role.mention + group[len(role.name) :]
             else:
                 user = discord.utils.get(
                     destination.members, name=m.group(1), discriminator=m.group(2)
                 )
                 if user:
-                    allowed_users.append(user)
+                    mentions.users.append(user)
                     return user.mention
             return m.group(0)
 
@@ -582,12 +562,9 @@ class Rift(commands.Cog):
         else:
             content = mention_re.sub(sub, message.content)
 
-        await self.clean_send(
-            destination,
+        return await destination.send(
             f"{prefix}\n>>> {content}",
-            allowed_types=allowed_types,
-            allowed_roles=allowed_roles,
-            allowed_users=allowed_users,
+            allowed_mentions=mentions,
         )
 
     # EVENTS
@@ -620,8 +597,12 @@ class Rift(commands.Cog):
                 if isinstance(exc, (RiftError, discord.HTTPException)):
                     reason = " ".join(exc.args)
                 else:
-                    reason = f"{type(exc).__name__}. Check your console or logs for details."
-                await channel.send(f"I couldn't send your message to {destination}: {reason}")
+                    reason = (
+                        f"{type(exc).__name__}. Check your console or logs for details."
+                    )
+                await channel.send(
+                    f"I couldn't send your message to {destination}: {reason}"
+                )
             else:
                 self.messages.add_vectors(message, m)
 
@@ -630,7 +611,8 @@ class Rift(commands.Cog):
         if message.author.bot:
             return
         return asyncio.gather(
-            *(m.delete() for m in self.messages.pop(message, ())), return_exceptions=True,
+            *(m.delete() for m in self.messages.pop(message, ())),
+            return_exceptions=True,
         )
 
     @commands.Cog.listener()
@@ -648,7 +630,9 @@ class Rift(commands.Cog):
         )
 
     @commands.Cog.listener()
-    async def on_pydle_message(self, client: RiftIRCClient, target: str, by: str, message: str):
+    async def on_pydle_message(
+        self, client: RiftIRCClient, target: str, by: str, message: str
+    ):
         if client.is_same_nick(by, client.nickname):
             return
         if client.is_same_nick(target, client.nickname):
@@ -681,7 +665,11 @@ class Rift(commands.Cog):
         futures = [
             asyncio.ensure_future(
                 self.process_irc_message(
-                    prefix, irc_message, destination, is_op=is_op, has_everyone=has_everyone
+                    prefix,
+                    irc_message,
+                    destination,
+                    is_op=is_op,
+                    has_everyone=has_everyone,
                 )
             )
             for destination in self.rifts.get(irc_channel, ())
@@ -700,8 +688,12 @@ class Rift(commands.Cog):
                 if isinstance(exc, (RiftError, discord.HTTPException)):
                     reason = " ".join(exc.args)
                 else:
-                    reason = f"{type(exc).__name__}. Check your console or logs for details."
-                await irc_channel.send(f"I couldn't send your message to {destination}: {reason}")
+                    reason = (
+                        f"{type(exc).__name__}. Check your console or logs for details."
+                    )
+                await irc_channel.send(
+                    f"I couldn't send your message to {destination}: {reason}"
+                )
 
     """
     @commands.Cog.listener()
