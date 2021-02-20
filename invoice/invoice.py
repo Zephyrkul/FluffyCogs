@@ -333,7 +333,7 @@ class InVoice(commands.Cog):
             name = "\N{SPEAKER WITH THREE SOUND WAVES} " + vc.name
         role = await guild.create_role(
             name=name,
-            permissions=guild_role.permissions if guild_role else discord.Permissions.none(),
+            permissions=discord.Permissions(guild_role.permissions.value & perms.value) if guild_role else discord.Permissions.none(),
             reason="Dynamic role for {vc}".format(vc=vc),
         )
         await self.config.channel(vc).role.set(role.id)
@@ -343,10 +343,22 @@ class InVoice(commands.Cog):
         else:
             overs = {}
         # inherit guild role and remove its overwrites
+        perms.update(manage_roles=False)
         default = overs.pop(guild_role, discord.PermissionOverwrite())
+        if not default.is_empty():
+            allow, deny = default.pair()
+            allow = discord.Permissions(allow.value & perms.value)
+            deny = discord.Permissions(deny.value & perms.value)
+            default = discord.PermissionOverwrite.from_pair(allow, deny)
         # prevent any other roles from viewing the channel
-        for overwrite in overs.values():
-            overwrite.update(read_messages=None)
+        # since we're creating a channel, manage_roles must also be None
+        perms.update(read_messages=False)
+        for key, overwrite in overs.items():
+            allow, deny = default.pair()
+            allow = discord.Permissions(allow.value & perms.value)
+            deny = discord.Permissions(deny.value & perms.value)
+            overs[key] = discord.PermissionOverwrite.from_pair(allow, deny)
+            overwrite.update(read_messages=None, manage_roles=None)
         # vc-specific role, inherited from guild role
         overs.setdefault(role, default).update(read_messages=True, send_messages=True)
         # @everyone, remove read permissions
