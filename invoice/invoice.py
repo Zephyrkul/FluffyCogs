@@ -333,7 +333,9 @@ class InVoice(commands.Cog):
             name = "\N{SPEAKER WITH THREE SOUND WAVES} " + vc.name
         role = await guild.create_role(
             name=name,
-            permissions=discord.Permissions(guild_role.permissions.value & perms.value) if guild_role else discord.Permissions.none(),
+            permissions=discord.Permissions(guild_role.permissions.value & perms.value)
+            if guild_role
+            else discord.Permissions.none(),
             reason="Dynamic role for {vc}".format(vc=vc),
         )
         await self.config.channel(vc).role.set(role.id)
