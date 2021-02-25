@@ -44,9 +44,7 @@ class AutoDisconnect(commands.Cog):
         def check(m: discord.Member, b: discord.VoiceState, a: discord.VoiceState):
             if m != member:
                 return False
-            if a.channel != m.guild.afk_channel:
-                return True
-            return False
+            return a.channel != m.guild.afk_channel
 
         if not after.channel:
             return

@@ -76,21 +76,14 @@ class SecureInv(commands.Cog):
         if days is None:
             days = settings["days"]
         if uses is None:
-            if days:
-                uses = settings["uses"]
-            else:
-                uses = settings["uses"] or 1
-        generated = []
-        for i in range(amount or 1):
-            generated.append(
-                await channel.create_invite(
+            uses = settings["uses"] if days else settings["uses"] or 1
+        generated = [await channel.create_invite(
                     max_age=(days or 0) * 86400,
                     max_uses=uses,
                     temporary=False,
                     unique=True,
                     reason=get_audit_reason(ctx.author, reason=reason),
-                )
-            )
+                ) for _ in range(amount or 1)]
         await ctx.send("\n".join(invite.url for invite in generated), delete_after=120)
 
     @inv.group(name="set", invoke_without_command=True)

@@ -124,10 +124,7 @@ class LogsFrom(commands.Cog):
                 return await ctx.send(_T("Okay, I've cancelled my logging."))
             messages = message_task.result()
             processed = 0
-            if kwargs["oldest_first"]:
-                pop = messages.popleft
-            else:
-                pop = messages.pop
+            pop = messages.popleft if kwargs["oldest_first"] else messages.pop
             while messages:
                 await asyncio.sleep(0)
                 if cancel_task.done():

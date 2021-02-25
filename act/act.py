@@ -13,10 +13,7 @@ from redbot.core.utils.chat_formatting import italics
 from .helpers import *
 
 fmt_re = re.compile(r"{(?:0|user)(?:\.([^\{]+))?}")
-if TYPE_CHECKING:
-    Lower = str
-else:
-    Lower = str.lower
+Lower = str if TYPE_CHECKING else str.lower
 
 
 class Act(commands.Cog):

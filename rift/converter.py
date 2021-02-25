@@ -89,10 +89,7 @@ class DiscordConverter(commands.Converter):
         blacklists = await asyncio.gather(
             config.all_guilds(), config.all_channels(), config.all_users()
         )
-        if globally:
-            guilds = ctx.bot.guilds
-        else:
-            guilds = [ctx.guild]
+        guilds = ctx.bot.guilds if globally else [ctx.guild]
         results = set()
         for guild in guilds:
             if blacklists[0].get(guild.id, {}).get("blacklisted"):

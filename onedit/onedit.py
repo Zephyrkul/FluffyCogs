@@ -38,8 +38,7 @@ class OnEdit(commands.Cog):
         Defaults to 5 seconds.
         Set to 0 to disable.
         """
-        if timeout < 0:
-            timeout = 0
+        timeout = max(timeout, 0)
         await self.config.timeout.set(timeout)
         self.timeout = timeout
         await ctx.tick()

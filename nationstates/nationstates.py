@@ -328,10 +328,7 @@ class NationStates(commands.Cog):
             delheader = "Delegate (Non-Executive)"
         tags = {t.text for t in root.iterfind("TAGS/TAG")}
         founderless = "Founderless" in tags
-        if root.FOUNDED.pyval == 0:
-            founded = "in Antiquity"
-        else:
-            founded = root.FOUNDED.pyval
+        founded = "in Antiquity" if root.FOUNDED.pyval == 0 else root.FOUNDED.pyval
         if root.FOUNDER.text == "0":
             foundervalue = "No Founder"
         else:
@@ -345,18 +342,17 @@ class NationStates(commands.Cog):
                 root.FOUNDER.text,
                 " (Ceased to Exist)" if founderless else "",
             )
-        if founderless:
-            founderheader = "Founderless"
-        else:
-            founderheader = "Founder"
+        founderheader = "Founderless" if founderless else "Founder"
         if not root.FOUNDERAUTH.text or "X" not in root.FOUNDERAUTH.text:
             founderheader += " (Non-Executive)"
         fash = "Fascist" in tags and "Anti-Fascist" not in tags  # why do people hoard tags...
         name = "{}{}".format("\N{LOCK} " if "Password" in tags else "", root.NAME.text)
-        if fash:
-            warning = "\n**```css\n\N{HEAVY EXCLAMATION MARK SYMBOL} Region Tagged as Fascist \N{HEAVY EXCLAMATION MARK SYMBOL}\n```**"
-        else:
-            warning = ""
+        warning = (
+            "\n**```css\n\N{HEAVY EXCLAMATION MARK SYMBOL} Region Tagged as Fascist \N{HEAVY EXCLAMATION MARK SYMBOL}\n```**"
+            if fash
+            else ""
+        )
+
         description = "[{} nations](https://www.nationstates.net/region={}/page=list_nations) | Founded {} | Power: {}{}".format(
             root.NUMNATIONS.pyval, root.get("id"), founded, root.POWER.text, warning
         )

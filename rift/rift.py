@@ -414,9 +414,7 @@ class Rift(commands.Cog):
                 return True
             if scoped in vector:
                 return True
-            if scoped in map(lambda c: getattr(c, "guild", None), vector):
-                return True
-            return False
+            return scoped in map(lambda c: getattr(c, "guild", None), vector)
 
         unique_rifts: Set[Vector[Messageable]] = set()
         for source, destination in self.rifts.vectors():
@@ -535,17 +533,16 @@ class Rift(commands.Cog):
             member = destination.guild.get_member(user.id)
             if member:
                 return destination.permissions_for(member)
-            else:
-                every = destination.guild.default_role
-                overs = destination.overwrites_for(every)
-                overs = overs.pair()
-                perms = (every.permissions.value & ~overs[1].value) | overs[0].value
-                log.debug(
-                    "calculated permissions for @everyone in guild %s: %s",
-                    destination.guild.id,
-                    perms,
-                )
-                return discord.Permissions(perms)
+            every = destination.guild.default_role
+            overs = destination.overwrites_for(every)
+            overs = overs.pair()
+            perms = (every.permissions.value & ~overs[1].value) | overs[0].value
+            log.debug(
+                "calculated permissions for @everyone in guild %s: %s",
+                destination.guild.id,
+                perms,
+            )
+            return discord.Permissions(perms)
         return discord.Permissions.all()
 
     @staticmethod
@@ -553,11 +550,11 @@ class Rift(commands.Cog):
         blist = ("B", "KB", "MB")
         index = 0
         while True:
-            if b > 900:
-                b = b / 1024.0
-                index += 1
-            else:
+            if b <= 900:
                 return "{:.3g} {}".format(b, blist[index])
+
+            b = b / 1024.0
+            index += 1
 
     async def process_discord_message(self, message, destination):
         author = message.author
