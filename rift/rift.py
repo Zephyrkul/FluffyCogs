@@ -1,18 +1,34 @@
 import asyncio
 import logging
+from datetime import datetime, timedelta
 from functools import partial
 from io import BytesIO
+from itertools import chain, starmap
 from traceback import walk_tb
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, List, Optional, Set, Tuple, Union, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
 import discord
-from discord.ext import tasks
 from redbot.core import Config, checks, commands
 from redbot.core.bot import Red
 from redbot.core.i18n import Translator, cog_i18n
-from redbot.core.utils import common_filters, deduplicate_iterables, mod
-from redbot.core.utils.chat_formatting import humanize_list, pagify
+from redbot.core.utils import AsyncIter, deduplicate_iterables, mod
+from redbot.core.utils.chat_formatting import humanize_list, pagify, quote
+from redbot.core.utils.common_filters import filter_invites
 from redbot.core.utils.menus import DEFAULT_CONTROLS, menu
 from redbot.core.utils.predicates import MessagePredicate
 
@@ -28,6 +44,9 @@ from .converter import Limited
 
 log = logging.getLogger("red.fluffy.rift")
 _ = Translator(__name__, __file__)
+T = TypeVar("T")
+UnionUser = Union[discord.User, discord.Member]
+UnionChannel = Union[discord.DMChannel, discord.TextChannel]
 
 
 @overload
@@ -36,20 +55,14 @@ async def can_close(ctx: commands.Context) -> bool:
 
 
 @overload
-async def can_close(ctx: discord.Message, bot) -> bool:
+async def can_close(ctx: discord.Message, bot: Red) -> bool:
     ...
 
 
-async def can_close(ctx: Union[commands.Context, discord.Message], bot=None):
+async def can_close(ctx, bot=None):
     """Admin / manage channel OR private channel"""
-    if isinstance(ctx.channel, discord.DMChannel):
+    if ctx.channel.type == discord.ChannelType.private:
         return True
-    """
-    if ctx.bot.get_cog(Rift.__name__).graph.is_allowed(
-        ctx.channel if ctx.guild else ctx.author, user=ctx.author, strict=True
-    ):
-        return True
-    """
     if isinstance(ctx, discord.Message):
         if not bot:
             raise TypeError
@@ -64,6 +77,53 @@ def check_can_close(func=None):
     if func:
         return check(func)
     return check
+
+
+async def purge_ids(
+    channel: discord.abc.Messageable,
+    ids: Iterable[int],
+    now: Union[datetime, discord.abc.Snowflake],
+):
+    channel = await channel._get_channel()
+    assert isinstance(channel, (discord.TextChannel, discord.DMChannel))
+    try:
+        nowdt: datetime = now.created_at  # type: ignore
+    except AttributeError:
+        assert isinstance(now, datetime)
+        nowdt = now
+    snowflakes = [
+        channel.get_partial_message(i)
+        for i in ids
+        if nowdt - discord.utils.snowflake_time(i) < timedelta(days=14, minutes=-5)
+    ]
+    if not snowflakes:
+        return
+    try:
+        can_purge = channel.permissions_for(channel.guild.me).manage_messages  # type: ignore
+    except AttributeError:
+        can_purge = False
+    if can_purge:
+        assert isinstance(channel, discord.TextChannel)
+        while True:
+            try:
+                await channel.delete_messages(snowflakes[:100])  # type: ignore
+            except discord.Forbidden:
+                return
+            except discord.HTTPException:
+                pass
+            snowflakes = snowflakes[100:]
+            if snowflakes:
+                await asyncio.sleep(1.5)
+            else:
+                return
+    else:
+        for partial in snowflakes:
+            try:
+                await partial.delete()
+            except discord.Forbidden:
+                return
+            except discord.HTTPException:
+                pass
 
 
 class RiftError(Exception):
@@ -109,29 +169,6 @@ class Rift(commands.Cog):
         self.config.register_global(
             notify=True,  # format="[{role}] {author}", format_no_guild="{author}"
         )
-        self._cache_invalidator.start()
-
-    @tasks.loop(minutes=5)
-    async def _cache_invalidator(self):
-        # longer-running bots need to remove expired cached messages
-        oldest_id = self.bot.cached_messages[0].id
-        for channel_id, message_id in list(
-            self.messages.keys()
-        ):  # iterate over a copy, not a view
-            if message_id < oldest_id:
-                self.messages.pop((channel_id, message_id))
-            else:
-                # dicts are ordered in Python
-                break
-
-    @_cache_invalidator.before_loop
-    async def _before_cache(self):
-        await self.bot.wait_until_ready()
-        # I can't be arsed to check for IndexErrors
-        await self.bot.wait_for("message")
-
-    def cog_unload(self):
-        self._cache_invalidator.cancel()
 
     # COMMANDS
 
@@ -255,7 +292,7 @@ class Rift(commands.Cog):
             )
         )
 
-    @rift.command(name="open")
+    @rift.command(name="open", require_var_positional=True)
     async def rift_open(
         self, ctx: commands.Context, one_way: Optional[bool] = None, *rifts: Messageable
     ):
@@ -265,8 +302,6 @@ class Rift(commands.Cog):
         Only your messages will be forwarded to the specified destinations,
         and all replies will be sent back to you.
         """
-        if not rifts:
-            raise commands.UserInputError()
         unique_rifts: List[Messageable] = deduplicate_iterables(rifts)
         source = Limited(message=ctx.message) if ctx.guild else ctx.author
         no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
@@ -276,6 +311,7 @@ class Rift(commands.Cog):
                 and getattr(rift, "guild", None)
                 and not isinstance(rift, discord.abc.User)
             ):
+                assert isinstance(rift, discord.TextChannel)
                 mem = rift.guild.get_member(ctx.author.id)
                 if mem and rift.permissions_for(mem).read_messages:
                     notify = False
@@ -298,7 +334,7 @@ class Rift(commands.Cog):
             ).format(humanize_list(list(map(str, unique_rifts))))
         )
 
-    @rift.command(name="link")
+    @rift.command(name="link", require_var_positional=True)
     @check_can_close()
     async def rift_link(
         self, ctx: commands.Context, one_way: Optional[bool] = None, *rifts: Messageable
@@ -309,8 +345,6 @@ class Rift(commands.Cog):
         Anything anyone says in this channel will be forwarded.
         All replies will be relayed back here.
         """
-        if not rifts:
-            raise commands.UserInputError()
         unique_rifts: List[Messageable] = deduplicate_iterables(rifts)
         source = ctx.channel if ctx.guild else ctx.author
         no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
@@ -320,6 +354,7 @@ class Rift(commands.Cog):
                 and getattr(rift, "guild", None)
                 and not isinstance(rift, discord.abc.User)
             ):
+                assert isinstance(rift, discord.TextChannel)
                 mem = rift.guild.get_member(ctx.author.id)
                 if mem and rift.permissions_for(mem).read_messages:
                     notify = False
@@ -342,7 +377,7 @@ class Rift(commands.Cog):
             ).format(humanize_list(list(map(str, unique_rifts))))
         )
 
-    @rift.command(name="web")
+    @rift.command(name="web", require_var_positional=True)
     @checks.is_owner()
     async def rift_web(self, ctx: commands.Context, *rifts: Messageable):
         """
@@ -350,15 +385,18 @@ class Rift(commands.Cog):
 
         See the helptext of `[p]rift link` for more info.
         """
-        if not rifts:
-            raise commands.UserInputError()
         unique_rifts: List[Messageable] = deduplicate_iterables(rifts)
         source = ctx.channel if ctx.guild else ctx.author
         no_notify = await self.bot.is_owner(ctx.author) and not await self.config.notify()
         self.rifts.add_web(source, *unique_rifts)
         humanized = humanize_list(list(map(str, (source, *unique_rifts))))
         for rift in unique_rifts:
-            if no_notify and getattr(rift, "guild", None):
+            if (
+                no_notify
+                and getattr(rift, "guild", None)
+                and not isinstance(rift, discord.abc.User)
+            ):
+                assert isinstance(rift, discord.TextChannel)
                 mem = rift.guild.get_member(ctx.author.id)
                 if mem and rift.permissions_for(mem).read_messages:
                     notify = False
@@ -453,12 +491,19 @@ class Rift(commands.Cog):
 
     # UTILITIES
 
-    async def _send(self, message, destinations):
-        futures = [
-            asyncio.ensure_future(self.process_discord_message(message, d)) for d in destinations
-        ]
+    def _partial(self, channel_id: int, message_id: int) -> Optional[discord.PartialMessage]:
+        # This function has the potential to miss messages in DMs due to the DMChannel limit
+        # Re-opening DMChannels just to edit/delete old messages is, in most cases, unnecessary
+        channel = self.bot.get_channel(channel_id)
+        try:
+            return channel.get_partial_message(message_id)
+        except AttributeError:
+            return None
+
+    async def _send(self, message: discord.Message, destinations: List[Messageable]):
+        futures = [asyncio.ensure_future(self.process_send(message, d)) for d in destinations]
         if len(futures) == 1:
-            fs = futures  # no need to wrap this up in as_completed
+            fs: Iterable[asyncio.Future] = futures  # no need to wrap this up in as_completed
         else:
             fs = asyncio.as_completed(futures)
         for fut in fs:
@@ -481,7 +526,7 @@ class Rift(commands.Cog):
             else:
                 self.messages.add_vectors((message.channel.id, message.id), (m.channel.id, m.id))
 
-    async def close_rifts(self, closer: discord.abc.User, *destinations: Messageable):
+    async def close_rifts(self, closer: UnionUser, *destinations: Messageable) -> int:
         unique = set()
         for destination in destinations:
             unique.add(destination)
@@ -511,85 +556,206 @@ class Rift(commands.Cog):
         self.rifts.remove_vertices(*unique)
         return num_closed
 
-    async def get_embed(self, destination, attachments):
+    @staticmethod
+    def is_image_url(url: str) -> bool:
+        return url.lower().endswith(("png", "jpeg", "jpg", "gif", "webp"))
+
+    def get_embed(
+        self, attachments: List[discord.Attachment], **kwargs
+    ) -> Optional[discord.Embed]:
         if not attachments:
-            return
-        attachment = attachments[0]
-        embed = discord.Embed(colour=await self.bot.get_embed_color(destination))
-        if attachment.url.lower().endswith(("png", "jpeg", "jpg", "gif", "webp")):
-            embed.set_image(url=attachment.url)
-        else:
-            embed.add_field(
-                name=self.xbytes(attachment.size),
-                value=f"[{attachment.filename}]({attachment.url})",
-                inline=True,
-            )
+            return None
+        if len(attachments) > 25:
+            raise RiftError(_("Too many files."))
+        try:
+            embed = kwargs["embed"]
+        except KeyError:
+            embed = discord.Embed(**kwargs)
+        single = len(attachments) == 1
+        use_image = True
+        for attachment in attachments:
+            if use_image and self.is_image_url(attachment.url):
+                embed.set_image(url=attachment.url)
+                use_image = False
+            if use_image and single:
+                embed.add_field(
+                    name=self.xbytes(attachment.size),
+                    value=f"[{attachment.filename}]({attachment.url})",
+                    inline=True,
+                )
         return embed
 
-    def permissions(self, destination, user, is_owner=False):
-        if destination.type == discord.ChannelType.private:
-            return destination.permissions_for(self.bot.user)
-        if not is_owner:
-            member = destination.guild.get_member(user.id)
-            if member:
-                return destination.permissions_for(member)
-            every = destination.guild.default_role
-            overs = destination.overwrites_for(every)
-            overs = overs.pair()
-            perms = (every.permissions.value & ~overs[1].value) | overs[0].value
-            log.debug(
-                "calculated permissions for @everyone in guild %s: %s",
-                destination.guild.id,
-                perms,
+    def get_embeds(self, attachments: List[discord.Attachment], **kwargs) -> List[discord.Embed]:
+        """
+        Webhook-only. Creates a List of embeds that will display as one multi-image embed.
+        """
+        if not attachments:
+            return []
+        if len(attachments) > 10 or len(attachments) == 1:
+            embed = self.get_embed(attachments, **kwargs)
+            assert embed
+            return [embed]
+        try:
+            embeds = [kwargs["embed"]]
+        except KeyError:
+            embeds = [discord.Embed(**kwargs)]
+        append = False
+        for attachment in attachments:
+            url = attachment.url
+            if self.is_image_url(url):
+                if append:
+                    embed = discord.Embed(url=embeds[0].url)
+                    embed.set_image(url=url)
+                    embeds.append(embed)
+                else:
+                    embeds[0].url = embeds[0].url or url
+                    embeds[0].set_image(url=url)
+                    append = True
+            embeds[0].add_field(
+                name=self.xbytes(attachment.size),
+                value=f"[{attachment.filename}]({url})",
+                inline=True,
             )
-            return discord.Permissions(perms)
-        return discord.Permissions.all()
+        return embeds
+
+    def permissions(self, destination: UnionChannel, user, is_owner=False):
+        if destination.type == discord.ChannelType.private:
+            assert isinstance(destination, discord.DMChannel)
+            return destination.permissions_for(self.bot.user)
+        assert isinstance(destination, discord.TextChannel)
+        if is_owner:
+            return discord.Permissions.all()
+        member = destination.guild.get_member(user.id)
+        if member:
+            return destination.permissions_for(member)
+        every = destination.guild.default_role
+        allow, deny = destination.overwrites_for(every).pair()
+        perms = (every.permissions.value & ~deny.value) | allow.value
+        log.debug(
+            "calculated permissions for @everyone in guild %s: %s",
+            destination.guild.id,
+            perms,
+        )
+        return discord.Permissions(perms)
 
     @staticmethod
     def xbytes(b):
-        blist = ("B", "KB", "MB")
-        index = 0
-        while True:
+        for suffix in ("", "K", "M"):
             if b <= 900:
-                return "{:.3g} {}".format(b, blist[index])
+                break
+            b /= 1024.0
+        return "{:.3g} {}B".format(b, suffix)
 
-            b = b / 1024.0
-            index += 1
-
-    async def process_discord_message(self, message, destination):
+    async def process_send(self, message: discord.Message, destination: discord.abc.Messageable):
+        channel: UnionChannel = await destination._get_channel()
         author = message.author
+        kwargs = await self.process_kwargs(
+            author,
+            channel,
+            message.jump_url,
+            content=message.content,
+            attachments=message.attachments,
+        )
+        if to_ref := await self.process_reference(message.reference, channel):
+            kwargs["reference"] = to_ref
+            kwargs["mention_author"] = any(m.id == self.bot.user.id for m in message.mentions)
+        return await self.try_or_remove(destination.send(**kwargs), channel)
+
+    async def process_edit(
+        self, payload: discord.RawMessageUpdateEvent, destination: discord.PartialMessage
+    ):
+        channel = destination.channel
+        this_channel = self.bot.get_channel(payload.channel_id)
+        this_guild: Optional[discord.Guild] = getattr(this_channel, "guild", None)
+        if this_guild:
+            author = this_guild.get_member(int(payload.data["author"]["id"]))
+        else:
+            author = self.bot.get_user(int(payload.data["author"]["id"]))
+        assert author
+        kwargs = await self.process_kwargs(
+            author,
+            channel,
+            f"https://discord.com/channels/{payload.data.get('guild_id', '@me')}/{payload.channel_id}/{payload.message_id}",
+            content=payload.data.get("content"),
+            attachments=[
+                cast(discord.Attachment, SimpleNamespace(**attachment))
+                for attachment in payload.data.get("attachments", ())
+            ],
+        )
+        try:
+            return await destination.edit(**kwargs)
+        except discord.HTTPException:
+            pass
+
+    async def process_reference(
+        self,
+        reference: Optional[discord.MessageReference],
+        channel: UnionChannel,
+    ) -> Optional[discord.MessageReference]:
+        if not reference:
+            return None
+        # discord.py-stubs has a bad typehint for MessageReference.__init__
+        async for de, to in AsyncIter(self.messages.vectors(), steps=100):
+            if de == (reference.channel_id, reference.message_id) and to[0] == channel.id:
+                return discord.MessageReference(  # type: ignore
+                    channel_id=channel.id, message_id=to[1]
+                )
+            elif to == (reference.channel_id, reference.message_id) and de[0] == channel.id:
+                return discord.MessageReference(  # type: ignore
+                    channel_id=channel.id, message_id=de[1]
+                )
+        return None
+
+    async def process_kwargs(
+        self,
+        author: UnionUser,
+        channel: UnionChannel,
+        jump_url: str,
+        *,
+        content: Optional[str],
+        attachments: List[discord.Attachment],
+    ) -> Dict[str, Any]:
+        guild: Optional[discord.Guild] = getattr(channel, "guild", None)
+        oga = author
+        if guild:
+            author = guild.get_member(author.id) or self.bot.get_user(author.id)
+            assert author
         if not await self.bot.allowed_by_whitelist_blacklist(author):
-            return
+            raise RiftError(_("You are not permitted to use the bot here."))
         is_owner = await self.bot.is_owner(author)
-        if isinstance(destination, discord.Message):
-            channel = destination.channel
-        elif method := getattr(destination, "create_dm", None):
-            channel = await method()
-        else:
-            channel = destination
-        guild = getattr(channel, "guild", None)
-        me = (guild or channel).me
-        if not is_owner and guild:
-            dest_author = guild.get_member(author.id)
-            if dest_author:
-                is_automod_immune = await self.bot.is_automod_immune(dest_author)
-            else:
-                is_automod_immune = False
-        else:
-            is_automod_immune = True
+        me = (guild or channel).me  # type: ignore
         author_perms = self.permissions(channel, author, is_owner)
         bot_perms = self.permissions(channel, me)
         both_perms = discord.Permissions(author_perms.value & bot_perms.value)
-        content = message.content
-        if not is_automod_immune:
-            filt: "Filter" = self.bot.get_cog("Filter")
-            if filt and await filt.filter_hits(content, destination):
-                raise RiftError("Your message was filtered at the destination.")
-        attachments = message.attachments
-        embed = None
+        if guild and content and not is_owner and not await self.bot.is_automod_immune(author):
+            assert isinstance(channel, discord.TextChannel)
+            filt: Optional["Filter"] = self.bot.get_cog("Filter")  # type: ignore
+            if filt and await filt.filter_hits(content, channel):
+                raise RiftError(_("Your message was filtered."))
+        embed: Optional[discord.Embed]
+        if await self.bot.embed_requested(
+            channel, getattr(channel, "recipient", author), command=self.rift
+        ):
+            embed = discord.Embed(
+                colour=oga.colour or await self.bot.get_embed_color(channel), url=jump_url
+            )
+            ogg: Optional[discord.Guild]
+            if ogg := getattr(oga, "guild", None):
+                assert isinstance(oga, discord.Member)
+                if oga.top_role != ogg.default_role:
+                    embed.title = filter_invites(f"{oga.top_role} in {ogg}")
+                else:
+                    embed.title = filter_invites(f"in {ogg}")
+            embed.set_author(
+                name=filter_invites(str(author)),
+                icon_url=author.avatar_url_as(size=32),
+            )
+        else:
+            content = f"{author}\n{quote(content)}" if content else str(author)
+            embed = None
         if attachments and author_perms.attach_files:
-            if bot_perms.embed_links:
-                embed = await self.get_embed(destination, attachments)
+            if embed:
+                embed = self.get_embed(attachments, embed=embed)
             else:
                 if content:
                     content = f"{content}\n\n{_('Attachments:')}\n"
@@ -597,39 +763,43 @@ class Rift(commands.Cog):
                     content = _("Attachments:")
                 content += "\n".join(f"({self.xbytes(a.size)}) {a.url}" for a in attachments)
         if not content and not embed:
-            raise RiftError(_("No content to send."))
+            raise RiftError(_("Nothing to send."))
         allowed_mentions = discord.AllowedMentions()
         if not is_owner:
-            top_role = getattr(author, "top_role", None)
-            if top_role and top_role != top_role.guild.default_role:
-                content = f"[{author.top_role}] {author}\n>>> {content}"
-            else:
-                content = f"{author}\n>>> {content}"
-            if not both_perms.administrator:
-                content = common_filters.filter_invites(content)
+            if content and not both_perms.administrator:
+                content = filter_invites(content)
             if not both_perms.mention_everyone:
                 allowed_mentions = discord.AllowedMentions(users=True, everyone=True, roles=True)
             else:
                 allowed_mentions = discord.AllowedMentions(users=True)
+        return {"allowed_mentions": allowed_mentions, "embed": embed, "content": content}
+
+    async def try_or_remove(self, coro: Awaitable[T], channel: UnionChannel) -> T:
+        guild: Optional[discord.Guild] = getattr(channel, "guild", None)
+        if guild:
+            me = guild.me
+        else:
+            me = channel.me  # type: ignore
+        vertex: Messageable = getattr(channel, "recipient", channel)
         try:
-            if isinstance(destination, discord.Message):
-                coro = destination.edit
-            else:
-                coro = destination.send
-            return await coro(content=content, embed=embed, allowed_mentions=allowed_mentions)
+            return await coro
         except discord.Forbidden:
-            if not channel.permissions_for(me).send_messages:
+            if not guild or not channel.permissions_for(me).send_messages:
                 # we can't send here anymore, may as well remove it
-                self.rifts.remove_vertices(getattr(channel, "recipient", channel))
+                self.rifts.remove_vertices(vertex)
             raise
 
     # EVENTS
 
     @commands.Cog.listener()
-    async def on_message_without_command(self, message):
+    async def on_message_without_command(self, message: discord.Message):
         if message.author.bot:
             return
+        if message.type != discord.MessageType.default:
+            return
         if not message.content and not message.attachments:
+            return
+        if not await self.bot.message_eligible_as_command(message):
             return
         channel = message.channel if message.guild else message.author
         destinations = deduplicate_iterables(
@@ -647,20 +817,19 @@ class Rift(commands.Cog):
         await self._send(message, destinations)
 
     @commands.Cog.listener()
-    async def on_message_delete(self, message):
-        if message.author.bot:
+    async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent):
+        if "author" not in payload.data or payload.data["author"].get("bot", False):
             return
-        return asyncio.gather(
+        process = partial(self.process_edit, payload)
+        await asyncio.gather(
             *map(
-                discord.Message.delete,
+                process,
                 filter(
                     None,
                     (
-                        discord.utils.get(
-                            self.bot.cached_messages, id=message_id, channel__id=channel_id
-                        )
-                        for channel_id, message_id in self.messages.pop(
-                            (message.channel.id, message.id), ()
+                        self._partial(channel_id, message_id)
+                        for channel_id, message_id in self.messages.get(
+                            (payload.channel_id, payload.message_id), ()
                         )
                     ),
                 ),
@@ -669,24 +838,33 @@ class Rift(commands.Cog):
         )
 
     @commands.Cog.listener()
-    async def on_message_edit(self, _b, message):
-        if message.author.bot:
+    async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
+        if payload.cached_message and payload.cached_message.author.bot:
             return
-        process = partial(self.process_discord_message, message)
         await asyncio.gather(
             *map(
-                process,
+                discord.PartialMessage.delete,
                 filter(
                     None,
                     (
-                        discord.utils.get(
-                            self.bot.cached_messages, id=message_id, channel__id=channel_id
-                        )
-                        for channel_id, message_id in self.messages.get(
-                            (message.channel.id, message.id), ()
+                        self._partial(channel_id, message_id)
+                        for channel_id, message_id in self.messages.pop(
+                            (payload.channel_id, payload.message_id), ()
                         )
                     ),
                 ),
             ),
             return_exceptions=True,
+        )
+
+    @commands.Cog.listener()
+    async def on_raw_bulk_message_delete(self, payload: discord.RawBulkMessageDeleteEvent):
+        to_delete: Dict[discord.abc.Messageable, List[int]] = {}
+        pcid = payload.channel_id
+        for pmid in payload.message_ids:
+            for cid, mid in self.messages.pop((pcid, pmid), ()):
+                if channel := (self.bot.get_channel(cid)):
+                    to_delete.setdefault(channel, []).append(mid)
+        await asyncio.gather(
+            *starmap(partial(purge_ids, now=datetime.utcnow()), to_delete.items())
         )

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from itertools import chain, filterfalse
 from typing import List
 
 import discord
@@ -13,6 +12,8 @@ _ = Translator(__name__, __file__)
 
 
 class Limited(discord.abc.Messageable):
+    __slots__ = ("author", "channel")
+
     def __init__(self, **kwargs):
         super().__init__()
         if message := kwargs.pop("message", None):
@@ -29,13 +30,14 @@ class Limited(discord.abc.Messageable):
         return hash((self.author, self.channel))
 
     def __eq__(self, o: object) -> bool:
-        if isinstance(o, Limited):
-            return (self.author, self.channel) == (o.author, o.channel)
         if isinstance(o, discord.abc.User):
             return self.author == o or self.channel == o
-        if isinstance(o, (discord.TextChannel, discord.abc.PrivateChannel)):
+        if isinstance(o, (discord.TextChannel, discord.DMChannel)):
             return self.channel == o
-        return (self.author, self.channel) == (o.author, o.channel)
+        try:
+            return (self.author, self.channel) == (o.author, o.channel)  # type: ignore
+        except AttributeError:
+            return NotImplemented
 
     def __str__(self) -> str:
         return f"{self.author}, in {self.channel}"
