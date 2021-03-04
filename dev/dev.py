@@ -7,6 +7,7 @@ import contextlib
 import importlib
 import inspect
 import io
+import re
 import sys
 import textwrap
 import traceback
@@ -75,7 +76,13 @@ class Env(Dict[str, Any]):
         )
         return self
 
-    def __missing__(self, key):
+    def __getitem__(self, key):
+        if key.casefold() in ("exit", "quit"):  # pre-empt self and builtins
+            raise SystemExit(0)
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            pass
         try:
             return getattr(builtins, key)
         except AttributeError:
@@ -88,16 +95,16 @@ class Env(Dict[str, Any]):
             self.imported.append(key)
             self[key] = module
             return module
-        dotkey = "." + key
-        for tlms in ["redbot", "discord"]:
-            modules = [
-                v for k, v in sys.modules.items() if k.endswith(dotkey) and k.startswith(tlms)
-            ]
-            if len(modules) == 1:
-                module = modules[0]
-                self.imported.append(f"{module.__name__} as {key}")
-                self[key] = module
-                return module
+        modules = [
+            v
+            for k, v in sys.modules.items()
+            if re.fullmatch(fr"(redbot|discord)(\.|\..+\.){key}", k)
+        ]
+        if len(modules) == 1:
+            module = modules[0]
+            self.imported.append(f"{module.__name__} as {key}")
+            self[key] = module
+            return module
         raise KeyError(key)
 
     def get_formatted_imports(self) -> Optional[str]:
@@ -127,26 +134,27 @@ class Dev(dev_commands.Dev):
         else:
             return f"Cog Version: {self.__version__}"
 
-    async def my_exec(self, ctx: commands.Context, *args, **kwargs) -> None:
+    async def my_exec(self, ctx: commands.Context, *args, **kwargs) -> bool:
         tasks = [
-            ctx.bot.wait_for("message", check=MessagePredicate.cancelled(ctx)),
-            self._my_exec(ctx, *args, **kwargs),
+            asyncio.create_task(
+                ctx.bot.wait_for("message", check=MessagePredicate.cancelled(ctx))
+            ),
+            asyncio.create_task(self._my_exec(ctx, *args, **kwargs)),
         ]
         async with ctx.typing():
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in pending:
             task.cancel()
-        for task in done:
-            result = task.result()
-            if not result:
-                # _my_exec finished
-                return
-            # wait_for finished
-            assert isinstance(result, discord.Message)
-            if not ctx.channel.permissions_for(
-                ctx.me
-            ).add_reactions or not await ctx.react_quietly("\N{CROSS MARK}"):
-                await ctx.send("Cancelled.")
+        result = done.pop().result()
+        if isinstance(result, bool):
+            return result
+        # wait_for finished
+        assert isinstance(result, discord.Message)
+        if not ctx.channel.permissions_for(ctx.me).add_reactions or not await ctx.react_quietly(
+            "\N{CROSS MARK}"
+        ):
+            await ctx.send("Cancelled.")
+        return False
 
     async def _my_exec(
         self,
@@ -157,7 +165,7 @@ class Dev(dev_commands.Dev):
         run: str = None,
         compiler: Compiler = None,
         **environ: Any,
-    ) -> None:
+    ) -> bool:
         compiler = compiler or Compiler()
         original_message = discord.utils.get(ctx.bot.cached_messages, id=ctx.message.id)
         if original_message:
@@ -172,6 +180,7 @@ class Dev(dev_commands.Dev):
         env.update(environ)
         stdout = io.StringIO()
         filename = f"<{ctx.command}>"
+        exited = False
         try:
             with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stdout):
                 exc = None
@@ -193,6 +202,8 @@ class Dev(dev_commands.Dev):
                 else:
                     if exc:
                         raise exc
+        except SystemExit:
+            exited = True
         except BaseException as e:
             # return only frames that are part of provided code
             i, j = -1, 0
@@ -222,6 +233,7 @@ class Dev(dev_commands.Dev):
         if printed:
             ret[1] = "# Output:\n" + printed
         asyncio.ensure_future(self.send_interactive(ctx, *ret, message=message))
+        return exited
 
     async def send_interactive(
         self,
@@ -374,16 +386,27 @@ class Dev(dev_commands.Dev):
         evaluated.
         """
         if ctx.channel.id in self.sessions:
-            await ctx.send(
-                _("Already running a REPL session in this channel. Exit it with `quit`.")
-            )
+            if self.sessions[ctx.channel.id]:
+                await ctx.send(
+                    _("Already running a REPL session in this channel. Exit it with `quit`.")
+                )
+            else:
+                await ctx.send(
+                    _(
+                        "Already running a REPL session in this channel. Resume the REPL with `{}repl resume`."
+                    ).format(ctx.clean_prefix)
+                )
             return
 
         variables = Env.from_context(ctx)
         compiler = Compiler()
 
         self.sessions[ctx.channel.id] = True
-        await ctx.send(_("Enter code to execute or evaluate. `exit()` or `quit` to exit."))
+        await ctx.send(
+            _(
+                "Enter code to execute or evaluate. `exit()` or `quit` to exit. `{}repl pause` to pause."
+            ).format(ctx.clean_prefix)
+        )
 
         while True:
             response = await ctx.bot.wait_for("message", check=MessagePredicate.regex(r"^`", ctx))
@@ -394,11 +417,6 @@ class Dev(dev_commands.Dev):
                 continue
 
             cleaned = self.cleanup_code(response.content).strip()
-
-            if cleaned.rstrip("( )") in ("quit", "exit", "stop"):
-                del self.sessions[ctx.channel.id]
-                await ctx.send(_("Exiting."))
-                return
 
             if cleaned.startswith("from __future__ import"):
                 try:
@@ -413,7 +431,7 @@ class Dev(dev_commands.Dev):
                     )
                     continue
 
-            await self.my_exec(
+            exited = await self.my_exec(
                 ctx,
                 cleaned,
                 variables,
@@ -423,6 +441,11 @@ class Dev(dev_commands.Dev):
                 compiler=compiler,
                 message=response,
             )
+
+            if exited:
+                del self.sessions[ctx.channel.id]
+                await ctx.send(_("Exiting."))
+                return
 
     # The below command is unchanged from NeuroAssassin's code.
     # It is present here mainly as a backport for previous versions of Red.
