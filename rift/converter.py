@@ -66,14 +66,18 @@ class DiscordConverter(commands.Converter):
                 m = f"{m}, in {guild}"
             message = f"{message}\n{m}"
         await ctx.send(message)
-        predicate = MessagePredicate.less(len(results), ctx=ctx)
+        predicate = MessagePredicate.valid_int(ctx=ctx)
         try:
             await ctx.bot.wait_for("message", check=predicate, timeout=30)
         except asyncio.TimeoutError as te:
             m = _("No destination selected.")
             await ctx.send(m)
             raise commands.BadArgument(m)
-        return results[predicate]
+        result = predicate.result
+        try:
+            return results[result]
+        except IndexError:
+            raise commands.BadArgument(f"{result} is not a number in the list.") from None
 
     @classmethod
     async def search(
