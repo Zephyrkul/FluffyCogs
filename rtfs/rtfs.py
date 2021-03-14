@@ -23,7 +23,19 @@ LOG = logging.getLogger("red.fluffy.rtfs")
 
 
 class Unlicensed(Exception):
-    pass
+    """
+    Exception class for when the source code is known to have too restrictive of a license to redistribute code.
+    """
+
+    def __init__(self, *args, cite: str = None, **kwargs):
+        super.__init__(*args, **kwargs)
+        self.cite = cite
+
+
+class NoLicense(Exception):
+    """
+    Exception class for when the source code is known to have no license.
+    """
 
 
 class SourceSource(menus.ListPageSource):
@@ -156,19 +168,22 @@ class RTFS(commands.Cog):
                     if installable.repo is None:
                         is_installed = False
                     else:
-                        if (
-                            "mikeshardmind" in installable.repo.url.lower()
-                            or "sinbad" in installable.repo.url.lower()
-                        ):
-                            # Sinbad's license specifically disallows redistribution of code, as per Section 3.
-                            #   Ref: https://github.com/mikeshardmind/SinbadCogs/blob/9cdcd042d57cc39c7330fcda50ecf580c055c313/LICENSE#L73-L76
-                            # Raising OSError here will prevent even bot owners from viewing the code.
-                            raise Unlicensed()
-                        else:
-                            url = yarl.URL(installable.repo.url)
-                            if url.user or url.password:
-                                is_installed = False
-                            header = f"<{installable.repo.clean_url.rstrip('/')}/blob/{installable.commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
+                        if ctx.guild or not is_owner:
+                            surl = str(installable.repo.url).lower()
+                            if "mikeshardmind/sinbadcogs" in surl:
+                                # Sinbad's license specifically disallows redistribution of code, as per Section 3.
+                                # Raising Unlicensed here will prevent even bot owners from viewing the code.
+                                raise Unlicensed(
+                                    cite="<https://github.com/mikeshardmind/SinbadCogs/blob/master/LICENSE#L73-L76>"
+                                )
+                            elif "aikaterna/gobcog" in surl:
+                                raise NoLicense()
+                            elif "aikaterna/imgwelcome" in surl:
+                                raise NoLicense()
+                        url = yarl.URL(installable.repo.url)
+                        if url.user or url.password:
+                            is_installed = False
+                        header = f"<{installable.repo.clean_url.rstrip('/')}/blob/{installable.commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
         if not is_installed and not is_owner:
             # don't disclose the source of private cogs
             raise OSError()
@@ -202,9 +217,15 @@ class RTFS(commands.Cog):
                 return await self.format_and_send(ctx, obj, is_owner=is_owner)
         except OSError:
             return await ctx.send(f"I couldn't find source file for `{thing}`")
-        except Unlicensed:
+        except Unlicensed as e:
+            if e.cite:
+                message = f"The source code for `{thing}` is copyrighted under too strict a license for me to show it here. (See {e.cite})"
+            else:
+                message = f"The source code for `{thing}` is copyrighted under too strict a license for me to show it here."
+            return await ctx.send(message)
+        except NoLicense:
             return await ctx.send(
-                f"The source code for `{thing}` is copyrighted under too strict a license for me to show it here."
+                f"The source code for `{thing}` has no license, so I cannot show it here."
             )
         dev = ctx.bot.get_cog("Dev")
         if not is_owner or not dev:
