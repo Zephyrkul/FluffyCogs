@@ -26,6 +26,10 @@ _features = [getattr(__future__, fname) for fname in __future__.all_feature_name
 _ = dev_commands._
 
 
+class Exit(BaseException):
+    pass
+
+
 # This is taken straight from stdlib's codeop,
 # but with some modifications for this usecase
 class Compiler:
@@ -47,6 +51,8 @@ class Env(Dict[str, Any]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.imported = []
+        self.stdout = io.StringIO()
+        self["print"] = self._print
 
     @classmethod
     def from_context(cls, ctx: commands.Context, /, **kwargs: Any) -> "Env":
@@ -78,7 +84,7 @@ class Env(Dict[str, Any]):
 
     def __getitem__(self, key):
         if key.casefold() in ("exit", "quit"):  # pre-empt self and builtins
-            raise SystemExit(0)
+            raise Exit()
         try:
             return super().__getitem__(key)
         except KeyError:
@@ -115,17 +121,20 @@ class Env(Dict[str, Any]):
         self.imported.clear()
         return message
 
+    def _print(self, *args, **kwargs):
+        file = kwargs.pop("file", self.stdout)
+        return print(*args, **kwargs, file=file)
+
 
 class Dev(dev_commands.Dev):
     """Various development focused utilities."""
 
     # Schema: [my version] <[targeted bot version]>
-    __version__ = "0.0.2 <3.4.1dev>"
+    __version__ = "0.0.3 <3.4.7>"
 
     def __init__(self):
         super().__init__()
-        del self._last_result  # we don't need this anymore
-        self.sessions = {}
+        del self._last_result
 
     def format_help_for_context(self, ctx: commands.Context) -> str:
         pre = super().format_help_for_context(ctx)
@@ -160,7 +169,7 @@ class Dev(dev_commands.Dev):
         self,
         ctx: commands.Context,
         source,
-        env: Dict[str, Any],
+        env: Env,
         *modes: str,
         run: str = None,
         compiler: Compiler = None,
@@ -178,31 +187,29 @@ class Dev(dev_commands.Dev):
         # [Imports, Prints, Errors, Result]
         ret: List[Optional[str]] = [None, None, None, None]
         env.update(environ)
-        stdout = io.StringIO()
         filename = f"<{ctx.command}>"
         exited = False
         try:
-            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stdout):
-                exc = None
-                for mode in modes:
-                    try:
-                        compiled = compiler(source, filename, mode)
-                        output = await self.maybe_await(types.FunctionType(compiled, env)())
-                    except SyntaxError as e:
-                        exc = e
-                        continue
-                    else:
-                        if run:
-                            # don't call the func here, leave it to maybe_await
-                            output = await self.maybe_await(env[run]())
-                        if output is not None:
-                            setattr(builtins, "_", output)
-                            ret[3] = f"# Result:\n{output!r}"
-                        break
+            exc = None
+            for mode in modes:
+                try:
+                    compiled = compiler(source, filename, mode)
+                    output = await self.maybe_await(types.FunctionType(compiled, env)())
+                except SyntaxError as e:
+                    exc = e
+                    continue
                 else:
-                    if exc:
-                        raise exc
-        except SystemExit:
+                    if run:
+                        # don't call the func here, leave it to maybe_await
+                        output = await self.maybe_await(env[run]())
+                    if output is not None:
+                        setattr(builtins, "_", output)
+                        ret[3] = f"# Result:\n{output!r}"
+                    break
+            else:
+                if exc:
+                    raise exc
+        except (Exit, SystemExit):
             exited = True
         except BaseException as e:
             # return only frames that are part of provided code
@@ -229,7 +236,8 @@ class Dev(dev_commands.Dev):
             and (imported := method())
         ):
             ret[0] = f"# Imported:\n{imported}"
-        printed = stdout.getvalue().strip()
+        printed = env.stdout.getvalue().strip()
+        env.stdout = io.StringIO()
         if printed:
             ret[1] = "# Output:\n" + printed
         asyncio.ensure_future(self.send_interactive(ctx, *ret, message=message))
@@ -283,6 +291,16 @@ class Dev(dev_commands.Dev):
         else:
             return coro
 
+    def get_environment(self, ctx: commands.Context, **kwargs) -> Env:
+        env = Env.from_context(ctx, **kwargs)
+        for name, value in self.env_extensions.items():
+            try:
+                env[name] = value(ctx)
+            except Exception as e:
+                traceback.clear_frames(e.__traceback__)  # type: ignore
+                env[name] = e
+        return env
+
     @commands.command()
     @commands.is_owner()
     async def debug(self, ctx, *, code):
@@ -299,7 +317,7 @@ class Dev(dev_commands.Dev):
             commands - redbot.core.commands
             _        - The result of the last dev command.
         """
-        env = Env.from_context(ctx, commands=commands)
+        env = self.get_environment(ctx, commands=commands)
         code = self.cleanup_code(code).strip()
 
         compiler = Compiler()
@@ -338,7 +356,7 @@ class Dev(dev_commands.Dev):
             commands - redbot.core.commands
             _        - The result of the last dev command.
         """
-        env = Env.from_context(ctx, commands=commands)
+        env = self.get_environment(ctx, commands=commands)
         body = self.cleanup_code(body).strip()
 
         compiler = Compiler()
@@ -398,13 +416,13 @@ class Dev(dev_commands.Dev):
                 )
             return
 
-        variables = Env.from_context(ctx)
+        variables = self.get_environment(ctx)
         compiler = Compiler()
 
         self.sessions[ctx.channel.id] = True
         await ctx.send(
             _(
-                "Enter code to execute or evaluate. `exit()` or `quit` to exit. `{}repl pause` to pause."
+                "Enter code to execute or evaluate. `exit` or `quit` to exit. `{}repl pause` to pause."
             ).format(ctx.clean_prefix)
         )
 
