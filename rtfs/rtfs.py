@@ -109,7 +109,7 @@ class RTFS(commands.Cog):
                 else:
                     raise OSError
         elif isinstance(obj, partial):
-            sorce = obj.func
+            source = obj.func
         elif isinstance(obj, property):
             source = obj.fget
         elif isinstance(obj, (discord.utils.cached_property, discord.utils.CachedSlotProperty)):
