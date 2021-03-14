@@ -3,6 +3,7 @@ import importlib
 import inspect
 import logging
 import traceback
+from functools import partial
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
@@ -78,8 +79,23 @@ class RTFS(commands.Cog):
         pass  # Nothing to delete
 
     @staticmethod
-    async def format_and_send(ctx: commands.Context, obj: Any, *, is_owner: bool = False) -> None:
-        source = obj
+    def unwrap_wrapped(wrapped):
+        unwrapped, trace = wrapped, set()
+        while True:
+            if id(unwrapped) in trace:
+                return wrapped
+            try:
+                unwrapped = wrapped.__wrapped__
+            except AttributeError:
+                return unwrapped
+            else:
+                trace.add(unwrapped)
+
+    @classmethod
+    async def format_and_send(
+        cls, ctx: commands.Context, obj: Any, *, is_owner: bool = False
+    ) -> None:
+        source = cls.unwrap_wrapped(obj)
         if isinstance(obj, commands.Cog):
             source = type(obj)
         elif isinstance(obj, commands.Command):
@@ -92,6 +108,8 @@ class RTFS(commands.Cog):
                     )
                 else:
                     raise OSError
+        elif isinstance(obj, partial):
+            sorce = obj.func
         elif isinstance(obj, property):
             source = obj.fget
         elif isinstance(obj, (discord.utils.cached_property, discord.utils.CachedSlotProperty)):
