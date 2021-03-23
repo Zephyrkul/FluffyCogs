@@ -336,7 +336,7 @@ class Dev(dev_commands.Dev):
             commands - redbot.core.commands
             _        - The result of the last dev command.
         """
-        env = self.get_environment(ctx, commands=commands)
+        env = self.get_environment(ctx)
         body = self.cleanup_code(body).strip()
 
         compiler = Compiler()
@@ -444,24 +444,6 @@ class Dev(dev_commands.Dev):
                 del self.sessions[ctx.channel.id]
                 await ctx.send(_("Exiting."))
                 return
-
-    # The below command is unchanged from NeuroAssassin's code.
-    # It is present here mainly as a backport for previous versions of Red.
-    @repl.command(aliases=["resume"])
-    async def pause(self, ctx, toggle: Optional[bool] = None):
-        """Pauses/resumes the REPL running in the current channel"""
-        if ctx.channel.id not in self.sessions:
-            await ctx.send(_("There is no currently running REPL session in this channel."))
-            return
-
-        if toggle is None:
-            toggle = not self.sessions[ctx.channel.id]
-        self.sessions[ctx.channel.id] = toggle
-
-        if toggle:
-            await ctx.send(_("The REPL session in this channel has been resumed."))
-        else:
-            await ctx.send(_("The REPL session in this channel is now paused."))
 
     @commands.command()
     @commands.is_owner()
