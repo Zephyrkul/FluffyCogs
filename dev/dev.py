@@ -276,7 +276,7 @@ class Dev(dev_commands.Dev):
 
     def get_environment(self, ctx: commands.Context) -> Env:
         base_env = super().get_environment(ctx)
-        del base_env("_")
+        del base_env["_"]
         env = Env(base_env)
         env.amend()
         return env
