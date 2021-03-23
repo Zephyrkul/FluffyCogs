@@ -72,17 +72,6 @@ class SourceMenu(menus.MenuPages):
             raise
 
 
-class Env(dict):
-    def __missing__(self, key):
-        try:
-            module = importlib.import_module(key)
-        except ImportError:
-            raise KeyError(key) from None
-        else:
-            self[key] = module
-            return module
-
-
 class RTFS(commands.Cog):
     async def red_get_data_for_user(self, *, user_id):
         return {}  # Nothing to get
@@ -233,17 +222,7 @@ class RTFS(commands.Cog):
                 f"I couldn't find any cog or command named `{thing}`."
             )
         thing = dev.cleanup_code(thing)
-        env = Env(
-            bot=ctx.bot,
-            ctx=ctx,
-            channel=ctx.channel,
-            author=ctx.author,
-            guild=ctx.guild,
-            message=ctx.message,
-            asyncio=asyncio,
-            commands=commands,
-            dpy_commands=discord.ext.commands,
-        )
+        env = dev.get_environment(ctx)
         try:
             obj = eval(thing, env)
         except BaseException as be:
