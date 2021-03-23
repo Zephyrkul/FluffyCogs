@@ -278,7 +278,7 @@ class Dev(dev_commands.Dev):
         base_env = super().get_environment(ctx)
         del base_env["_"]
         env = Env(base_env)
-        env.amend()
+        env.amend(ctx)
         return env
 
     @commands.command()
