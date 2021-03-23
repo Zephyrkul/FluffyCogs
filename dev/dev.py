@@ -54,21 +54,10 @@ class Env(Dict[str, Any]):
         self.stdout = io.StringIO()
         self["print"] = self._print
 
-    @classmethod
-    def from_context(cls, ctx: commands.Context, /, **kwargs: Any) -> "Env":
-        self = cls(
+    def amend(self, ctx: commands.Context) -> None:
+        self.update(
             {
-                # "_": None,  # let __builtins__ handle this one
-                "ctx": ctx,
-                "author": ctx.author,
-                "bot": ctx.bot,
-                "channel": ctx.channel,
-                "guild": ctx.guild,
                 "me": ctx.me,
-                "message": ctx.message,
-                "asyncio": asyncio,  # not including this can cause errors with async-compile
-                "discord": discord,  # not necessary, but people generally assume this
-                "__name__": "__main__",  # not including this can cause errors with typing (#3648)
                 # eval and exec automatically put this in, but types.FunctionType does not
                 "__builtins__": builtins,
                 # fill in various other environment keys that some code might expect
@@ -77,10 +66,8 @@ class Env(Dict[str, Any]):
                 "__package__": None,
                 "__loader__": None,
                 "__spec__": None,
-            },
-            **kwargs,
+            }
         )
-        return self
 
     def __getitem__(self, key):
         if key.casefold() in ("exit", "quit"):  # pre-empt self and builtins
@@ -131,10 +118,6 @@ class Dev(dev_commands.Dev):
 
     # Schema: [my version] <[targeted bot version]>
     __version__ = "0.0.3 <3.4.7>"
-
-    def __init__(self):
-        super().__init__()
-        del self._last_result
 
     def format_help_for_context(self, ctx: commands.Context) -> str:
         pre = super().format_help_for_context(ctx)
@@ -291,14 +274,11 @@ class Dev(dev_commands.Dev):
         else:
             return coro
 
-    def get_environment(self, ctx: commands.Context, **kwargs) -> Env:
-        env = Env.from_context(ctx, **kwargs)
-        for name, value in self.env_extensions.items():
-            try:
-                env[name] = value(ctx)
-            except Exception as e:
-                traceback.clear_frames(e.__traceback__)  # type: ignore
-                env[name] = e
+    def get_environment(self, ctx: commands.Context) -> Env:
+        base_env = super().get_environment(ctx)
+        del base_env("_")
+        env = Env(base_env)
+        env.amend()
         return env
 
     @commands.command()
@@ -317,7 +297,7 @@ class Dev(dev_commands.Dev):
             commands - redbot.core.commands
             _        - The result of the last dev command.
         """
-        env = self.get_environment(ctx, commands=commands)
+        env = self.get_environment(ctx)
         code = self.cleanup_code(code).strip()
 
         compiler = Compiler()
