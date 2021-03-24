@@ -7,14 +7,14 @@ import contextlib
 import importlib
 import inspect
 import io
-import re
 import sys
 import textwrap
 import traceback
 import types
+from contextvars import ContextVar
 from copy import copy
 from itertools import chain
-from typing import Any, Dict, List, Optional
+from typing import IO, Any, Dict, List, Optional
 
 import discord
 from redbot.core import commands, dev_commands
@@ -24,6 +24,45 @@ from redbot.core.utils.predicates import MessagePredicate
 _features = [getattr(__future__, fname) for fname in __future__.all_feature_names]
 
 _ = dev_commands._
+stdout = ContextVar[IO[str]]("stdout")
+stderr = ContextVar[IO[str]]("stderr")
+
+
+@contextlib.asynccontextmanager
+async def redirect():
+    sio = io.StringIO()
+    outtoken = stdout.set(sio)
+    errtoken = stderr.set(sio)
+    try:
+        yield sio
+    finally:
+        stdout.reset(outtoken)
+        stderr.reset(errtoken)
+
+
+class MonkeyContext:
+    def __init__(self, ctxvar: ContextVar, default):
+        self.__ctxvar = ctxvar
+        if self is default:
+            raise TypeError
+        self.__default = default
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.__ctxvar.get(self.__default), name)
+
+
+def monkey_streams():
+    # monkeypatching is 👌
+    sys.stdout = MonkeyContext(stdout, sys.stdout)  # type: ignore
+    sys.stderr = MonkeyContext(stderr, sys.stderr)  # type: ignore
+
+
+def unmonkey_streams():
+    try:
+        sys.stdout = sys.stdout._MonkeyContext__default
+        sys.stderr = sys.stderr._MonkeyContext__default
+    except AttributeError:
+        pass
 
 
 class Exit(BaseException):
@@ -51,35 +90,10 @@ class Env(Dict[str, Any]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.imported = []
-        self.stdout = io.StringIO()
-        self["print"] = self._print
 
-    def amend(self, ctx: commands.Context) -> None:
-        self.update(
-            {
-                "me": ctx.me,
-                # eval and exec automatically put this in, but types.FunctionType does not
-                "__builtins__": builtins,
-                # fill in various other environment keys that some code might expect
-                "__builtin__": builtins,
-                "__doc__": ctx.command.help,
-                "__package__": None,
-                "__loader__": None,
-                "__spec__": None,
-            }
-        )
-
-    def __getitem__(self, key):
-        if key.casefold() in ("exit", "quit"):  # pre-empt self and builtins
+    def __missing__(self, key):
+        if key in ("exit", "quit"):
             raise Exit()
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            pass
-        try:
-            return getattr(builtins, key)
-        except AttributeError:
-            pass
         try:
             module = importlib.import_module(key)
         except ImportError:
@@ -88,16 +102,8 @@ class Env(Dict[str, Any]):
             self.imported.append(key)
             self[key] = module
             return module
-        modules = [
-            v
-            for k, v in sys.modules.items()
-            if re.fullmatch(fr"(redbot|discord)(\.|\..+\.){key}", k)
-        ]
-        if len(modules) == 1:
-            module = modules[0]
-            self.imported.append(f"{module.__name__} as {key}")
-            self[key] = module
-            return module
+        if (bot := self["bot"]) and (cog := bot.get_cog(key)):
+            return cog
         raise KeyError(key)
 
     def get_formatted_imports(self) -> Optional[str]:
@@ -108,16 +114,12 @@ class Env(Dict[str, Any]):
         self.imported.clear()
         return message
 
-    def _print(self, *args, **kwargs):
-        file = kwargs.pop("file", self.stdout)
-        return print(*args, **kwargs, file=file)
-
 
 class Dev(dev_commands.Dev):
     """Various development focused utilities."""
 
     # Schema: [my version] <[targeted bot version]>
-    __version__ = "0.0.3 <3.4.7>"
+    __version__ = "0.0.4 <3.4.7>"
 
     def format_help_for_context(self, ctx: commands.Context) -> str:
         pre = super().format_help_for_context(ctx)
@@ -173,25 +175,25 @@ class Dev(dev_commands.Dev):
         filename = f"<{ctx.command}>"
         exited = False
         try:
-            exc = None
-            for mode in modes:
-                try:
-                    compiled = compiler(source, filename, mode)
-                    output = await self.maybe_await(types.FunctionType(compiled, env)())
-                except SyntaxError as e:
-                    exc = e
-                    continue
+            async with redirect() as sio:
+                exc = None
+                for mode in modes:
+                    try:
+                        compiled = compiler(source, filename, mode)
+                        output = await self.maybe_await(types.FunctionType(compiled, env)())
+                    except SyntaxError as e:
+                        exc = e
+                        continue
+                    else:
+                        if run:
+                            output = await self.maybe_await(env[run]())
+                        if output is not None:
+                            setattr(builtins, "_", output)
+                            ret[3] = f"# Result:\n{output!r}"
+                        break
                 else:
-                    if run:
-                        # don't call the func here, leave it to maybe_await
-                        output = await self.maybe_await(env[run]())
-                    if output is not None:
-                        setattr(builtins, "_", output)
-                        ret[3] = f"# Result:\n{output!r}"
-                    break
-            else:
-                if exc:
-                    raise exc
+                    if exc:
+                        raise exc
         except (Exit, SystemExit):
             exited = True
         except BaseException as e:
@@ -219,8 +221,7 @@ class Dev(dev_commands.Dev):
             and (imported := method())
         ):
             ret[0] = f"# Imported:\n{imported}"
-        printed = env.stdout.getvalue().strip()
-        env.stdout = io.StringIO()
+        printed = sio.getvalue().strip()
         if printed:
             ret[1] = "# Output:\n" + printed
         asyncio.ensure_future(self.send_interactive(ctx, *ret, message=message))
@@ -277,8 +278,20 @@ class Dev(dev_commands.Dev):
     def get_environment(self, ctx: commands.Context) -> Env:
         base_env = super().get_environment(ctx)
         del base_env["_"]
-        env = Env(base_env)
-        env.amend(ctx)
+        env = Env(
+            {
+                "me": ctx.me,
+                # eval and exec automatically put this in, but types.FunctionType does not
+                "__builtins__": builtins,
+                # fill in various other environment keys that some code might expect
+                "__builtin__": builtins,
+                "__doc__": ctx.command.help,
+                "__package__": None,
+                "__loader__": None,
+                "__spec__": None,
+            }
+        )
+        env.update(base_env)
         return env
 
     @commands.command()
