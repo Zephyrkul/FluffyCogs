@@ -1,8 +1,9 @@
 import inspect
 import logging
 import traceback
-from functools import partial
+from functools import partial, partialmethod
 from importlib.metadata import PackageNotFoundError, version
+from itertools import chain
 from typing import Any
 
 import discord
@@ -77,29 +78,15 @@ class RTFS(commands.Cog):
     async def red_delete_data_for_user(self, *, requester, user_id):
         pass  # Nothing to delete
 
-    @staticmethod
-    def unwrap_wrapped(wrapped):
-        unwrapped, trace = wrapped, set()
-        while True:
-            if id(unwrapped) in trace:
-                return wrapped
-            try:
-                unwrapped = wrapped.__wrapped__
-            except AttributeError:
-                return unwrapped
-            else:
-                trace.add(unwrapped)
-
     @classmethod
     async def format_and_send(
         cls, ctx: commands.Context, obj: Any, *, is_owner: bool = False
     ) -> None:
-        source = cls.unwrap_wrapped(obj)
-        if isinstance(obj, commands.Cog):
-            source = type(obj)
-        elif isinstance(obj, commands.Command):
+        obj = inspect.unwrap(obj)
+        source = obj
+        if isinstance(obj, commands.Command):
             source = obj.callback
-            if not source.__module__:
+            if not inspect.getmodule(source):
                 # probably some kind of custom-coded command
                 if is_owner:
                     return await ctx.invoke(
@@ -107,7 +94,7 @@ class RTFS(commands.Cog):
                     )
                 else:
                     raise OSError
-        elif isinstance(obj, partial):
+        elif isinstance(obj, (partial, partialmethod)):
             source = obj.func
         elif isinstance(obj, property):
             source = obj.fget
@@ -115,13 +102,13 @@ class RTFS(commands.Cog):
             source = obj.function
         try:
             lines, line = inspect.getsourcelines(source)
-            source_file = inspect.getsourcefile(source)
-        except TypeError:
-            if isinstance(source, type):
+        except TypeError as e:
+            if "was expected, got" not in e.args[0]:
                 raise
             source = type(source)
             lines, line = inspect.getsourcelines(source)
-            source_file = inspect.getsourcefile(source)
+        source_file = inspect.getsourcefile(source)
+        comments = inspect.getcomments(source)
         module = getattr(inspect.getmodule(source), "__name__", None)
         if source_file and module and source_file.endswith("__init__.py"):
             full_module = f"{module}.__init__"
@@ -181,7 +168,11 @@ class RTFS(commands.Cog):
                 header = box(f"File {source_file}, line {line}", lang="py")
         raw_pages = list(
             pagify(
-                "".join(lines).replace("```", "`\u200b`\u200b`"), shorten_by=10, page_length=1024
+                "".join(chain([comments], lines) if comments else lines).replace(
+                    "```", "`\u200b`\u200b`"
+                ),
+                shorten_by=10,
+                page_length=1024,
             )
         )
         await SourceMenu(
@@ -199,7 +190,7 @@ class RTFS(commands.Cog):
         is_owner = await ctx.bot.is_owner(ctx.author)
         try:
             if obj := ctx.bot.get_cog(thing):
-                return await self.format_and_send(ctx, obj, is_owner=is_owner)
+                return await self.format_and_send(ctx, type(obj), is_owner=is_owner)
             elif obj := ctx.bot.get_command(thing):
                 return await self.format_and_send(ctx, obj, is_owner=is_owner)
         except OSError:
@@ -223,9 +214,9 @@ class RTFS(commands.Cog):
         env = dev.get_environment(ctx)
         try:
             obj = eval(thing, env)
-        except BaseException as be:
+        except Exception as e:
             return await ctx.send(
-                box("".join(traceback.format_exception_only(type(be), be)), lang="py")
+                box("".join(traceback.format_exception_only(type(e), e)), lang="py")
             )
         try:
             return await self.format_and_send(ctx, obj, is_owner=is_owner)
