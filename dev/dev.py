@@ -95,6 +95,10 @@ class Env(Dict[str, Any]):
         if key in ("exit", "quit"):
             raise Exit()
         try:
+            return getattr(builtins, key)
+        except AttributeError:
+            pass
+        try:
             module = importlib.import_module(key)
         except ImportError:
             pass
@@ -119,7 +123,7 @@ class Dev(dev_commands.Dev):
     """Various development focused utilities."""
 
     # Schema: [my version] <[targeted bot version]>
-    __version__ = "0.0.4 <3.4.7>"
+    __version__ = "0.0.5 <3.4.9>"
 
     def format_help_for_context(self, ctx: commands.Context) -> str:
         pre = super().format_help_for_context(ctx)
