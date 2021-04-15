@@ -108,7 +108,7 @@ class RTFS(commands.Cog):
             source = type(source)
             lines, line = inspect.getsourcelines(source)
         source_file = inspect.getsourcefile(source)
-        comments = inspect.getcomments(source)
+        comments = inspect.getcomments(source) if line > 0 else ""
         module = getattr(inspect.getmodule(source), "__name__", None)
         if source_file and module and source_file.endswith("__init__.py"):
             full_module = f"{module}.__init__"
@@ -144,11 +144,13 @@ class RTFS(commands.Cog):
                     else:
                         if ctx.guild or not is_owner:
                             surl = str(installable.repo.url).lower()
-                            if "mikeshardmind/sinbadcogs" in surl:
+                            if (
+                                "mikeshardmind/sinbadcogs" in surl
+                                and installable.repo.branch.lower() == "v3"
+                            ):
                                 # Sinbad's license specifically disallows redistribution of code, as per Section 3.
-                                # Raising Unlicensed here will prevent even bot owners from viewing the code.
                                 raise Unlicensed(
-                                    cite="<https://github.com/mikeshardmind/SinbadCogs/blob/master/LICENSE#L73-L76>"
+                                    cite="<https://github.com/mikeshardmind/SinbadCogs/blob/v3/LICENSE#L73-L76>"
                                 )
                             elif "aikaterna/gobcog" in surl:
                                 raise NoLicense()
