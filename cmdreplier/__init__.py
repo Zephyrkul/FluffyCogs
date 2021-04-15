@@ -33,6 +33,12 @@ async def before_hook(ctx: Context):
     # since replies always mention and can't be changed on edit,
     # this won't patch ctx if the command invokation is an edit.
     if ctx.message.reference and not ctx.message.edited_at:
+        try:
+            # before_hook might be called multiple times
+            # clear any overwritten send method before overwriting it again
+            del ctx.send
+        except AttributeError:
+            pass
         ctx.send = partial(new_send, ctx.send)
 
 
