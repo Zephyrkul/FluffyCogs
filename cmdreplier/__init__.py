@@ -29,7 +29,10 @@ async def new_send(__sender, /, *args, **kwargs):
 
 
 async def before_hook(ctx: Context):
-    if ctx.message.reference:
+    # onedit allows command calls on message edits
+    # since replies always mention and can't be changed on edit,
+    # this won't patch ctx if the command invokation is an edit.
+    if ctx.message.reference and not ctx.message.edited_at:
         ctx.send = partial(new_send, ctx.send)
 
 
