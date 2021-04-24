@@ -236,9 +236,12 @@ class AntiCrashVid(commands.Cog):
         video = path / filename
         digest = await to_thread(self.hexdigest, video)
         async with self.config.custom(HASHES, digest).unsafe.get_lock():
+            LOG.debug("digest for video at link %r: %s", link, digest)
             if await self.config.custom(HASHES, digest).unsafe():
-                LOG.debug("would remove message with link %s: cached digest @ %s", link, digest)
+                LOG.debug("would remove message with link %r; cached digest @ %s", link, digest)
                 return True
+            else:
+                LOG.debug("link %r not in digest cache", link)
             first, last = await asyncio.gather(
                 self.get_probe(
                     "-loglevel",
@@ -265,14 +268,18 @@ class AntiCrashVid(commands.Cog):
                     path / "last.jpg",
                 ),
             )
-            print(first.splitlines()[-1], last.splitlines()[-1], sep="\n")
-            if first.splitlines()[-1] != last.splitlines()[-1]:
+            first_line, last_line = first.splitlines()[-1], last.splitlines()[-1]
+            print(first_line, last_line, sep="\n")
+            if first_line != last_line:
                 LOG.debug(
-                    "would remove message with link %s: ffprobe first and last frames have conflicting results",
+                    "would remove message with link %r: ffprobe first and last frames have conflicting results",
                     link,
                 )
                 await self.config.custom(HASHES, digest).unsafe.set(True)
                 return True
+            else:
+                LOG.debug("link %r has consistent first/last ffprobe results", link)
+            del first_line, last_line
             process = await asyncio.create_subprocess_exec(
                 "ffprobe",
                 "-v",
@@ -289,11 +296,12 @@ class AntiCrashVid(commands.Cog):
             out, _ = await process.communicate()
             if not all_equal(out.splitlines()):
                 LOG.debug(
-                    "would remove message with link %s: ffprobe frame dimentions are not constant",
+                    "would remove message with link %r: ffprobe frame dimentions are not constant",
                     link,
                 )
                 await self.config.custom(HASHES, digest).unsafe.set(True)
                 return True
+            LOG.debug("link %r looks safe", link)
             return False
 
     @staticmethod
