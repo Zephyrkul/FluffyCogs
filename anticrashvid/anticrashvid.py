@@ -2,19 +2,19 @@ import asyncio
 import contextvars
 import functools
 import hashlib
+import io
 import itertools
 import logging
 import pathlib
 import shutil
 from datetime import datetime, timezone
-from typing import Callable, Dict, Final, List, Literal, Set, TypedDict, TypeVar, Union
+from typing import Callable, Final, List, Literal, MutableMapping, TypeVar
 
 import discord
 import youtube_dl
 from redbot.core import Config, commands, modlog
 from redbot.core.bot import Red
 from redbot.core.data_manager import cog_data_path
-from redbot.core.utils import AsyncIter, deduplicate_iterables
 
 # chunks >=2048 cause hashlib to release the GIL
 BLOCKS: Final[int] = 128
@@ -38,18 +38,12 @@ async def to_thread(func: Callable[..., T], /, *args, **kwargs) -> T:
     return await loop.run_in_executor(None, func_call)  # type: ignore
 
 
-class Settings(TypedDict):
-    bypasslist: List[int]
-
-
 class AntiCrashVid(commands.Cog):
     def __init__(self, bot: Red):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
         self.config.init_custom(HASHES, 1)
         self.config.register_custom(HASHES, unsafe=None)
-        self.config.register_guild(bypasslist=[])
-        self.cache: Dict[int, Set[int]] = {}
         self.cog_ready = asyncio.Event()
         asyncio.ensure_future(self.initialize())
 
@@ -59,16 +53,10 @@ class AntiCrashVid(commands.Cog):
         requester: Literal["discord_deleted_user", "owner", "user", "user_strict"],
         user_id: int,
     ):
-        if requester == "user":
-            LOG.info("Ignoring deletion request for user id %s", user_id)
-            raise commands.RedUnhandledAPI()
-        all_guilds = await self.config.all_guilds()
-        settings: Settings
-        async for _, settings in AsyncIter(all_guilds, steps=100):
-            settings["bypasslist"].remove(user_id)
+        pass
 
-    async def cog_before_invoke(self, ctx) -> None:
-        await self.cog_ready.wait()
+    async def red_get_data_for_user(self, *, user_id: int) -> MutableMapping[str, io.BytesIO]:
+        return {}
 
     async def initialize(self):
         try:
@@ -80,80 +68,11 @@ class AntiCrashVid(commands.Cog):
             )
         except RuntimeError:
             pass
-        all_guilds: Dict[int, Settings] = await self.config.all_guilds()
-        self.cache = {k: set(v["bypasslist"]) for k, v in all_guilds.items()}
         self.cog_ready.set()
-
-    @commands.group()
-    @commands.guildowner_or_permissions(administrator=True)
-    async def anticrashvid(self, ctx: commands.GuildContext):
-        """Manage anticrashvid's settings"""
-
-    @anticrashvid.group(aliases=["whitelist"])
-    async def bypasslist(self, ctx: commands.GuildContext):
-        """
-        Manage anticrashvid's bypasslist.
-
-        Messages from members or roles in the bypasslist will not be checked for malicious videos.
-        By default, server owners and full admins are exempt from anticrashvid's checks.
-        """
-
-    @bypasslist.command(require_var_positional=True)
-    async def add(
-        self, ctx: commands.GuildContext, *users_or_roles: Union[discord.Member, discord.Role, int]
-    ):
-        """Add users or roles to anticrashvid's bypasslist for this server."""
-        ids = [getattr(i, "id", i) for i in users_or_roles]
-        self.cache.setdefault(ctx.guild.id, set()).update(ids)
-        async with self.config.guild(ctx.guild).bypasslist() as bypasslist:
-            bypasslist[:] = deduplicate_iterables(bypasslist, ids)
-        await ctx.tick()
-
-    @bypasslist.command(require_var_positional=True)
-    async def remove(
-        self, ctx: commands.GuildContext, *users_or_roles: Union[discord.Member, discord.Role, int]
-    ):
-        """Remove users or roles from anticrashvid's bypasslist for this server."""
-        ids = {getattr(i, "id", i) for i in users_or_roles}
-        try:
-            self.cache[ctx.guild.id] -= ids
-        except KeyError:
-            return await ctx.tick()
-        async with self.config.guild(ctx.guild).bypasslist() as bypasslist:
-            bypasslist[:] = [i for i in bypasslist if i not in ids]
-        await ctx.tick()
-
-    @bypasslist.command()
-    async def clear(self, ctx: commands.GuildContext):
-        """Clear anticrashvid's bypasslist for this server."""
-        await self.config.guild(ctx.guild).clear()
-        await ctx.tick()
-
-    async def should_bypass(self, message: discord.Message) -> bool:
-        # Note that bots and even the client itself are also checked by default
-        if not message.guild:
-            return True
-        if LOG.isEnabledFor(logging.DEBUG):
-            # for debugging purposes
-            return False
-        who = message.author
-        assert isinstance(who, discord.Member)
-        if message.guild.owner_id == who.id:
-            return True
-        if who.guild_permissions.administrator:
-            return True
-        if not LOG.isEnabledFor(logging.DEBUG) and await self.bot.is_owner(who):
-            return True
-        await self.cog_ready.wait()
-        try:
-            bypasslist = self.cache[message.guild.id]
-        except KeyError:
-            return False
-        return not bypasslist.isdisjoint((who.id, *who._roles))  # type: ignore
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if await self.should_bypass(message):
+        if not LOG.isEnabledFor(logging.DEBUG) and await self.bot.is_automod_immune(message):
             LOG.debug("Not checking message by author %s", message.author)
             return
         assert message.guild
@@ -173,7 +92,7 @@ class AntiCrashVid(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_edit(self, _, message: discord.Message):
-        if await self.should_bypass(message):
+        if not LOG.isEnabledFor(logging.DEBUG) and await self.bot.is_automod_immune(message):
             LOG.debug("Not checking message by author %s", message.author)
             return
         assert message.guild
