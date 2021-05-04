@@ -2,13 +2,12 @@ import asyncio
 import contextvars
 import functools
 import hashlib
-import io
-import itertools
 import logging
+import os
 import pathlib
 import shutil
 from datetime import datetime, timezone
-from typing import Callable, Final, List, Literal, MutableMapping, TypeVar
+from typing import Callable, Final, List, TypeVar
 
 import discord
 import youtube_dl
@@ -21,14 +20,6 @@ BLOCKS: Final[int] = 128
 HASHES: Final[str] = "HASHES"
 LOG = logging.getLogger("red.fluffy.anticrashvid")
 T = TypeVar("T")
-
-
-# from itertools recipes <https://docs.python.org/3/library/itertools.html#itertools-recipes>
-def all_equal(iterable):
-    "Returns True if all the elements are equal to each other"
-    g = itertools.groupby(iterable)
-    return next(g, True) and not next(g, False)
-
 
 # backport of 3.9's to_thread
 async def to_thread(func: Callable[..., T], /, *args, **kwargs) -> T:
@@ -47,15 +38,10 @@ class AntiCrashVid(commands.Cog):
         self.cog_ready = asyncio.Event()
         asyncio.ensure_future(self.initialize())
 
-    async def red_delete_data_for_user(
-        self,
-        *,
-        requester: Literal["discord_deleted_user", "owner", "user", "user_strict"],
-        user_id: int,
-    ):
+    async def red_delete_data_for_user(self, *, requester, user_id):
         pass
 
-    async def red_get_data_for_user(self, *, user_id: int) -> MutableMapping[str, io.BytesIO]:
+    async def red_get_data_for_user(self, *, user_id):
         return {}
 
     async def initialize(self):
@@ -64,7 +50,7 @@ class AntiCrashVid(commands.Cog):
                 name="malicious_video",
                 default_setting=True,
                 image="\N{TELEVISION}",
-                case_str="Malicious video detected",
+                case_str="Potentially malicious video detected",
             )
         except RuntimeError:
             pass
@@ -72,8 +58,15 @@ class AntiCrashVid(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if not LOG.isEnabledFor(logging.DEBUG) and await self.bot.is_automod_immune(message):
-            LOG.debug("Not checking message by author %s", message.author)
+        if not LOG.isEnabledFor(logging.DEBUG):
+            if await self.bot.is_automod_immune(message):
+                LOG.debug("Not checking message by author %s: is automod immune", message.author)
+            elif await self.bot.cog_disabled_in_guild(self, message.guild):
+                LOG.debug(
+                    "Not checking message by author %s: cog is disabled in guild %s",
+                    message.author,
+                    message.guild,
+                )
             return
         assert message.guild
         links = []
@@ -92,9 +85,17 @@ class AntiCrashVid(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_edit(self, _, message: discord.Message):
-        if not LOG.isEnabledFor(logging.DEBUG) and await self.bot.is_automod_immune(message):
-            LOG.debug("Not checking message by author %s", message.author)
+        if not LOG.isEnabledFor(logging.DEBUG):
+            if await self.bot.is_automod_immune(message):
+                LOG.debug("Not checking message by author %s: is automod immune", message.author)
+            elif await self.bot.cog_disabled_in_guild(self, message.guild):
+                LOG.debug(
+                    "Not checking message by author %s: cog is disabled in guild %s",
+                    message.author,
+                    message.guild,
+                )
             return
+
         assert message.guild
         links = []
         for embed in message.embeds:
@@ -108,8 +109,7 @@ class AntiCrashVid(commands.Cog):
         await self.cry(message)
 
     async def cry(self, message: discord.Message):
-        assert message.guild
-        assert isinstance(message.channel, discord.TextChannel)
+        assert message.guild and isinstance(message.channel, discord.TextChannel)
         message_deleted = False
         try:
             if (
@@ -130,71 +130,78 @@ class AntiCrashVid(commands.Cog):
                 user=message.author,
                 moderator=message.guild.me,
                 channel=message.channel,
-                reason=message.jump_url if not message_deleted else None,
+                reason=message.jump_url
+                if not message_deleted
+                else "Offending message was deleted.",
             )
         except Exception:
             pass
 
     async def check_links(self, links: List[str], channel_id: int, message_id: int) -> List[bool]:
+        assert links
         directory = cog_data_path(self) / f"{channel_id}-{message_id}"
         try:
             if len(links) == 1:
                 return [await self.check_link(links[0], directory)]
             return await asyncio.gather(
-                *(self.check_link(link, directory) for link in links), return_exceptions=True
+                *(self.check_link(link, directory / str(i)) for i, link in enumerate(links)),
+                return_exceptions=True,
             )
         finally:
-            shutil.rmtree(directory)
+            shutil.rmtree(directory, ignore_errors=True)
 
     async def check_link(self, link: str, path: pathlib.Path) -> bool:
         path.mkdir(parents=True)
         template = "%(title)s-%(id)s.%(ext)s"
         filename = template % await to_thread(
-            self.dl_video, link, outtmpl=str(path / template), quiet=True, logger=LOG
+            self.dl_video,
+            link,
+            outtmpl=os.path.join(str(path).replace("%", "%%"), template),
+            quiet=True,
+            logger=LOG,
         )
         video = path / filename
+        video.with_suffix("").mkdir()
         digest = await to_thread(self.hexdigest, video)
-        async with self.config.custom(HASHES, digest).unsafe.get_lock():
+        unsafe = self.config.custom(HASHES, digest).unsafe
+        async with unsafe.get_lock():
             LOG.debug("digest for video at link %r: %s", link, digest)
-            if await self.config.custom(HASHES, digest).unsafe():
+            if await unsafe():
                 LOG.debug("would remove message with link %r; cached digest @ %s", link, digest)
                 return True
             else:
                 LOG.debug("link %r not in digest cache", link)
-            first, last = await asyncio.gather(
-                self.get_probe(
-                    "-loglevel",
-                    "fatal",
-                    "-i",
-                    video,
-                    "-vframes",
-                    "1",
-                    "-q:v",
-                    "1",
-                    path / "first.jpg",
-                ),
-                self.get_probe(
-                    "-loglevel",
-                    "fatal",
-                    "-sseof",
-                    "-3",
-                    "-i",
-                    video,
-                    "-update",
-                    "1",
-                    "-q:v",
-                    "1",
-                    path / "last.jpg",
-                ),
+            first_line = await self.get_probe(
+                "-loglevel",
+                "fatal",
+                "-i",
+                video,
+                "-vframes",
+                "1",
+                "-q:v",
+                "1",
+                video.with_suffix("") / "first.jpg",
             )
-            first_line, last_line = first.splitlines()[-1], last.splitlines()[-1]
-            print(first_line, last_line, sep="\n")
+            last_line = await self.get_probe(
+                "-loglevel",
+                "fatal",
+                "-sseof",
+                "-3",
+                "-i",
+                video,
+                "-update",
+                "1",
+                "-q:v",
+                "1",
+                video.with_suffix("") / "last.jpg",
+            )
+            LOG.debug("first probe: %r\nlast probe: %r", first_line, last_line)
             if first_line != last_line:
                 LOG.debug(
                     "would remove message with link %r: ffprobe first and last frames have conflicting results",
                     link,
                 )
-                await self.config.custom(HASHES, digest).unsafe.set(True)
+                await unsafe.set(True)
                 return True
             else:
                 LOG.debug("link %r has consistent first/last ffprobe results", link)
@@ -212,14 +219,18 @@ class AntiCrashVid(commands.Cog):
                 video,
                 stdout=asyncio.subprocess.PIPE,
             )
-            out, _ = await process.communicate()
-            if not all_equal(out.splitlines()):
-                LOG.debug(
-                    "would remove message with link %r: ffprobe frame dimentions are not constant",
-                    link,
-                )
-                await self.config.custom(HASHES, digest).unsafe.set(True)
-                return True
+            # only one pipe is used, so accessing it should™️ be safe
+            assert process.stdout
+            first_line = await process.stdout.readline()
+            while line := await process.stdout.readline():
+                if line != first_line:
+                    process.terminate()
+                    LOG.debug(
+                        "would remove message with link %r: ffprobe frame dimentions are not constant",
+                        link,
+                    )
+                    await unsafe.set(True)
+                    return True
             LOG.debug("link %r looks safe", link)
             return False
 
@@ -231,8 +242,14 @@ class AntiCrashVid(commands.Cog):
         process = await asyncio.create_subprocess_exec(
             "ffprobe", "-i", args[-1], stderr=asyncio.subprocess.PIPE
         )
-        _, err = await process.communicate()
-        return err
+        # only one pipe is used, so accessing it should™️ be safe
+        assert process.stderr
+        line = b""
+        while next_line := await process.stderr.readline():
+            line = next_line
+        if code := await process.wait():
+            raise RuntimeError(f"Process exited with exit code {code}")
+        return line
 
     @staticmethod
     def hexdigest(path) -> str:
