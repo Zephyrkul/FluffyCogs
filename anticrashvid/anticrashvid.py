@@ -173,6 +173,11 @@ class AntiCrashVid(commands.Cog):
                 return True
             else:
                 LOG.debug("link %r not in digest cache", link)
+            LOG.info(
+                "Beginning first probe for link %r.\n"
+                "If ffprobe logs stop suddenly, then most likely your system has insufficient RAM for this cog.",
+                link,
+            )
             first_line = await self.get_probe(
                 "-loglevel",
                 "fatal",
@@ -184,6 +189,7 @@ class AntiCrashVid(commands.Cog):
                 "1",
                 video.with_suffix("") / "first.jpg",
             )
+            LOG.info("Beginning second probe for link %r.", link)
             last_line = await self.get_probe(
                 "-loglevel",
                 "fatal",
@@ -208,6 +214,7 @@ class AntiCrashVid(commands.Cog):
             else:
                 LOG.debug("link %r has consistent first/last ffprobe results", link)
             del first_line, last_line
+            LOG.info("Beginning third probe for link %r.", link)
             process = await asyncio.create_subprocess_exec(
                 "ffprobe",
                 "-v",
@@ -233,7 +240,7 @@ class AntiCrashVid(commands.Cog):
                     )
                     await unsafe.set(True)
                     return True
-            LOG.debug("link %r looks safe", link)
+            LOG.info("All probes for link %r complete: video appears safe.", link)
             return False
 
     @staticmethod
