@@ -29,13 +29,14 @@ async def to_thread(func: Callable[..., T], /, *args, **kwargs) -> T:
     return await loop.run_in_executor(None, func_call)  # type: ignore
 
 
+# Credit for these fixes: https://www.reddit.com/r/discordapp/comments/mwsqm2/detect_discord_crash_videos_for_bot_developers/
 class AntiCrashVid(commands.Cog):
     def __init__(self, bot: Red):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
         self.config.init_custom(HASHES, 1)
         self.config.register_custom(HASHES, unsafe=None)
-        self.cog_ready = asyncio.Event()
+        self.case_ready = asyncio.Event()
         asyncio.ensure_future(self.initialize())
 
     async def red_delete_data_for_user(self, *, requester, user_id):
@@ -54,7 +55,7 @@ class AntiCrashVid(commands.Cog):
             )
         except RuntimeError:
             pass
-        self.cog_ready.set()
+        self.case_ready.set()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -121,6 +122,7 @@ class AntiCrashVid(commands.Cog):
         except discord.HTTPException:
             pass
         try:
+            await self.case_ready.wait()
             await modlog.create_case(
                 bot=self.bot,
                 guild=message.guild,
