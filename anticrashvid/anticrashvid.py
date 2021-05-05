@@ -9,7 +9,7 @@ import pathlib
 import shutil
 from base64 import b85decode, b85encode
 from datetime import datetime, timezone
-from typing import Callable, Final, List, TypeVar
+from typing import TYPE_CHECKING, Callable, Final, List, TypeVar
 
 import discord
 import youtube_dl
@@ -23,6 +23,11 @@ BLOCKS: Final[int] = 128
 HASHES: Final[str] = "HASHES"
 LOG = logging.getLogger("red.fluffy.anticrashvid")
 T = TypeVar("T")
+
+if TYPE_CHECKING:
+    Hex = bytes
+else:
+    Hex = bytes.fromhex
 
 # backport of 3.9's to_thread
 async def to_thread(func: Callable[..., T], /, *args, **kwargs) -> T:
@@ -65,13 +70,17 @@ class AntiCrashVid(commands.Cog):
             pass
         self.case_ready.set()
 
-    async def preload_hashes(self):
+    async def preload_hashes(self, *, clear_past_hashes=False):
         # b85 uses 5 ASCII chars to represent 4 bytes of data
         b85_digest_size = math.ceil(hashlib.sha512().digest_size / 4) * 5
         value = {"unsafe": True}
         async with self.config.custom(HASHES).all() as current_hashes:
+            assert isinstance(current_hashes, dict)
+            if clear_past_hashes:
+                current_hashes.clear()
             with open(bundled_data_path(self) / "known_hashes", "rb") as file:
                 while chunk := file.read(b85_digest_size):
+                    assert len(chunk) == b85_digest_size
                     current_hashes[b85decode(chunk).hex()] = value
 
     @commands.command(hidden=True)
@@ -88,6 +97,17 @@ class AntiCrashVid(commands.Cog):
                 pagify(all_hashes.decode("ascii"), shorten_by=10), box_lang=""
             )
         await ctx.send("No hashes to export.")
+
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def clear_hashes(self, ctx: commands.Context):
+        """
+        Removes all hex digests from the cache.
+
+        Known / pre-computed hashes will remain cached.
+        """
+        await self.preload_hashes(clear_past_hashes=True)
+        await ctx.tick()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -262,11 +282,13 @@ class AntiCrashVid(commands.Cog):
             assert process.stdout
             first_line = await process.stdout.readline()
             while line := await process.stdout.readline():
-                if line != first_line:
+                if line.strip() and line != first_line:
                     process.terminate()
                     LOG.debug(
-                        "would remove message with link %r: ffprobe frame dimentions are not constant",
+                        "would remove message with link %r: ffprobe frame dimentions are not constant (%r != %r)",
                         link,
+                        first_line.rstrip(),
+                        line.rstrip(),
                     )
                     await unsafe.set(True)
                     return True
