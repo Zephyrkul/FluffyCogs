@@ -93,17 +93,11 @@ class AntiCrashVid(commands.Cog):
     async def on_message(self, message: discord.Message):
         if not message.guild:
             return
-        if (message.author.id, self.bot.user.id) != (215640856839979008, 256505473807679488):
-            if await self.bot.is_automod_immune(message):
-                LOG.debug("Not checking message by author %s: is automod immune", message.author)
-                return
-            elif await self.bot.cog_disabled_in_guild(self, message.guild):
-                LOG.debug(
-                    "Not checking message by author %s: cog is disabled in guild %s",
-                    message.author,
-                    message.guild,
-                )
-                return
+        if (message.author.id, self.bot.user.id) != (215640856839979008, 256505473807679488) and (
+            await self.bot.cog_disabled_in_guild(self, message.guild)
+            or await self.bot.is_automod_immune(message)
+        ):
+            return
         links = []
         for attachment in message.attachments:
             if attachment.content_type and attachment.content_type.startswith("video/"):
@@ -122,17 +116,11 @@ class AntiCrashVid(commands.Cog):
     async def on_message_edit(self, _, message: discord.Message):
         if not message.guild:
             return
-        if (message.author.id, self.bot.user.id) != (215640856839979008, 256505473807679488):
-            if await self.bot.is_automod_immune(message):
-                LOG.debug("Not checking message by author %s: is automod immune", message.author)
-                return
-            elif await self.bot.cog_disabled_in_guild(self, message.guild):
-                LOG.debug(
-                    "Not checking message by author %s: cog is disabled in guild %s",
-                    message.author,
-                    message.guild,
-                )
-                return
+        if (message.author.id, self.bot.user.id) != (215640856839979008, 256505473807679488) and (
+            await self.bot.cog_disabled_in_guild(self, message.guild)
+            or await self.bot.is_automod_immune(message)
+        ):
+            return
         links = []
         for embed in message.embeds:
             if url := embed.video.url:
