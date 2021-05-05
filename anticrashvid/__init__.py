@@ -1,3 +1,6 @@
+# The file bundled with this cog is a base85-encoded list of known hashes that crash discord,
+# as pre-computed by trusted sources.
+
 import json
 from pathlib import Path
 

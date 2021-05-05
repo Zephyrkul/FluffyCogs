@@ -3,17 +3,20 @@ import contextvars
 import functools
 import hashlib
 import logging
+import math
 import os
 import pathlib
 import shutil
+from base64 import b85decode, b85encode
 from datetime import datetime, timezone
-from typing import Callable, Final, List, TypeVar
+from typing import Callable, Final, Iterable, List, Tuple, TypeVar
 
 import discord
 import youtube_dl
 from redbot.core import Config, commands, modlog
 from redbot.core.bot import Red
-from redbot.core.data_manager import cog_data_path
+from redbot.core.data_manager import bundled_data_path, cog_data_path
+from redbot.core.utils.chat_formatting import pagify
 
 # chunks >=2048 cause hashlib to release the GIL
 BLOCKS: Final[int] = 128
@@ -29,6 +32,18 @@ async def to_thread(func: Callable[..., T], /, *args, **kwargs) -> T:
     return await loop.run_in_executor(None, func_call)  # type: ignore
 
 
+# from stdlib's itertools, slightly modified
+def grouper(iterable: Iterable[T], n: int) -> Iterable[Tuple[T, ...]]:
+    """Collect data into fixed-length chunks or blocks"""
+    # grouper('ABCDEFG', 3) --> ABC DEF"
+    args = [iter(iterable)] * n  # type: ignore
+    return zip(*args)
+
+
+class VideoTooLong(Exception):
+    """Exception raised when the video is too long. Not sure what else you were expecting."""
+
+
 # Credit for these fixes: https://www.reddit.com/r/discordapp/comments/mwsqm2/detect_discord_crash_videos_for_bot_developers/
 class AntiCrashVid(commands.Cog):
     def __init__(self, bot: Red):
@@ -38,6 +53,7 @@ class AntiCrashVid(commands.Cog):
         self.config.register_custom(HASHES, unsafe=None)
         self.case_ready = asyncio.Event()
         asyncio.ensure_future(self.initialize())
+        asyncio.ensure_future(self.preload_hashes())
 
     async def red_delete_data_for_user(self, *, requester, user_id):
         pass
@@ -57,19 +73,45 @@ class AntiCrashVid(commands.Cog):
             pass
         self.case_ready.set()
 
+    async def preload_hashes(self):
+        # b85 uses 5 ASCII chars to represent 4 bytes of data
+        b85_digest_size = math.ceil(hashlib.sha512().digest_size / 4) * 5
+        value = {"unsafe": True}
+        async with self.config.custom(HASHES).all() as current_hashes:
+            with open(bundled_data_path(self) / "known_hashes", "rb") as file:
+                while chunk := file.read(b85_digest_size):
+                    current_hashes[b85decode(chunk).hex()] = value
+
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def export_hashes(self, ctx: commands.Context):
+        """Exports known hashes as a base85-encoded block."""
+        all_hashes = b"".join(
+            b85encode(bytes.fromhex(k), pad=True)
+            for k, v in (await self.config.custom(HASHES).all()).items()
+            if v["unsafe"]
+        )
+        if all_hashes:
+            return await ctx.send_interactive(
+                pagify(all_hashes.decode("ascii"), shorten_by=10), box_lang=""
+            )
+        await ctx.send("No hashes to export.")
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if not LOG.isEnabledFor(logging.DEBUG):
+        if not message.guild:
+            return
+        if (message.author.id, self.bot.user.id) != (215640856839979008, 256505473807679488):
             if await self.bot.is_automod_immune(message):
                 LOG.debug("Not checking message by author %s: is automod immune", message.author)
+                return
             elif await self.bot.cog_disabled_in_guild(self, message.guild):
                 LOG.debug(
                     "Not checking message by author %s: cog is disabled in guild %s",
                     message.author,
                     message.guild,
                 )
-            return
-        assert message.guild
+                return
         links = []
         for attachment in message.attachments:
             if attachment.content_type and attachment.content_type.startswith("video/"):
@@ -86,18 +128,19 @@ class AntiCrashVid(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_edit(self, _, message: discord.Message):
-        if not LOG.isEnabledFor(logging.DEBUG):
+        if not message.guild:
+            return
+        if (message.author.id, self.bot.user.id) != (215640856839979008, 256505473807679488):
             if await self.bot.is_automod_immune(message):
                 LOG.debug("Not checking message by author %s: is automod immune", message.author)
+                return
             elif await self.bot.cog_disabled_in_guild(self, message.guild):
                 LOG.debug(
                     "Not checking message by author %s: cog is disabled in guild %s",
                     message.author,
                     message.guild,
                 )
-            return
-
-        assert message.guild
+                return
         links = []
         for embed in message.embeds:
             if url := embed.video.url:
@@ -155,13 +198,20 @@ class AntiCrashVid(commands.Cog):
     async def check_link(self, link: str, path: pathlib.Path) -> bool:
         path.mkdir(parents=True)
         template = "%(title)s-%(id)s.%(ext)s"
-        filename = template % await to_thread(
-            self.dl_video,
-            link,
-            outtmpl=os.path.join(str(path).replace("%", "%%"), template),
-            quiet=True,
-            logger=LOG,
-        )
+        try:
+            filename = template % await to_thread(
+                self.dl_video,
+                link,
+                outtmpl=os.path.join(str(path).replace("%", "%%"), template),
+                quiet=True,
+                logger=LOG,
+                # anything less than "best" may download gifs instead,
+                # which are seen as safe but are not actually safe
+                format="best",
+            )
+        except VideoTooLong:
+            LOG.info("Video at link %r was too long, and wasn't downloaded or probed.", link)
+            return False
         video = path / filename
         video.with_suffix("").mkdir()
         digest = await to_thread(self.hexdigest, video)
@@ -272,4 +322,12 @@ class AntiCrashVid(commands.Cog):
     @staticmethod
     def dl_video(link: str, /, **options) -> dict:
         with youtube_dl.YoutubeDL(options) as ytdl:
+            # don't download quite yet
+            info = ytdl.extract_info(link, download=False)
+            try:
+                if info["duration"] > 60:
+                    # 60s is arbitrary, but crashing videos are extremely unlikely to be very long
+                    raise VideoTooLong
+            except KeyError:
+                pass
             return ytdl.extract_info(link)
