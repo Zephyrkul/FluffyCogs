@@ -9,7 +9,7 @@ import pathlib
 import shutil
 from base64 import b85decode, b85encode
 from datetime import datetime, timezone
-from typing import Callable, Final, Iterable, List, Tuple, TypeVar
+from typing import Callable, Final, List, TypeVar
 
 import discord
 import youtube_dl
@@ -30,14 +30,6 @@ async def to_thread(func: Callable[..., T], /, *args, **kwargs) -> T:
     ctx = contextvars.copy_context()
     func_call = functools.partial(ctx.run, func, *args, **kwargs)
     return await loop.run_in_executor(None, func_call)  # type: ignore
-
-
-# from stdlib's itertools, slightly modified
-def grouper(iterable: Iterable[T], n: int) -> Iterable[Tuple[T, ...]]:
-    """Collect data into fixed-length chunks or blocks"""
-    # grouper('ABCDEFG', 3) --> ABC DEF"
-    args = [iter(iterable)] * n  # type: ignore
-    return zip(*args)
 
 
 class VideoTooLong(Exception):
