@@ -195,7 +195,9 @@ class Dev(dev_commands.Dev):
                             output = await self.maybe_await(env[run]())
                         if output is not None:
                             setattr(builtins, "_", output)
-                            ret[3] = f"# Result:\n{pformat(output, compact=True, sort_dicts=False)}"
+                            ret[
+                                3
+                            ] = f"# Result:\n{pformat(output, compact=True, sort_dicts=False)}"
                         break
                 else:
                     if exc:
