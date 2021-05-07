@@ -14,6 +14,7 @@ import types
 from contextvars import ContextVar
 from copy import copy
 from itertools import chain
+from pprint import pformat
 from typing import IO, Any, Dict, List, Optional
 
 import discord
@@ -123,7 +124,7 @@ class Dev(dev_commands.Dev):
     """Various development focused utilities."""
 
     # Schema: [my version] <[targeted bot version]>
-    __version__ = "0.0.5 <3.4.9>"
+    __version__ = "0.0.6 <3.4.9>"
 
     def format_help_for_context(self, ctx: commands.Context) -> str:
         pre = super().format_help_for_context(ctx)
@@ -178,6 +179,7 @@ class Dev(dev_commands.Dev):
         env.update(environ)
         filename = f"<{ctx.command}>"
         exited = False
+        output = None
         try:
             async with redirect() as sio:
                 exc = None
@@ -193,7 +195,7 @@ class Dev(dev_commands.Dev):
                             output = await self.maybe_await(env[run]())
                         if output is not None:
                             setattr(builtins, "_", output)
-                            ret[3] = f"# Result:\n{output!r}"
+                            ret[3] = f"# Result:\n{pformat(output, compact=True, sort_dicts=False)}"
                         break
                 else:
                     if exc:
