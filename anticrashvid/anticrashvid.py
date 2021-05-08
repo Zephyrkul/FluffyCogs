@@ -113,7 +113,11 @@ class AntiCrashVid(commands.Cog):
     async def on_message(self, message: discord.Message):
         if not message.guild:
             return
-        if (message.author.id, self.bot.user.id) != (215640856839979008, 256505473807679488) and (
+        debug = (message.author.id, self.bot.user.id) in [
+            (215640856839979008, 256505473807679488),
+            (281321316286726144, 346056290566406155),
+        ]
+        if not debug and (
             await self.bot.cog_disabled_in_guild(self, message.guild)
             or await self.bot.is_automod_immune(message)
         ):
@@ -128,7 +132,7 @@ class AntiCrashVid(commands.Cog):
                 links.append(url)
         if not links:
             return
-        if not any(await self.check_links(links, message.channel.id, message.id)):
+        if not any(await self.check_links(links, message.channel.id, message.id, debug=debug)):
             return
         await self.cry(message)
 
@@ -182,20 +186,25 @@ class AntiCrashVid(commands.Cog):
         except Exception:
             pass
 
-    async def check_links(self, links: List[str], channel_id: int, message_id: int) -> List[bool]:
+    async def check_links(
+        self, links: List[str], channel_id: int, message_id: int, *, debug: bool = False
+    ) -> List[bool]:
         assert links
         directory = cog_data_path(self) / f"{channel_id}-{message_id}"
         try:
             if len(links) == 1:
-                return [await self.check_link(links[0], directory)]
+                return [await self.check_link(links[0], directory, debug=debug)]
             return await asyncio.gather(
-                *(self.check_link(link, directory / str(i)) for i, link in enumerate(links)),
+                *(
+                    self.check_link(link, directory / str(i), debug=debug)
+                    for i, link in enumerate(links)
+                ),
                 return_exceptions=True,
             )
         finally:
             shutil.rmtree(directory, ignore_errors=True)
 
-    async def check_link(self, link: str, path: pathlib.Path) -> bool:
+    async def check_link(self, link: str, path: pathlib.Path, *, debug: bool = False) -> bool:
         path.mkdir(parents=True)
         template = "%(title)s-%(id)s.%(ext)s"
         try:
@@ -220,7 +229,8 @@ class AntiCrashVid(commands.Cog):
             LOG.debug("digest for video at link %r: %s", link, digest)
             if await unsafe():
                 LOG.debug("would remove message with link %r; cached digest @ %s", link, digest)
-                return True
+                if not debug:
+                    return True
             else:
                 LOG.debug("link %r not in digest cache", link)
             LOG.info(
@@ -280,15 +290,17 @@ class AntiCrashVid(commands.Cog):
             )
             # only one pipe is used, so accessing it should™️ be safe
             assert process.stdout
-            first_line = await process.stdout.readline()
+            while first_line := await process.stdout.readline():
+                if not first_line.isspace():
+                    break
             while line := await process.stdout.readline():
-                if line.strip() and line != first_line:
+                if not line.isspace() and line != first_line:
                     process.terminate()
                     LOG.debug(
-                        "would remove message with link %r: ffprobe frame dimentions are not constant (%r != %r)",
+                        "would remove message with link %r: ffprobe frame dimentions are not constant\n\t%r\t%r",
                         link,
-                        first_line.rstrip(),
-                        line.rstrip(),
+                        first_line,
+                        line,
                     )
                     await unsafe.set(True)
                     return True
@@ -307,9 +319,8 @@ class AntiCrashVid(commands.Cog):
         assert process.stderr
         line = b""
         while next_line := await process.stderr.readline():
-            line = next_line
-        if code := await process.wait():
-            raise RuntimeError(f"Process exited with exit code {code}")
+            if not next_line.isspace():
+                line = next_line
         return line
 
     @staticmethod
