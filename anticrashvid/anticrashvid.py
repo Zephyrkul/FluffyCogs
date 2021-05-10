@@ -41,6 +41,10 @@ class VideoTooLong(Exception):
     """Exception raised when the video is too long. Not sure what else you were expecting."""
 
 
+class EmptyOutputFile(Exception):
+    """Exception raised when ffmpeg's output file is empty."""
+
+
 # Credit for these fixes: https://www.reddit.com/r/discordapp/comments/mwsqm2/detect_discord_crash_videos_for_bot_developers/
 class AntiCrashVid(commands.Cog):
     def __init__(self, bot: Red):
@@ -238,43 +242,47 @@ class AntiCrashVid(commands.Cog):
                 "If ffprobe logs stop suddenly, then most likely your system has insufficient RAM for this cog.",
                 link,
             )
-            first_line = await self.get_probe(
-                "-loglevel",
-                "fatal",
-                "-i",
-                video,
-                "-vframes",
-                "1",
-                "-q:v",
-                "1",
-                video.with_suffix("") / "first.jpg",
-            )
-            LOG.info("Beginning second probe for link %r.", link)
-            last_line = await self.get_probe(
-                "-loglevel",
-                "fatal",
-                "-sseof",
-                "-3",
-                "-i",
-                video,
-                "-update",
-                "1",
-                "-q:v",
-                "1",
-                video.with_suffix("") / "last.jpg",
-            )
-            LOG.debug("first probe: %r\nlast probe: %r", first_line, last_line)
-            if first_line != last_line:
-                LOG.debug(
-                    "would remove message with link %r: ffprobe first and last frames have conflicting results",
-                    link,
+            try:
+                first_line = await self.get_probe(
+                    "-loglevel",
+                    "fatal",
+                    "-i",
+                    str(video),
+                    "-vframes",
+                    "1",
+                    "-q:v",
+                    "1",
+                    path=video.with_suffix("") / "first.jpg",
                 )
-                await unsafe.set(True)
-                return True
+                LOG.info("Beginning second probe for link %r.", link)
+                last_line = await self.get_probe(
+                    "-loglevel",
+                    "fatal",
+                    "-sseof",
+                    "-3",
+                    "-i",
+                    str(video),
+                    "-update",
+                    "1",
+                    "-q:v",
+                    "1",
+                    path=video.with_suffix("") / "last.jpg",
+                )
+                LOG.debug("first probe: %r\nlast probe: %r", first_line, last_line)
+            except EmptyOutputFile:
+                LOG.debug("Empty ffmpeg output.", exc_info=True)
             else:
-                LOG.debug("link %r has consistent first/last ffprobe results", link)
-            del first_line, last_line
-            LOG.info("Beginning third probe for link %r.", link)
+                if first_line != last_line:
+                    LOG.debug(
+                        "would remove message with link %r: ffprobe first and last frames have conflicting results",
+                        link,
+                    )
+                    await unsafe.set(True)
+                    return True
+                else:
+                    LOG.debug("link %r has consistent first/last ffprobe results", link)
+                del first_line, last_line
+            LOG.info("Beginning final probe for link %r.", link)
             process = await asyncio.create_subprocess_exec(
                 "ffprobe",
                 "-v",
@@ -308,12 +316,14 @@ class AntiCrashVid(commands.Cog):
             return False
 
     @staticmethod
-    async def get_probe(*args) -> bytes:
-        process = await asyncio.create_subprocess_exec("ffmpeg", *args)
+    async def get_probe(*args: str, path: pathlib.Path) -> bytes:
+        process = await asyncio.create_subprocess_exec("ffmpeg", *args, path)
         if code := await process.wait():
             raise RuntimeError(f"Process exited with exit code {code}")
+        if not path.exists():
+            raise RuntimeError(f"ffmpeg did not create a file at {path}")
         process = await asyncio.create_subprocess_exec(
-            "ffprobe", "-i", args[-1], stderr=asyncio.subprocess.PIPE
+            "ffprobe", "-i", path, stderr=asyncio.subprocess.PIPE
         )
         # only one pipe is used, so accessing it should™️ be safe
         assert process.stderr
