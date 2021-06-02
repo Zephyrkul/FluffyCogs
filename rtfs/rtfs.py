@@ -179,7 +179,7 @@ class RTFS(commands.Cog):
         )
         await SourceMenu(
             SourceSource(raw_pages, per_page=1, header=header), clear_reactions_after=True
-        ).start(ctx, wait=True)
+        ).start(ctx)
 
     @commands.command(aliases=["rts", "source"])
     async def rtfs(self, ctx: commands.Context, *, thing: str):
