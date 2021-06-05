@@ -404,7 +404,10 @@ class InVoice(commands.Cog):
 
         if self._is_afk(a) is False and not self.member_as[(m.guild.id, m.id)].spammy:
             assert isinstance(a.channel, GuildVoiceTypes)
-            await self.dynamic_ready[a.channel.id].wait()
+            try:
+                await self.dynamic_ready[a.channel.id].wait()
+            except KeyError:
+                pass
             self._add_after(a, role_set, channel_updates)
 
         # This event gets triggered when a member leaves the server,
