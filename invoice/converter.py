@@ -1,4 +1,5 @@
 import inspect
+import re
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Final, Optional, Union, get_args, get_origin
 
 from discord.ext.commands.view import StringView
