@@ -402,7 +402,7 @@ class InVoice(commands.Cog):
         if b.channel != a.channel and b.channel:
             self._remove_before(b, role_set, channel_updates)
 
-        if self._is_afk(a) is not False and not self.member_as[(m.guild.id, m.id)].spammy:
+        if self._is_afk(a) is False and not self.member_as[(m.guild.id, m.id)].spammy:
             assert isinstance(a.channel, GuildVoiceTypes)
             await self.dynamic_ready[a.channel.id].wait()
             self._add_after(a, role_set, channel_updates)
