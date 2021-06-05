@@ -477,7 +477,7 @@ class InVoice(commands.Cog):
             await m.edit(roles=list(filter(None, map(guild.get_role, role_set))))
             stamp = True
         for channel_id, overs in channel_updates.items():
-            if channel := guild.get_channel(channel_id):
+            if (channel := guild.get_channel(channel_id)) and channel.overwrites.get(m) != overs:
                 await channel.set_permissions(m, overwrite=overs)
                 stamp = True
         if stamp:
