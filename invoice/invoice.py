@@ -501,16 +501,19 @@ class InVoice(commands.Cog):
         guild = m.guild
         stamp = False
         if role_set.symmetric_difference(m._roles):  # type: ignore
-            my_top_role = guild.me.top_role
-
-            def filt(r: Optional[discord.Role]):
-                return r and my_top_role > r
-
-            await m.edit(roles=list(filter(filt, map(guild.get_role, role_set))))  # type: ignore
-            stamp = True
+            try:
+                await m.edit(roles=list(filter(None, map(guild.get_role, role_set))))
+            except discord.Forbidden:
+                LOG.info("Unable to edit roles for %s in guild %s", m, guild)
+            else:
+                stamp = True
         for channel_id, overs in channel_updates.items():
             if (channel := guild.get_channel(channel_id)) and channel.overwrites.get(m) != overs:
-                await channel.set_permissions(m, overwrite=overs)
-                stamp = True
+                try:
+                    await channel.set_permissions(m, overwrite=overs)
+                except discord.Forbidden:
+                    LOG.info("Unable to edit channel permissions for %s in guild %s", m, guild)
+                else:
+                    stamp = True
         if stamp:
             self.member_as[(m.guild.id, m.id)].stamp()
