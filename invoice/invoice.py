@@ -221,18 +221,17 @@ class InVoice(commands.Cog):
         `scope` is the voice channel or category that you wish to change;
         leave it empty to manage guild-wide settings.
 
-        Configurable settings:
-            **role**:\tThe role that will be applied to users inside the scoped VCs.
-            **channel**:\tThe text channel that users will be granted access to while inside the scoped VCs.
-            **dynamic**:\ttrue/false, whether to dynamically create a new role and text channel for VC users when new VCs are created in this scope.
-                The new role will inherit the permissions of higher-scoped roles.
-                For voice channels, this controls whether the associated role and channel are deleted when the VC is deleted.
-            **dynamic_name**:\tThe name to apply to dynamically created roles and text channels.
-                Use `{vc}` as a placeholder to insert the name of the newly created voice channel.
-            **mute**:\ttrue/false, whether to restrict a user's permissions to send messages in the text channel if server muted.
-            **deaf**:\ttrue/false, whether to restrict a user's permissions to read messages in the text channel if server deafened.
-            **self_deaf**:\ttrue/false, whether to restrict a user's permissions to read messages in the text channel if self-deafened.
-            **suppress**:\ttrue/false, whether to restrict a user's permissions to send messages in the text channel if they don't have permission to speak.
+        __Configurable Settings__
+        **role**:\tThe role granted to users inside the scoped VCs.
+        **channel**:\tThe text channel granted access to while inside the scoped VCs.
+        **dynamic**:\ttrue/false, create a new role and text channel when new VCs are created here.
+            The new role will inherit the permissions of higher-scoped roles.
+        **dynamic_name**:\tThe name to apply to dynamically created roles and text channels.
+            `{vc}` will be replaced with the name of the new channel.
+        **mute**:\ttrue/false, mute the user in the text channel if they are server muted.
+        **suppress**:\ttrue/false, mute the user in the text channel if they don't have permission to speak.
+        **deaf**:\ttrue/false, remove the user from the text channel if they are server deafened.
+        **self_deaf**:\ttrue/false, remove the user from the text channel if they are self deafened.
         """
         scoped = scope or ctx.guild
         config = self.config.channel(scope) if scope else self.config.guild(ctx.guild)
