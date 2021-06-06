@@ -169,7 +169,7 @@ class InVoice(commands.Cog):
         Configure or view settings for automated voice-based permissions.
         """
 
-    @invoice.command(name="unset")
+    @invoice.command(name="unset", require_var_positional=True)
     @commands.guild_only()
     @commands.admin_or_permissions(manage_guild=True)
     async def _unset(
@@ -254,6 +254,11 @@ class InVoice(commands.Cog):
         *,
         scope: Union[discord.CategoryChannel, GuildVoice] = None,
     ):
+        """
+        Show the current settings for the specified scope.
+
+        See `[p]help invoice set` for explanations of the various settings.
+        """
         guild = ctx.guild
         scoped = scope or guild
         chain = Chain.from_scope(scoped, self.cache)
