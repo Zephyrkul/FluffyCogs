@@ -64,13 +64,18 @@ class SettingsConverter(DataclassConverter):
 
 assert {f.name for f in fields(SettingsConverter)} == set(Settings.__annotations__)
 Cache = DefaultDict[int, Settings]
+T = TypeVar("T")
 MT = TypeVar("MT", bound=Mapping)
 
 
 class Chain(ChainMap[str, Any]):
     @staticmethod
-    def _filter_value(d: MT) -> MT:
-        return type(d)(filter(operator.itemgetter(1), d.items()))  # type: ignore
+    def _filter_value(d) -> dict:
+        try:
+            items = d.items()  # type: ignore
+        except AttributeError:
+            items = d
+        return dict(filter(operator.itemgetter(1), items))  # type: ignore
 
     @classmethod
     def from_scope(
@@ -111,6 +116,11 @@ class InVoice(commands.Cog):
 
     async def red_delete_data_for_user(self, *, requester, user_id):
         pass  # No data to delete
+
+    @staticmethod
+    def _debug_and_return(message: str, obj: T) -> T:
+        LOG.debug(message, obj)
+        return obj
 
     @staticmethod
     def _is_afk(voice: discord.VoiceState):
@@ -396,6 +406,7 @@ class InVoice(commands.Cog):
             return  # I doubt this could happen, but just in case
         if await self.bot.cog_disabled_in_guild(self, m.guild):
             return
+        LOG.debug("on_voice_state_update(%s, %s, %s)", m, b, a)
         await self.cog_ready.wait()
         role_set: Set[int] = set(m._roles)  # type: ignore
         channel_updates: Dict[int, Optional[discord.PermissionOverwrite]] = {}
@@ -424,9 +435,14 @@ class InVoice(commands.Cog):
     ):
         assert isinstance(b.channel, GuildVoiceTypes)
         chain = Chain.from_scope(b.channel, self.cache)
-        role_set.difference_update(chain.all("role"))
+        role_set.difference_update(
+            self._debug_and_return("maybe removing role IDs: %s", chain.all("role"))
+        )
         channel_id: int
-        for channel_id in filter(None, chain.all("channel")):
+        for channel_id in filter(
+            None,
+            self._debug_and_return("maybe removing channel overwrites: %s", chain.all("channel")),
+        ):
             channel_updates[channel_id] = None
 
     def _add_after(
@@ -441,9 +457,11 @@ class InVoice(commands.Cog):
         role_id: int = next(filter(guild.get_role, chain.all("role")), 0)
         channel_id: int = next(filter(guild.get_channel, chain.all("channel")), 0)
         if role_id:
+            LOG.debug("Pre-emptively adding role: %s", role_id)
             role_set.add(role_id)
             overwrites = discord.PermissionOverwrite()
         elif channel_id:
+            LOG.debug("Pre-emptively adding read_messages: %s", channel_id)
             overwrites = discord.PermissionOverwrite(read_messages=True)
         else:
             # nothing to do
@@ -452,16 +470,26 @@ class InVoice(commands.Cog):
         deaf: bool = a.deaf and chain["deaf"]
         self_deaf: bool = a.self_deaf and chain["self_deaf"]
         suppress: bool = a.suppress and chain["suppress"]
+        LOG.debug(
+            "mute: %s, suppress: %s, deaf: %s, self_deaf: %s", mute, deaf, self_deaf, suppress
+        )
         if mute or suppress:
+            LOG.debug("muted or suppressed")
             if channel_id:
                 overwrites.update(send_messages=False, add_reactions=False)
-            elif role_id:
+            else:
                 role_set.discard(role_id)
         if deaf or self_deaf:
             if role_id:
                 role_set.discard(role_id)
-            elif channel_id:
+            else:
                 overwrites.update(read_messages=False)
+        if LOG.isEnabledFor(logging.DEBUG):
+            LOG.debug(
+                "role: %s; overwrites: allow %s, deny %s",
+                role_id in role_set,
+                *map(Chain._filter_value, overwrites.pair()),
+            )
         channel_updates[channel_id] = None if overwrites.is_empty() else overwrites
 
     async def apply_permissions(
