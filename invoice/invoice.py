@@ -500,12 +500,13 @@ class InVoice(commands.Cog):
     ) -> None:
         guild = m.guild
         stamp = False
-        role_set.discard(0)
-        role_set.add(guild.id)
-        if (sd := role_set.symmetric_difference(m._roles)) and all(  # type: ignore
-            m.guild.me.top_role > r for r in sd
-        ):
-            await m.edit(roles=list(filter(None, map(guild.get_role, role_set))))
+        if role_set.symmetric_difference(m._roles):  # type: ignore
+            my_top_role = guild.me.top_role
+
+            def filt(r: Optional[discord.Role]):
+                return r and my_top_role > r
+
+            await m.edit(roles=list(filter(filt, map(guild.get_role, role_set))))  # type: ignore
             stamp = True
         for channel_id, overs in channel_updates.items():
             if (channel := guild.get_channel(channel_id)) and channel.overwrites.get(m) != overs:
