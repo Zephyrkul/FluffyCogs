@@ -471,7 +471,7 @@ class InVoice(commands.Cog):
         self_deaf: bool = a.self_deaf and chain["self_deaf"]
         suppress: bool = a.suppress and chain["suppress"]
         LOG.debug(
-            "mute: %s, suppress: %s, deaf: %s, self_deaf: %s", mute, deaf, self_deaf, suppress
+            "mute: %s, suppress: %s, deaf: %s, self_deaf: %s", mute, suppress, deaf, self_deaf
         )
         if mute or suppress:
             LOG.debug("muted or suppressed")
