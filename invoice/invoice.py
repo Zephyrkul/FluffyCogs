@@ -4,7 +4,7 @@ import itertools
 import logging
 import operator
 import re
-from dataclasses import asdict, dataclass, fields
+from dataclasses import dataclass, fields
 from datetime import timedelta
 from functools import partial
 from typing import (
@@ -30,7 +30,7 @@ from redbot.core.bot import Red
 from redbot.core.utils.antispam import AntiSpam
 from redbot.core.utils.chat_formatting import humanize_list
 
-from .converter import AsCFIdentifier, DataclassConverter
+from .converter import AsCFIdentifier, DataclassConverter, asdict_shallow
 
 LOG: Final = logging.getLogger("red.fluffy.invoice")
 GuildVoice = Union[discord.VoiceChannel, discord.StageChannel]
@@ -237,7 +237,7 @@ class InVoice(commands.Cog):
         config = self.config.channel(scope) if scope else self.config.guild(ctx.guild)
         decomposed = {
             k: getattr(v, "id", v)
-            for k, v in asdict(settings).items()
+            for k, v in asdict_shallow(settings).items()
             if v is not settings.MISSING
         }
         self.cache[scoped.id].update(decomposed)  # type: ignore

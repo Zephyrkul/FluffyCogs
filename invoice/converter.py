@@ -1,5 +1,6 @@
 import inspect
 import re
+from dataclasses import fields
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Final, Optional, Union, get_args, get_origin
 
 from discord.ext.commands.view import StringView
@@ -20,6 +21,11 @@ _ident_param: Final = inspect.Parameter(
 
 def _not_nonetype(item):
     return item is not type(None)
+
+
+def asdict_shallow(obj, dict_factory=dict):
+    """Same as dataclasses' asdict, but doesn't copy and doesn't recurse."""
+    return dict_factory((f.name, getattr(obj, f.name)) for f in fields(obj))
 
 
 # Theoretically this works for any well-formed dataclass-like class
