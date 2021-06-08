@@ -161,7 +161,7 @@ class Rift(commands.Cog):
         super().__init__()
         self.bot = bot
         self.rifts = SimpleGraph[Messageable]()
-        self.messages = SimpleGraph[Tuple[int, int]]()
+        self.messages = SimpleGraph[Tuple[Optional[int], int, int]]()
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_channel(blacklisted=False)
         self.config.register_guild(blacklisted=False)
@@ -491,10 +491,22 @@ class Rift(commands.Cog):
 
     # UTILITIES
 
-    def _partial(self, channel_id: int, message_id: int) -> Optional[discord.PartialMessage]:
+    @staticmethod
+    def _to_ids(m) -> Tuple[Optional[int], int, int]:
+        return getattr(m.guild, "id", None), m.channel.id, m.id
+
+    def _partial(
+        self, guild_id: Optional[int], channel_id: int, message_id: int
+    ) -> Optional[discord.PartialMessage]:
         # This function has the potential to miss messages in DMs due to the DMChannel limit
         # Re-opening DMChannels just to edit/delete old messages is, in most cases, unnecessary
-        channel = self.bot.get_channel(channel_id)
+        if guild_id is not None:
+            try:
+                channel = self.bot.get_guild(guild_id).get_channel(channel_id)
+            except AttributeError:
+                return None
+        else:
+            channel = self.bot._connection._get_private_channel(channel_id)
         try:
             return channel.get_partial_message(message_id)
         except AttributeError:
@@ -524,7 +536,7 @@ class Rift(commands.Cog):
                     f"I couldn't send your message to {destination}: {reason}"
                 )
             else:
-                self.messages.add_vectors((message.channel.id, message.id), (m.channel.id, m.id))
+                self.messages.add_vectors(self._to_ids(message), self._to_ids(m))
 
     async def close_rifts(self, closer: UnionUser, *destinations: Messageable) -> int:
         unique = set()
@@ -694,15 +706,23 @@ class Rift(commands.Cog):
     ) -> Optional[discord.MessageReference]:
         if not reference:
             return None
-        # discord.py-stubs has a bad typehint for MessageReference.__init__
         async for de, to in AsyncIter(self.messages.vectors(), steps=100):
-            if de == (reference.channel_id, reference.message_id) and to[0] == channel.id:
-                return discord.MessageReference(  # type: ignore
-                    channel_id=channel.id, message_id=to[1]
+            if (
+                de == (reference.guild_id, reference.channel_id, reference.message_id)
+                and to[1] == channel.id
+            ):
+                return discord.MessageReference(
+                    guild_id=to[0],
+                    channel_id=to[1],
+                    message_id=to[2],
+                    fail_if_not_exists=False,
                 )
-            elif to == (reference.channel_id, reference.message_id) and de[0] == channel.id:
-                return discord.MessageReference(  # type: ignore
-                    channel_id=channel.id, message_id=de[1]
+            elif (
+                to == (reference.guild_id, reference.channel_id, reference.message_id)
+                and de[1] == channel.id
+            ):
+                return discord.MessageReference(
+                    guild_id=de[0], channel_id=de[1], message_id=de[2], fail_if_not_exists=False
                 )
         return None
 
@@ -827,9 +847,9 @@ class Rift(commands.Cog):
                 filter(
                     None,
                     (
-                        self._partial(channel_id, message_id)
-                        for channel_id, message_id in self.messages.get(
-                            (payload.channel_id, payload.message_id), ()
+                        self._partial(guild_id, channel_id, message_id)
+                        for guild_id, channel_id, message_id in self.messages.get(
+                            (payload.guild_id, payload.channel_id, payload.message_id), ()
                         )
                     ),
                 ),
@@ -847,9 +867,9 @@ class Rift(commands.Cog):
                 filter(
                     None,
                     (
-                        self._partial(channel_id, message_id)
-                        for channel_id, message_id in self.messages.pop(
-                            (payload.channel_id, payload.message_id), ()
+                        self._partial(guild_id, channel_id, message_id)
+                        for guild_id, channel_id, message_id in self.messages.pop(
+                            (payload.guild_id, payload.channel_id, payload.message_id), ()
                         )
                     ),
                 ),
@@ -860,11 +880,10 @@ class Rift(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_bulk_message_delete(self, payload: discord.RawBulkMessageDeleteEvent):
         to_delete: Dict[discord.abc.Messageable, List[int]] = {}
-        pcid = payload.channel_id
         for pmid in payload.message_ids:
-            for cid, mid in self.messages.pop((pcid, pmid), ()):
-                if channel := (self.bot.get_channel(cid)):
-                    to_delete.setdefault(channel, []).append(mid)
+            for ids in self.messages.pop((payload.guild_id, payload.channel_id, pmid), ()):
+                if partial_message := self._partial(*ids):
+                    to_delete.setdefault(partial_message.channel, []).append(partial_message.id)
         await asyncio.gather(
             *starmap(partial(purge_ids, now=datetime.utcnow()), to_delete.items())
         )
