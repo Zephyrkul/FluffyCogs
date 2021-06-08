@@ -490,6 +490,7 @@ class InVoice(commands.Cog):
     ) -> None:
         guild = m.guild
         stamp = False
+        role_set.discard(guild.id)
         if role_set.symmetric_difference(m._roles):  # type: ignore
             try:
                 await m.edit(roles=list(filter(None, map(guild.get_role, role_set))))
