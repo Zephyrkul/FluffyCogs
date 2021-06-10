@@ -1,4 +1,5 @@
 import asyncio
+import builtins
 import contextlib
 import itertools
 import logging
@@ -13,6 +14,7 @@ from typing import (
     DefaultDict,
     Dict,
     Final,
+    List,
     Mapping,
     Optional,
     Set,
@@ -68,15 +70,15 @@ T = TypeVar("T")
 MT = TypeVar("MT", bound=Mapping)
 
 
-class Chain(ChainMap[str, Any]):
-    @staticmethod
-    def _filter_value(d) -> dict:
-        try:
-            items = d.items()  # type: ignore
-        except AttributeError:
-            items = d
-        return dict(filter(operator.itemgetter(1), items))  # type: ignore
+def _filter_value(d, filterer=operator.itemgetter(1)) -> dict:
+    try:
+        items = d.items()  # type: ignore
+    except AttributeError:
+        items = d
+    return dict(filter(filterer, items))  # type: ignore
 
+
+class Chain(ChainMap[str, Any]):
     @classmethod
     def from_scope(
         cls, scope: Union[GuildVoice, discord.CategoryChannel, discord.Guild], cache: Cache
@@ -84,24 +86,30 @@ class Chain(ChainMap[str, Any]):
         if category_id := getattr(scope, "category_id", None):
             assert isinstance(scope, GuildVoiceTypes) and isinstance(category_id, int)
             return cls(
-                cls._filter_value(cache[scope.id]),
-                cls._filter_value(cache[category_id]),
+                _filter_value(cache[scope.id]),
+                _filter_value(cache[category_id]),
                 cache[scope.guild.id],
             )
         elif guild := getattr(scope, "guild", None):
             assert isinstance(guild, discord.Guild) and not isinstance(scope, discord.Guild)
             if scope.type == discord.ChannelType.category:
                 assert isinstance(scope, discord.CategoryChannel)
-                return cls({}, cls._filter_value(cache[scope.id]), cache[guild.id])
+                return cls({}, _filter_value(cache[scope.id]), cache[guild.id])
             else:
                 assert isinstance(scope, GuildVoiceTypes)
-                return cls(cls._filter_value(cache[scope.id]), {}, cache[guild.id])
+                return cls(_filter_value(cache[scope.id]), {}, cache[guild.id])
         else:
             assert isinstance(scope, discord.Guild)
             return cls(cache[scope.id])
 
-    def all(self, key):
-        return [m.get(key) for m in self.maps]
+    def all(self, key, *, map=None):
+        if not map:
+
+            def map(arg):
+                return arg
+
+        _map = builtins.map
+        return list(filter(None, _map(map, (m.get(key) for m in self.maps))))
 
 
 class InVoice(commands.Cog):
@@ -283,15 +291,14 @@ class InVoice(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, vc: discord.abc.GuildChannel):
+        # TODO: split this code into smaller functions
         if not isinstance(vc, GuildVoiceTypes):
             return
         guild = vc.guild
-        if vc.category:
-            perms = vc.category.permissions_for(guild.me)
-        else:
-            perms = guild.me.guild_permissions
-        # 0x10000010: manage_roles & manage_channels
-        if perms.value & 0x10000010 != 0x10000010:
+        me = guild.me
+        my_perms = me.guild_permissions
+        # manage_roles & manage_channels & read_messages & send_messages
+        if my_perms.value & 0x10000C10 != 0x10000C10:
             return
         if self.guild_as[guild.id].spammy:
             return
@@ -303,22 +310,27 @@ class InVoice(commands.Cog):
             return
         self.dynamic_ready[vc.id] = asyncio.Event()
         try:
-            scoped_roles = list(filter(None, map(guild.get_role, chain.all("role"))))
             if dynamic_name := chain["dynamic_name"]:
                 name = re.sub(r"(?i){vc}", vc.name, dynamic_name)
             else:
                 name = "\N{SPEAKER WITH THREE SOUND WAVES} " + vc.name
-            perms = discord.Permissions.none()
-            for role in scoped_roles:
-                perms.value |= role.permissions.value
-            perms.value &= guild.me.guild_permissions.value
+            scoped_roles: List[discord.Role] = chain.all("role", map=guild.get_role)
+            if scoped_roles:
+                perms = scoped_roles[0].permissions
+            else:
+                perms = discord.Permissions.none()
+            perms.value &= my_perms.value
             role = await guild.create_role(
                 name=name,
                 permissions=perms,
                 reason="Dynamic role for {vc}".format(vc=vc),
             )
-            chain["role"] = role.id
             await self.config.channel(vc).role.set(role.id)
+            self.cache[vc.id]["role"] = role.id
+            # assume my_perms doesn't have Manage Roles for channel creation if not admin
+            # because: https://discord.com/developers/docs/resources/guild#create-guild-channel
+            my_perms.manage_roles = my_perms.administrator
+            # also if your bot actually has admin... why...
             if vc.category:
                 overs = vc.category.overwrites
             else:
@@ -328,30 +340,44 @@ class InVoice(commands.Cog):
             for role in scoped_roles:
                 try:
                     o_allow, o_deny = overs.pop(role).pair()
-                    deny.value |= o_deny.value
-                    allow.value |= o_allow.value
                 except KeyError:
                     pass
+                else:
+                    deny.value |= o_deny.value & my_perms.value
+                    allow.value |= o_allow.value & my_perms.value
             default = discord.PermissionOverwrite.from_pair(allow, deny)
+            # ensure vc-specific role can read and write
+            default.update(read_messages=True, send_messages=True)
+            # now assume we don't have read_messages
+            # makes the following code simpler
+            my_perms.read_messages = False
             # prevent any other roles from viewing the channel
             for k, overwrite in overs.copy().items():
-                overwrite.update(read_messages=None)
+                o_allow, o_deny = overwrite.pair()
+                o_allow.value &= my_perms.value
+                o_deny.value &= my_perms.value
+                overwrite = discord.PermissionOverwrite.from_pair(o_allow, o_deny)
                 if overwrite.is_empty():
                     del overs[k]
+                else:
+                    overs[k] = overwrite
             # let admins and mods see the channel
             for role in itertools.chain(
                 await self.bot.get_admin_roles(guild), await self.bot.get_mod_roles(guild)
             ):
                 overs.setdefault(role, discord.PermissionOverwrite()).update(read_messages=True)
-            # vc-specific role, inherited from guild role
-            overs.setdefault(role, default).update(read_messages=True, send_messages=True)
-            # @everyone, remove read permissions
+            # deny read permissions from @everyone
             overs.setdefault(guild.default_role, discord.PermissionOverwrite()).update(
                 read_messages=False
             )
             # add bot to the channel
-            overs.setdefault(guild.me, discord.PermissionOverwrite()).update(
-                read_messages=True, send_messages=True
+            key: Union[discord.Member, discord.Role] = me
+            for role in me.roles:
+                if role.tags and role.tags.bot_id == me.id:
+                    key = role
+                    break
+            overs.setdefault(key, discord.PermissionOverwrite()).update(
+                read_messages=True, manage_channels=True
             )
             text = await guild.create_text_channel(
                 name=name,
@@ -360,7 +386,7 @@ class InVoice(commands.Cog):
                 reason="Dynamic channel for {vc}".format(vc=vc),
             )
             await self.config.channel(vc).channel.set(text.id)
-            self.channel_cache[vc.id]["channel"] = text.id
+            self.cache[vc.id]["channel"] = text.id
         finally:
             self.guild_as[guild.id].stamp()
             self.dynamic_ready[vc.id].set()
@@ -478,7 +504,7 @@ class InVoice(commands.Cog):
             LOG.debug(
                 "role: %s; overwrites: allow %s, deny %s",
                 role_id in role_set,
-                *map(Chain._filter_value, overwrites.pair()),
+                *map(_filter_value, overwrites.pair()),
             )
         channel_updates[channel_id] = None if overwrites.is_empty() else overwrites
 
