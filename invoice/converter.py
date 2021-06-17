@@ -10,8 +10,8 @@ if TYPE_CHECKING:
     AsCFIdentifier = str
 else:
 
-    def AsCFIdentifier(argument: str):
-        return re.sub(r"\W+|^(?=\d)", "_", argument)
+    def AsCFIdentifier(argument: str) -> str:
+        return re.sub(r"\W+|^(?=\d)", "_", argument.casefold())
 
 
 _ident_param: Final = inspect.Parameter(
@@ -56,7 +56,7 @@ class DataclassConverter:
         if get_origin(anno) is Union:
             # since a name was passed, suppress d.py's typing.Optional behavior
             parameter = parameter.replace(
-                annotation=Union[tuple(filter(_not_nonetype, get_args(anno)))]
+                annotation=Union[tuple(filter(_not_nonetype, get_args(anno)))]  # type: ignore
             )
         return parameter
 
@@ -78,9 +78,9 @@ class DataclassConverter:
                 and type(None) in get_args(anno)
             ):
                 kwargs[name] = None
+            elif cls.__total__:
+                raise commands.MissingRequiredArgument(param)
             else:
-                if cls.__total__:
-                    raise commands.MissingRequiredArgument(param)
                 kwargs[name] = cls.MISSING
 
     @classmethod

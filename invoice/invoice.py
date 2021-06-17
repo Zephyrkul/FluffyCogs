@@ -15,7 +15,6 @@ from typing import (
     Dict,
     Final,
     List,
-    Mapping,
     Optional,
     Set,
     Tuple,
@@ -66,8 +65,7 @@ class SettingsConverter(DataclassConverter):
 
 assert {f.name for f in fields(SettingsConverter)} == set(Settings.__annotations__)
 Cache = DefaultDict[int, Settings]
-T = TypeVar("T")
-MT = TypeVar("MT", bound=Mapping)
+_T = TypeVar("_T")
 
 
 def _filter_value(d, filterer=operator.itemgetter(1)) -> dict:
@@ -126,7 +124,7 @@ class InVoice(commands.Cog):
         pass  # No data to delete
 
     @staticmethod
-    def _debug_and_return(message: str, obj: T) -> T:
+    def _debug_and_return(message: str, obj: _T) -> _T:
         LOG.debug(message, obj)
         return obj
 
@@ -320,13 +318,13 @@ class InVoice(commands.Cog):
             else:
                 perms = discord.Permissions.none()
             perms.value &= my_perms.value
-            role = await guild.create_role(
+            dynamic_role = await guild.create_role(
                 name=name,
                 permissions=perms,
                 reason="Dynamic role for {vc}".format(vc=vc),
             )
-            await self.config.channel(vc).role.set(role.id)
-            self.cache[vc.id]["role"] = role.id
+            await self.config.channel(vc).role.set(dynamic_role.id)
+            self.cache[vc.id]["role"] = dynamic_role.id
             # assume my_perms doesn't have Manage Roles for channel creation if not admin
             # because: https://discord.com/developers/docs/resources/guild#create-guild-channel
             my_perms.manage_roles = my_perms.administrator
@@ -336,7 +334,7 @@ class InVoice(commands.Cog):
             else:
                 overs = {}
             # inherit scoped roles and remove their permissions
-            deny, allow = discord.Permissions.none(), discord.Permissions.none()
+            allow, deny = discord.Permissions(read_messages=True), discord.Permissions.none()
             for role in scoped_roles:
                 try:
                     o_allow, o_deny = overs.pop(role).pair()
@@ -345,13 +343,15 @@ class InVoice(commands.Cog):
                 else:
                     deny.value |= o_deny.value & my_perms.value
                     allow.value |= o_allow.value & my_perms.value
+            # ensure default can be applied by the bot on creation
+            allow.value &= my_perms.value
+            deny.value &= my_perms.value
             default = discord.PermissionOverwrite.from_pair(allow, deny)
-            # ensure vc-specific role can read and write
-            default.update(read_messages=True, send_messages=True)
             # now assume we don't have read_messages
             # makes the following code simpler
             my_perms.read_messages = False
-            # prevent any other roles from viewing the channel
+            # prevent any other roles from having read_messages,
+            # and also ensure that the overwrites can be applied on creation
             for k, overwrite in overs.copy().items():
                 o_allow, o_deny = overwrite.pair()
                 o_allow.value &= my_perms.value
@@ -361,6 +361,8 @@ class InVoice(commands.Cog):
                     del overs[k]
                 else:
                     overs[k] = overwrite
+            # now apply the vc-specific role
+            overs[dynamic_role] = default
             # let admins and mods see the channel
             for role in itertools.chain(
                 await self.bot.get_admin_roles(guild), await self.bot.get_mod_roles(guild)
