@@ -7,7 +7,7 @@ endif
 installreqs:
 	$(PYTHON) -m pip install --upgrade flake8 autoflake isort black
 lint:
-	$(PYTHON) -m flake8 --count --select=E9,F63,F7,F82 --show-source --statistics $(DIFF)
+	$(PYTHON) -m flake8 $(DIFF)
 stylecheck:
 	$(PYTHON) -m autoflake --check --imports aiohttp,discord,redbot $(DIFF)
 	$(PYTHON) -m isort --check-only $(DIFF)
