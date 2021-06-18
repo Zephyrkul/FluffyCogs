@@ -341,8 +341,8 @@ class InVoice(commands.Cog):
                 except KeyError:
                     pass
                 else:
-                    deny.value |= o_deny.value & my_perms.value
-                    allow.value |= o_allow.value & my_perms.value
+                    deny.value |= o_deny.value
+                    allow.value |= o_allow.value
             # ensure default can be applied by the bot on creation
             allow.value &= my_perms.value
             deny.value &= my_perms.value
