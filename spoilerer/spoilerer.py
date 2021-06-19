@@ -70,8 +70,10 @@ class Spoilerer(commands.Cog):
         author = message.author
         if author.bot:
             return
-        guild = message.guild
         if not message.attachments:
+            return
+        guild = message.guild
+        if guild and guild.id not in self.enabled_guilds:
             return
         if (
             sum(attach.size for attach in message.attachments)
