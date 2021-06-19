@@ -107,7 +107,9 @@ class Spoilerer(commands.Cog):
             await self._spoil(message)
 
     @staticmethod
-    async def _spoil(message: discord.Message, content: Optional[str] = None):
+    async def _spoil(message: discord.Message, content: Optional[str] = ...):
+        if content is ...:
+            content = message.content
         channel = message.channel
         files = await asyncio.gather(
             *(
@@ -120,7 +122,10 @@ class Spoilerer(commands.Cog):
         if guild := message.guild:
             assert isinstance(channel, discord.TextChannel)
             me = guild.me
-            content = f"from {message.author.mention}\n{quote(content or message.content)}"
+            if content:
+                content = f"from {message.author.mention}\n{quote(message.content)}"
+            else:
+                content = f"from {message.author.mention}"
             if channel.permissions_for(me).manage_messages:
                 await message.delete(delay=0)
         else:
