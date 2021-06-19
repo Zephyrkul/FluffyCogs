@@ -6,7 +6,6 @@ import discord
 from redbot.core import Config, commands
 from redbot.core.bot import Red
 from redbot.core.utils.chat_formatting import quote
-from typing_extensions import TypeGuard
 
 button: Final = "\N{WHITE SQUARE BUTTON}"
 content_re: Final = re.compile(r"(?i)^(?:image|video)/")
