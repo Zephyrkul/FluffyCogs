@@ -1,6 +1,7 @@
 import inspect
 import logging
 import traceback
+import re
 from functools import partial, partialmethod
 from importlib.metadata import PackageNotFoundError, version
 from itertools import chain
@@ -19,6 +20,7 @@ except ImportError:
 
 
 LOG = logging.getLogger("red.fluffy.rtfs")
+GIT_AT = re.compile(r"(?i)git@(?P<host>[^:]+):(?P<user>[^/]+)/(?P<repo>.+)\.git")
 
 
 class Unlicensed(Exception):
@@ -156,10 +158,19 @@ class RTFS(commands.Cog):
                                 raise NoLicense()
                             elif "aikaterna/imgwelcome" in surl:
                                 raise NoLicense()
-                        url = yarl.URL(installable.repo.url)
-                        if url.user or url.password:
+                        if match := GIT_AT.match(installable.repo.url):
+                            # SSH URL
+                            # Since it's not possible to tell if it's a private repo or not without an extra web request,
+                            # we'll just assume it's a private repo
                             is_installed = False
-                        header = f"<{installable.repo.clean_url.rstrip('/')}/blob/{installable.commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
+                            repo_url = f"<https://{match.group('host')}/{match.group('user')}/{match.group('repo')}"
+                        else:
+                            repo_url = installable.repo.clean_url
+                            if repo_url != installable.repo.url:
+                                # Private repo
+                                is_installed = False
+                            repo_url = repo_url.rstrip("/")
+                        header = f"<{repo_url}/blob/{installable.commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
         if not is_installed and not is_owner:
             # don't disclose the source of private cogs
             raise OSError()
@@ -216,6 +227,8 @@ class RTFS(commands.Cog):
         env = dev.get_environment(ctx)
         try:
             obj = eval(thing, env)
+        except NameError:
+            return await ctx.send(f"I couldn't find any cog, command, or object named `{thing}`.")
         except Exception as e:
             return await ctx.send(
                 box("".join(traceback.format_exception_only(type(e), e)), lang="py")
