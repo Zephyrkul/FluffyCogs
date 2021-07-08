@@ -1,7 +1,7 @@
 import inspect
 import logging
-import traceback
 import re
+import traceback
 from functools import partial, partialmethod
 from importlib.metadata import PackageNotFoundError, version
 from itertools import chain
