@@ -186,7 +186,8 @@ class Rift(commands.Cog):
         await ctx.send("What would you like to say?")
         p = MessagePredicate.same_context(ctx=ctx)
         message = await ctx.bot.wait_for("message", check=p)
-        await self._send(message, unique_rifts)
+        await self._send(message, unique_rifts):
+        await message.reply("Your message has been sent.", mention_author=False)
 
     @commands.group()
     async def rift(self, ctx: commands.Context):
