@@ -163,7 +163,7 @@ class RTFS(commands.Cog):
                             # Since it's not possible to tell if it's a private repo or not without an extra web request,
                             # we'll just assume it's a private repo
                             is_installed = False
-                            repo_url = f"<https://{match.group('host')}/{match.group('user')}/{match.group('repo')}"
+                            repo_url = f"<https://{match.group('host')}/{match.group('user')}/{match.group('repo')}>"
                         else:
                             repo_url = installable.repo.clean_url
                             if repo_url != installable.repo.url:
