@@ -1,19 +1,28 @@
 import functools
 import random
 import re
-from typing import TYPE_CHECKING, Union
+from datetime import datetime, timedelta, timezone
+from typing import Match, Optional, Union
 
 import aiohttp
 import discord
 import inflection
-from redbot.core import Config, bot, checks, commands
-from redbot.core.i18n import get_locale
+from redbot.core import Config, bot, commands, i18n
 from redbot.core.utils.chat_formatting import italics
 
 from .helpers import *
 
 fmt_re = re.compile(r"{(?:0|user)(?:\.([^\{]+))?}")
-Lower = str if TYPE_CHECKING else str.lower
+cmd_re = re.compile(r"[a-zA-Z_]+")
+
+
+def guild_only_without_subcommand():
+    def predicate(ctx: commands.Context):
+        if ctx.guild is None and ctx.invoked_subcommand is None:
+            raise commands.NoPrivateMessage()
+        return True
+
+    return commands.check(predicate)
 
 
 class Act(commands.Cog):
@@ -47,9 +56,8 @@ class Act(commands.Cog):
         await self.config.tenorkey.clear()
 
     @staticmethod
-    def repl(target: discord.Member, match: re.Match):
+    def repl(target: discord.Member, match: Match[str]) -> str:
         if attr := match.group(1):
-            print(attr)
             if attr.startswith("_") or "." in attr:
                 return str(target)
             try:
@@ -60,9 +68,6 @@ class Act(commands.Cog):
 
     @commands.command(hidden=True)
     async def act(self, ctx: commands.Context, *, target: Union[discord.Member, str] = None):
-        """
-        Acts on the specified user.
-        """
         if not target or isinstance(target, str):
             return  # no help text
 
@@ -76,11 +81,13 @@ class Act(commands.Cog):
             except KeyError:
                 message = NotImplemented
 
+        humanized: Optional[str] = None
         if message is None:  # ignored command
             return
         elif message is NotImplemented:  # default
             # humanize action text
-            action = inflection.humanize(ctx.invoked_with).split()
+            humanized = inflection.humanize(ctx.invoked_with)
+            action = humanized.split()
             iverb = -1
 
             for cycle in range(2):
@@ -106,57 +113,76 @@ class Act(commands.Cog):
             assert isinstance(message, str)
             message = fmt_re.sub(functools.partial(self.repl, target), message)
 
+        send = functools.partial(
+            ctx.send,
+            allowed_mentions=discord.AllowedMentions(
+                users=False if target in ctx.message.mentions else [target]
+            ),
+        )
+
         # add reaction gif
         if self.try_after and ctx.message.created_at < self.try_after:
-            return await ctx.send(message)
+            return await send(message)
         if not await ctx.embed_requested():
-            return await ctx.send(message)
+            return await send(message)
         key = (await ctx.bot.get_shared_api_tokens("tenor")).get("api_key")
         if not key:
-            return await ctx.send(message)
+            return await send(message)
+        if humanized is None:
+            humanized = inflection.humanize(ctx.invoked_with)
         async with aiohttp.request(
             "GET",
-            "https://api.tenor.com/v1/search",
+            "https://g.tenor.com/v1/search",
             params={
-                "q": ctx.invoked_with,
+                "q": humanized,
                 "key": key,
                 "anon_id": str(ctx.author.id ^ ctx.me.id),
                 "media_filter": "minimal",
                 "contentfilter": "off" if getattr(ctx.channel, "nsfw", False) else "low",
                 "ar_range": "wide",
-                "limit": "8",
-                "locale": get_locale(),
+                "limit": 20,
+                "locale": i18n.get_locale(),
             },
         ) as response:
             json: dict
             if response.status == 429:
-                self.try_after = ctx.message.created_at + 30
+                self.try_after = ctx.message.created_at + timedelta(seconds=30)
                 json = {}
             elif response.status >= 400:
                 json = {}
             else:
                 json = await response.json()
         if not json.get("results"):
-            return await ctx.send(message)
-        message = f"{message}\n\n{random.choice(json['results'])['itemurl']}"
-        await ctx.send(
-            message,
-            allowed_mentions=discord.AllowedMentions(
-                users=False if target in ctx.message.mentions else [target]
-            ),
+            return await send(message)
+        # Try to keep gifs more relevant by only grabbing from the top 50% + 1 of results,
+        # in case there are only a few results.
+        # math.ceiling() is not used since it would be too limiting for smaller lists.
+        choice = json["results"][random.randrange(len(json["results"]) // 2 + 1)]
+        choice = random.choice(json["results"])
+        embed = discord.Embed(
+            color=await ctx.embed_color(),
+            timestamp=datetime.fromtimestamp(choice["created"], timezone.utc),
+            url=choice["itemurl"],
         )
+        # This footer is required by Tenor's API: https://tenor.com/gifapi/documentation#attribution
+        embed.set_footer(text="Via Tenor")
+        embed.set_image(url=choice["media"][0]["gif"]["url"])
+        await send(message, embed=embed)
+
+    # because people keep using [p]help act instead of [p]help Act
+    act.callback.__doc__ = __doc__
 
     @commands.group()
-    @checks.is_owner()
+    @commands.admin_or_permissions(manage_guild=True)
     async def actset(self, ctx: commands.Context):
         """
         Configure various settings for the act cog.
         """
 
-    @actset.group(aliases=["custom"], invoke_without_command=True)
-    @checks.admin_or_permissions(manage_guild=True)
-    @commands.guild_only()
-    async def customize(self, ctx: commands.Context, command: Lower, *, response: str = None):
+    @actset.group(aliases=["custom", "customise"], invoke_without_command=True)
+    @commands.admin_or_permissions(manage_guild=True)
+    @guild_only_without_subcommand()
+    async def customize(self, ctx: commands.GuildContext, command: str, *, response: str = None):
         """
         Customize the response to an action.
 
@@ -174,10 +200,8 @@ class Act(commands.Cog):
             )
 
     @customize.command(name="global")
-    @checks.is_owner()
-    async def customize_global(
-        self, ctx: commands.Context, command: Lower, *, response: str = None
-    ):
+    @commands.is_owner()
+    async def customize_global(self, ctx: commands.Context, command: str, *, response: str = None):
         """
         Globally customize the response to an action.
 
@@ -191,9 +215,9 @@ class Act(commands.Cog):
         await ctx.tick()
 
     @actset.group(invoke_without_command=True)
-    @checks.admin_or_permissions(manage_guild=True)
-    @commands.guild_only()
-    async def ignore(self, ctx: commands.Context, command: Lower):
+    @commands.admin_or_permissions(manage_guild=True)
+    @guild_only_without_subcommand()
+    async def ignore(self, ctx: commands.GuildContext, command: str):
         """
         Ignore or unignore the specified action.
 
@@ -211,8 +235,8 @@ class Act(commands.Cog):
             await ctx.send("I will now ignore the {command} action".format(command=command))
 
     @ignore.command(name="global")
-    @checks.is_owner()
-    async def ignore_global(self, ctx: commands.Context, command: Lower):
+    @commands.is_owner()
+    async def ignore_global(self, ctx: commands.Context, command: str):
         """
         Globally ignore or unignore the specified action.
 
@@ -227,7 +251,18 @@ class Act(commands.Cog):
         await ctx.tick()
 
     @actset.command()
-    @checks.is_owner()
+    @commands.admin_or_permissions(manage_guild=True)
+    async def embed(self, ctx: commands.Context):
+        """
+        Manage tenor embed settings for this cog.
+        """
+        await ctx.maybe_send_embed(
+            "You can enable or disable whether this cog attaches tenor gifs "
+            f"by using `{ctx.clean_prefix}embedset command act on/off`."
+        )
+
+    @actset.command()
+    @commands.is_owner()
     async def tenorkey(self, ctx: commands.Context):
         """
         Sets a Tenor GIF API key to enable reaction gifs with act commands.
@@ -240,9 +275,11 @@ class Act(commands.Cog):
             "Click `+ Create new app` and fill out the form.",
             "Copy the key from the app you just created.",
             "Give the key to Red with this command:\n"
-            f"`{ctx.prefix}set api tenor api_key your_api_key`\n"
+            f"`{ctx.clean_prefix}set api tenor api_key your_api_key`\n"
             "Replace `your_api_key` with the key you just got.\n"
-            "Everything else should be the same.",
+            "Everything else should be the same.\n\n",
+            "You can disable embeds again by using this command:\n"
+            f"`{ctx.clean_prefix}embedset command act off`",
         ]
         instructions = [f"**{i}.** {v}" for i, v in enumerate(instructions, 1)]
         await ctx.maybe_send_embed("\n".join(instructions))
@@ -255,11 +292,14 @@ class Act(commands.Cog):
             return
         if not self.act.enabled:
             return
+        if not cmd_re.fullmatch(ctx.invoked_with):
+            return
         if await ctx.bot.cog_disabled_in_guild(self, ctx.guild):
             return
         if isinstance(error, commands.UserFeedbackCheckFailure):
             # UserFeedbackCheckFailure inherits from CheckFailure
             return
-        elif isinstance(error, (commands.CheckFailure, commands.CommandNotFound)):
-            ctx.command = self.act
-            await ctx.bot.invoke(ctx)
+        if not isinstance(error, (commands.CheckFailure, commands.CommandNotFound)):
+            return
+        ctx.command = self.act
+        await ctx.bot.invoke(ctx)
