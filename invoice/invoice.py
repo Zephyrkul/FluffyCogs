@@ -10,11 +10,15 @@ from datetime import timedelta
 from functools import partial
 from typing import (
     Any,
+    Callable,
     ChainMap,
     DefaultDict,
     Dict,
     Final,
+    Iterable,
     List,
+    Literal,
+    Mapping,
     Optional,
     Set,
     Tuple,
@@ -64,11 +68,18 @@ class SettingsConverter(DataclassConverter):
 
 
 assert {f.name for f in fields(SettingsConverter)} == set(Settings.__annotations__)
+
 Cache = DefaultDict[int, Settings]
+_KT = TypeVar("_KT")
+_VT = TypeVar("_VT")
 _T = TypeVar("_T")
 
 
-def _filter_value(d, filterer=operator.itemgetter(1)) -> dict:
+def _filter_none(d: Mapping[_KT, Optional[_VT]]) -> Dict[_KT, _VT]:
+    return {k: v for k, v in d.items() if v is not None}
+
+
+def _filter_value(d, filterer: Callable[[Any], bool] = operator.itemgetter(1)) -> dict:
     try:
         items = d.items()  # type: ignore
     except AttributeError:
@@ -84,18 +95,18 @@ class Chain(ChainMap[str, Any]):
         if category_id := getattr(scope, "category_id", None):
             assert isinstance(scope, GuildVoiceTypes) and isinstance(category_id, int)
             return cls(
-                _filter_value(cache[scope.id]),
-                _filter_value(cache[category_id]),
+                _filter_none(cache[scope.id]),
+                _filter_none(cache[category_id]),
                 cache[scope.guild.id],
             )
         elif guild := getattr(scope, "guild", None):
             assert isinstance(guild, discord.Guild) and not isinstance(scope, discord.Guild)
             if scope.type == discord.ChannelType.category:
                 assert isinstance(scope, discord.CategoryChannel)
-                return cls({}, _filter_value(cache[scope.id]), cache[guild.id])
+                return cls({}, _filter_none(cache[scope.id]), cache[guild.id])
             else:
                 assert isinstance(scope, GuildVoiceTypes)
-                return cls(_filter_value(cache[scope.id]), {}, cache[guild.id])
+                return cls(_filter_none(cache[scope.id]), {}, cache[guild.id])
         else:
             assert isinstance(scope, discord.Guild)
             return cls(cache[scope.id])
@@ -521,18 +532,17 @@ class InVoice(commands.Cog):
         role_set.discard(guild.id)
         if role_set.symmetric_difference(m._roles):  # type: ignore
             try:
-                await m.edit(roles=list(filter(None, map(guild.get_role, role_set))))
+                await m.edit(roles=[discord.Object(id) for id in role_set])
             except discord.Forbidden:
                 LOG.info("Unable to edit roles for %s in guild %s", m, guild)
-            else:
-                stamp = True
+                LOG.debug("Before: %s\nAfter: %s", m._roles, role_set)
+            stamp = True
         for channel_id, overs in channel_updates.items():
             if (channel := guild.get_channel(channel_id)) and channel.overwrites.get(m) != overs:
                 try:
                     await channel.set_permissions(m, overwrite=overs)
                 except discord.Forbidden:
                     LOG.info("Unable to edit channel permissions for %s in guild %s", m, guild)
-                else:
-                    stamp = True
+                stamp = True
         if stamp:
             self.member_as[(m.guild.id, m.id)].stamp()
