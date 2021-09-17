@@ -5,11 +5,10 @@ import traceback
 from functools import partial, partialmethod
 from importlib.metadata import PackageNotFoundError, version
 from itertools import chain
-from typing import Any
+from typing import TYPE_CHECKING, Any, Optional
 
 import discord
 import redbot
-import yarl
 from redbot.core import commands
 from redbot.core.utils.chat_formatting import box, pagify
 
@@ -17,6 +16,9 @@ try:
     from discord.ext import menus
 except ImportError:
     from redbot.vendored.discord.ext import menus
+
+if TYPE_CHECKING:
+    from redbot.cogs.downloader import Downloader
 
 
 LOG = logging.getLogger("red.fluffy.rtfs")
@@ -90,10 +92,8 @@ class RTFS(commands.Cog):
             source = obj.callback
             if not inspect.getmodule(source):
                 # probably some kind of custom-coded command
-                if is_owner:
-                    return await ctx.invoke(
-                        ctx.bot.get_command("instantcmd source"), command=obj.qualified_name
-                    )
+                if is_owner and (cmd := ctx.bot.get_command("instantcmd source")):
+                    return await cmd(ctx, command=obj.qualified_name)
                 else:
                     raise OSError
         elif isinstance(obj, (partial, partialmethod)):
@@ -117,8 +117,11 @@ class RTFS(commands.Cog):
         else:
             full_module = module
         is_installed = False
+        # no reason to highlight entire files
+        line_suffix = f"#L{line}-L{line + len(lines) - 1}" if line > 0 else ""
         header: str = ""
         if full_module:
+            dl: Optional[Downloader]
             if full_module.startswith("discord."):
                 is_installed = True
                 if discord.__version__[-1].isdigit():
@@ -130,14 +133,14 @@ class RTFS(commands.Cog):
                         dpy_commit = "master"
                     else:
                         dpy_commit = dpy_version[1] if len(dpy_version) == 2 else "master"
-                header = f"<https://github.com/Rapptz/discord.py/blob/{dpy_commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
+                header = f"<https://github.com/Rapptz/discord.py/blob/{dpy_commit}/{full_module.replace('.', '/')}.py{line_suffix}>"
             elif full_module.startswith("redbot."):
                 is_installed = True
                 if "dev" in redbot.__version__:
                     red_commit = "V3/develop"
                 else:
                     red_commit = redbot.__version__
-                header = f"<https://github.com/Cog-Creators/Red-DiscordBot/blob/{red_commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
+                header = f"<https://github.com/Cog-Creators/Red-DiscordBot/blob/{red_commit}/{full_module.replace('.', '/')}.py{line_suffix}>"
             elif dl := ctx.bot.get_cog("Downloader"):
                 is_installed, installable = await dl.is_installed(full_module.split(".")[0])
                 if is_installed:
@@ -163,14 +166,14 @@ class RTFS(commands.Cog):
                             # Since it's not possible to tell if it's a private repo or not without an extra web request,
                             # we'll just assume it's a private repo
                             is_installed = False
-                            repo_url = f"<https://{match.group('host')}/{match.group('user')}/{match.group('repo')}>"
+                            repo_url = f"https://{match.group('host')}/{match.group('user')}/{match.group('repo')}"
                         else:
                             repo_url = installable.repo.clean_url
                             if repo_url != installable.repo.url:
                                 # Private repo
                                 is_installed = False
                             repo_url = repo_url.rstrip("/")
-                        header = f"<{repo_url}/blob/{installable.commit}/{full_module.replace('.', '/')}.py#L{line}-L{line + len(lines) - 1}>"
+                        header = f"<{repo_url}/blob/{installable.commit}/{full_module.replace('.', '/')}.py{line_suffix}>"
         if not is_installed and not is_owner:
             # don't disclose the source of private cogs
             raise OSError()
