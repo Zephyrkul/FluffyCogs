@@ -785,12 +785,13 @@ class Rift(commands.Cog):
                 content += "\n".join(f"({self.xbytes(a.size)}) {a.url}" for a in attachments)
         if not content and not embed:
             raise RiftError(_("Nothing to send."))
-        allowed_mentions = discord.AllowedMentions()
-        if not is_owner:
+        if is_owner:
+            allowed_mentions = discord.AllowedMentions.all()
+        else:
             if content and not both_perms.administrator:
                 content = filter_invites(content)
-            if not both_perms.mention_everyone:
-                allowed_mentions = discord.AllowedMentions(users=True, everyone=True, roles=True)
+            if both_perms.mention_everyone:
+                allowed_mentions = discord.AllowedMentions.all()
             else:
                 allowed_mentions = discord.AllowedMentions(users=True)
         return {"allowed_mentions": allowed_mentions, "embed": embed, "content": content}
