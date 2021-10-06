@@ -5,7 +5,7 @@ import itertools
 from copy import copy
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Union
+from typing import Optional
 
 import discord
 from redbot.core import commands
