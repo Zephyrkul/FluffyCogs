@@ -62,9 +62,6 @@ def logsfrom_check():
     return predicate
 
 
-MaybeMessage = Optional[Union[int, discord.Message]]  # yes, this order is intentional
-
-
 @cog_i18n(_T)
 class LogsFrom(commands.Cog):
     async def red_get_data_for_user(self, *, user_id):
@@ -78,8 +75,8 @@ class LogsFrom(commands.Cog):
     async def logsfrom(
         self,
         ctx,
-        after: discord.PartialMessage = None,
-        before: discord.PartialMessage = None,
+        after: Optional[discord.PartialMessage] = None,
+        before: Optional[discord.PartialMessage] = None,
         *,
         channel: discord.TextChannel = None,
     ):
