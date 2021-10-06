@@ -52,6 +52,16 @@ async def history(channel, **kwargs):
     return d
 
 
+# The below effectively makes for an owner-only command in guilds,
+# but one that can be overwritten with permissions
+def logsfrom_check():
+    @commands.permissions_check
+    def predicate(ctx):
+        return ctx.guild is None
+
+    return predicate
+
+
 MaybeMessage = Optional[Union[int, discord.Message]]  # yes, this order is intentional
 
 
@@ -63,12 +73,13 @@ class LogsFrom(commands.Cog):
     async def red_delete_data_for_user(self, *, requester, user_id):
         pass  # No data to delete
 
+    @logsfrom_check()
     @commands.command(usage="[bounds...] [channel]")
     async def logsfrom(
         self,
         ctx,
-        after: MaybeMessage = None,
-        before: MaybeMessage = None,
+        after: discord.PartialMessage = None,
+        before: discord.PartialMessage = None,
         *,
         channel: discord.TextChannel = None,
     ):
