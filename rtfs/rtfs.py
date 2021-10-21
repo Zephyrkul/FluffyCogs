@@ -186,7 +186,8 @@ class RTFS(commands.Cog):
             pagify(
                 "".join(chain([comments], lines) if comments else lines).replace(
                     # \u02CB = modifier letter grave accent
-                    "```", "\u02CB\u02CB\u02CB"
+                    "```",
+                    "\u02CB\u02CB\u02CB",
                 ),
                 shorten_by=10,
                 page_length=1024,
