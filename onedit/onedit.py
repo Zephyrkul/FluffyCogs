@@ -2,8 +2,8 @@ import asyncio
 from typing import Optional
 
 import discord
-from redbot.core.bot import Red
 from redbot.core import Config, checks, commands, i18n
+from redbot.core.bot import Red
 
 
 class OnEdit(commands.Cog):
