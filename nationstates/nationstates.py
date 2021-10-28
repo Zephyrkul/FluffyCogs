@@ -275,7 +275,7 @@ class NationStates(commands.Cog):
         if is_zday:
             embed.add_field(
                 name="{}{}".format(
-                    (root.ZOMBIE.ZACTION or "No Action").title(),
+                    (root.ZOMBIE.ZACTION.text or "No Action").title(),
                     " (Unintended)" if root.ZOMBIE.ZACTIONINTENDED else "",
                 ),
                 value="Survivors: {} | Zombies: {} | Dead: {}".format(
