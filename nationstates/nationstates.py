@@ -363,11 +363,7 @@ class NationStates(commands.Cog):
             url="https://www.nationstates.net/region={}".format(root.get("id")),
             description=description,
             timestamp=datetime.utcfromtimestamp(root.LASTUPDATE.pyval),
-            colour=0x000001
-            if fash
-            else 0x8BBC21
-            if is_zday
-            else await ctx.embed_colour(),
+            colour=0x000001 if fash else 0x8BBC21 if is_zday else await ctx.embed_colour(),
         )
         embed.set_author(name="NationStates", url="https://www.nationstates.net/")
         if root.FLAG.text:
