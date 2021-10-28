@@ -68,7 +68,7 @@ LINK_RE = re.compile(
     r'(?i)["<]?\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b[">]?'
 )
 WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
-ZDAY_EPOCHS = (1572465600, 1572584400 + 604800)
+ZDAY_START = 1635627600
 T = TypeVar("T", bound=Options)
 
 
@@ -136,15 +136,14 @@ class NationStates(commands.Cog):
         if xra:
             raise commands.CommandOnCooldown(None, time.time() - xra)
 
-    def cog_command_error(self, ctx, error):
-        # not a coro but returns one anyway
+    async def cog_command_error(self, ctx, error):
         original = getattr(error, "original", None)
         if original:
             if isinstance(original, asyncio.TimeoutError):
                 return ctx.send("Request timed out.")
             if isinstance(original, HTTPException):
                 return ctx.send(f"{original.status}: {original.message}")
-        return ctx.bot.on_command_error(ctx, error, unhandled_by_cog=True)
+        return await ctx.bot.on_command_error(ctx, error, unhandled_by_cog=True)
 
     # __________ UTILS __________
 
@@ -159,9 +158,10 @@ class NationStates(commands.Cog):
         return "{} {}".format(round(num, 3), illion[index])
 
     @staticmethod
-    def _is_zday(snowflake: discord.abc.Snowflake):
+    def _is_zday(snowflake: discord.abc.Snowflake, *, dev: bool = False):
         epoch = snowflake.created_at.timestamp()
-        return epoch >= ZDAY_EPOCHS[0] and epoch < ZDAY_EPOCHS[1]
+        start, end = ZDAY_START - 259200 * dev, ZDAY_START + 723600
+        return start <= epoch < end
 
     # __________ LISTENERS __________
 
@@ -239,6 +239,7 @@ class NationStates(commands.Cog):
         else:
             endo = "{:.0f} endorsements".format(endo)
         founded = root.FOUNDED.pyval or "in Antiquity"
+        is_zday = self._is_zday(ctx.message, dev=ctx.author.id == 215640856839979008)
         embed = ProxyEmbed(
             title=root.FULLNAME.text,
             url="https://www.nationstates.net/nation={}".format(root.get("id")),
@@ -251,7 +252,7 @@ class NationStates(commands.Cog):
                 founded,
             ),
             timestamp=datetime.utcfromtimestamp(root.LASTLOGIN.pyval),
-            colour=0x8BBC21 if self._is_zday(ctx.message) else await ctx.embed_colour(),
+            colour=0x8BBC21 if is_zday else await ctx.embed_colour(),
         )
         embed.set_author(name="NationStates", url="https://www.nationstates.net/")
         embed.set_thumbnail(url=root.FLAG.text)
@@ -271,16 +272,16 @@ class NationStates(commands.Cog):
             ),
             inline=False,
         )
-        if self._is_zday(ctx.message):
+        if is_zday:
             embed.add_field(
                 name="{}{}".format(
-                    (root.find("ZOMBIE/ZACTION") or "No Action").title(),
-                    " (Unintended)" if root.find("ZOMBIE/ZACTIONINTENDED") else "",
+                    (root.ZOMBIE.ZACTION or "No Action").title(),
+                    " (Unintended)" if root.ZOMBIE.ZACTIONINTENDED else "",
                 ),
                 value="Survivors: {} | Zombies: {} | Dead: {}".format(
-                    self._illion(root.find("ZOMBIE/SURVIVORS")),
-                    self._illion(root.find("ZOMBIE/ZOMBIES")),
-                    self._illion(root.find("ZOMBIE/DEAD")),
+                    self._illion(root.ZOMBIE.SURVIVORS),
+                    self._illion(root.ZOMBIE.ZOMBIES),
+                    self._illion(root.ZOMBIE.DEAD),
                 ),
                 inline=False,
             )
@@ -356,6 +357,7 @@ class NationStates(commands.Cog):
         description = "[{} nations](https://www.nationstates.net/region={}/page=list_nations) | Founded {} | Power: {}{}".format(
             root.NUMNATIONS.pyval, root.get("id"), founded, root.POWER.text, warning
         )
+        is_zday = self._is_zday(ctx.message, dev=ctx.author.id == 215640856839979008)
         embed = ProxyEmbed(
             title=name,
             url="https://www.nationstates.net/region={}".format(root.get("id")),
@@ -364,7 +366,7 @@ class NationStates(commands.Cog):
             colour=0x000001
             if fash
             else 0x8BBC21
-            if self._is_zday(ctx.message)
+            if is_zday
             else await ctx.embed_colour(),
         )
         embed.set_author(name="NationStates", url="https://www.nationstates.net/")
@@ -372,13 +374,13 @@ class NationStates(commands.Cog):
             embed.set_thumbnail(url=root.FLAG.text)
         embed.add_field(name=founderheader, value=foundervalue, inline=False)
         embed.add_field(name=delheader, value=delvalue, inline=False)
-        if self._is_zday(ctx.message):
+        if is_zday:
             embed.add_field(
                 name="Zombies",
                 value="Survivors: {} | Zombies: {} | Dead: {}".format(
-                    self._illion(root.find("ZOMBIE/SURVIVORS")),
-                    self._illion(root.find("ZOMBIE/ZOMBIES")),
-                    self._illion(root.find("ZOMBIE/DEAD")),
+                    self._illion(root.ZOMBIE.SURVIVORS),
+                    self._illion(root.ZOMBIE.ZOMBIES),
+                    self._illion(root.ZOMBIE.DEAD),
                 ),
                 inline=False,
             )
