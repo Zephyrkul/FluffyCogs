@@ -15,7 +15,7 @@ with open(Path(__file__).parent / "info.json") as fp:
 
 async def new_send(__sender, /, *args, **kwargs):
     ctx: Context = __sender.__self__
-    if "reference" not in kwargs:
+    if not ctx.command_failed and "reference" not in kwargs:
         message = ctx.message
         try:
             resolved = message.reference.resolved
