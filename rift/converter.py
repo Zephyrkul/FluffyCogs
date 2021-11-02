@@ -52,7 +52,7 @@ class Limited(discord.abc.Messageable):
 class DiscordConverter(commands.Converter):
     @classmethod
     async def convert(
-        cls, ctx, argument: str, *, globally: bool = True
+        cls, ctx: commands.Context, argument: str, *, globally: bool = True
     ) -> discord.abc.Messageable:
         results = await cls.search(ctx, argument, globally=globally)
         if len(results) == 0:
@@ -83,7 +83,7 @@ class DiscordConverter(commands.Converter):
 
     @classmethod
     async def search(
-        cls, ctx, argument: str, *, globally: bool = False
+        cls, ctx: commands.Context, argument: str, *, globally: bool = False
     ) -> List[discord.abc.Messageable]:
         is_owner = await ctx.bot.is_owner(ctx.author)
         is_nsfw = getattr(ctx.channel, "nsfw", False)

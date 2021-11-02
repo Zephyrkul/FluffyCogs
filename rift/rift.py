@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta
 from functools import partial
 from io import BytesIO
-from itertools import chain, starmap
+from itertools import starmap
 from traceback import walk_tb
 from types import SimpleNamespace
 from typing import (
@@ -11,6 +11,7 @@ from typing import (
     Any,
     Awaitable,
     Dict,
+    Hashable,
     Iterable,
     List,
     Optional,
@@ -37,6 +38,13 @@ from .graph import SimpleGraph, Vector
 if TYPE_CHECKING:
     from discord.abc import Messageable
     from redbot.cogs.filter import Filter
+
+    _H = TypeVar("_H", bound=Hashable)
+
+    def deduplicate_iterables(*iterables: Iterable[_H]) -> List[_H]:
+        ...
+
+
 else:
     from .converter import DiscordConverter as Messageable
 
@@ -59,7 +67,7 @@ async def can_close(ctx: discord.Message, bot: Red) -> bool:
     ...
 
 
-async def can_close(ctx, bot=None):
+async def can_close(ctx: Union[commands.Context, discord.Message], bot: Red = None):
     """Admin / manage channel OR private channel"""
     if ctx.channel.type == discord.ChannelType.private:
         return True
@@ -812,6 +820,15 @@ class Rift(commands.Cog):
             raise
 
     # EVENTS
+
+    @commands.Cog.listener()
+    async def on_typing(self, channel: UnionChannel, user: UnionUser, when: datetime):
+        destinations = deduplicate_iterables(
+            self.rifts.get(Limited(author=user, channel=channel), ()), self.rifts.get(channel, ())
+        )
+        await asyncio.gather(
+            *(channel.trigger_typing() for channel in destinations), return_exceptions=True
+        )
 
     @commands.Cog.listener()
     async def on_message_without_command(self, message: discord.Message):

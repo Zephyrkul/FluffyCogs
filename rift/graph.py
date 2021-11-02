@@ -21,7 +21,10 @@ class GraphError(Exception):
     pass
 
 
-_Base = MutableMapping[T, Set[T]] if TYPE_CHECKING else Generic
+if TYPE_CHECKING:
+    _Base = MutableMapping[T, Set[T]]
+else:
+    _Base = Generic
 
 
 class GraphMixin(_Base[T]):
