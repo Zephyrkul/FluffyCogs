@@ -665,7 +665,7 @@ class Rift(commands.Cog):
             if b <= 900:
                 break
             b /= 1024.0
-        return "{:.3g} {}B".format(b, suffix)
+        return f"{b:.3f} {suffix}B"
 
     async def process_send(self, message: discord.Message, destination: discord.abc.Messageable):
         channel: UnionChannel = await destination._get_channel()
