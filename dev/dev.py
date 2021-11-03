@@ -123,16 +123,6 @@ class Env(Dict[str, Any]):
 class Dev(dev_commands.Dev):
     """Various development focused utilities."""
 
-    # Schema: [my version] <[targeted bot version]>
-    __version__ = "0.0.6 <3.4.9>"
-
-    def format_help_for_context(self, ctx: commands.Context) -> str:
-        pre = super().format_help_for_context(ctx)
-        if pre:
-            return f"{pre}\nCog Version: {self.__version__}"
-        else:
-            return f"Cog Version: {self.__version__}"
-
     async def my_exec(self, ctx: commands.Context, *args, **kwargs) -> bool:
         tasks = [
             asyncio.create_task(
