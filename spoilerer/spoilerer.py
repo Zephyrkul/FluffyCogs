@@ -99,12 +99,17 @@ class Spoilerer(commands.Cog):
             await message.add_reaction(button)
         except discord.Forbidden:
             return
+
+        def check(r: discord.Reaction, u: Union[discord.Member, discord.User]):
+            return r.message == message and r.emoji == button and u == author
+
         try:
-            await self.bot.wait_for(
-                "reaction_add", timeout=10, check=lambda r, u: r.message == message and u == author
-            )
+            await self.bot.wait_for("reaction_add", timeout=10, check=check)
         except asyncio.TimeoutError:
-            await message.remove_reaction(button, me)
+            try:
+                await message.remove_reaction(button, me)
+            except discord.HTTPException:
+                return
         else:
             await self._spoil(message)
 
