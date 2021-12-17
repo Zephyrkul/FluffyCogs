@@ -823,6 +823,8 @@ class Rift(commands.Cog):
 
     @commands.Cog.listener()
     async def on_typing(self, channel: UnionChannel, user: UnionUser, when: datetime):
+        if user.bot:
+            return
         destinations = deduplicate_iterables(
             self.rifts.get(Limited(author=user, channel=channel), ()), self.rifts.get(channel, ())
         )
