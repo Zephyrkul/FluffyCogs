@@ -44,7 +44,6 @@ if TYPE_CHECKING:
     def deduplicate_iterables(*iterables: Iterable[_H]) -> List[_H]:
         ...
 
-
 else:
     from .converter import DiscordConverter as Messageable
 
