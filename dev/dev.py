@@ -13,7 +13,7 @@ import textwrap
 import types
 from contextvars import ContextVar
 from copy import copy
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar
+from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
 from typing_extensions import ParamSpec
 from weakref import WeakSet
 
