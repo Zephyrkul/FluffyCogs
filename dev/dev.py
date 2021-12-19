@@ -13,7 +13,7 @@ import textwrap
 import types
 from contextvars import ContextVar
 from copy import copy
-from typing import Any, Callable, Dict, List, TypeVar
+from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar
 from typing_extensions import ParamSpec
 from weakref import WeakSet
 
@@ -34,25 +34,34 @@ P = ParamSpec("P")
 
 
 @contextlib.asynccontextmanager
-async def redirect(console: rich.console.Console):
+async def redirect(**kwargs):
+    if "file" not in kwargs:
+        kwargs["file"] = file = io.StringIO()
+    else:
+        file = None
+    console = rich.console.Console(**kwargs)
     token = ctxconsole.set(console)
     try:
         yield console
     finally:
         ctxconsole.reset(token)
+        if file:
+            file.close()
 
 
-class Patcher(Callable[P, T]):
-    patchers: "WeakSet[Patcher]" = WeakSet()
+class Patcher(Generic[T, P]):
+    patchers: "WeakSet[Patcher[T, P]]" = WeakSet()
 
-    def __new__(cls, original: Callable[P, T], new: Callable[P, T], /) -> "Patcher":
+    def __new__(cls, original: Callable[P, T], new: Callable[P, T]):
+        if isinstance(new, cls):
+            new = new.new
         if isinstance(original, cls):
             # just redirect it
             original.new = new
             return original
         return super().__new__(cls)
 
-    def __init__(self, original: Callable[P, T], new: Callable[P, T], /):
+    def __init__(self, original: Callable[P, T], new: Callable[P, T]):
         self.original = original
         self.new = new
 
@@ -63,39 +72,82 @@ class Patcher(Callable[P, T]):
             return self.original(*args, **kwargs)
 
     def __getattr__(self, attr: str) -> Any:
-        return getattr(self.original, attr)
+        return getattr(self._original, attr)
 
-    @classmethod
-    def patch(cls, original: Callable[P, T], new: Callable[P, T], /) -> "Patcher":
-        self = cls(original, new)
-        container = sys.modules[original.__module__]
-        for attr in original.__qualname__.split(".")[:-1]:
-            container = getattr(original, attr)
-        setattr(container, original.__name__, self)
-        cls.patchers.add(self)
-        return self
+    @property
+    def original(self) -> Callable[P, T]:
+        original = self._original
+        try:
+            self.__code
+        except AttributeError:
+            return original
+        else:
+            assert isinstance(original, types.FunctionType)
+            func = types.FunctionType(
+                self.__code,
+                original.__globals__,
+                argdefs=original.__defaults__,
+                closure=original.__closure__,
+            )
+            if self.__kwdefaults is not None:
+                func.__kwdefaults__ = self.__kwdefaults
+            return func
+
+    @original.setter
+    def original(self, original: Callable[P, T]) -> None:
+        if self in self.patchers:
+            raise RuntimeError("Cannot change original after patching")
+        try:
+            del self.__code
+            del self.__kwdefaults
+        except AttributeError:
+            pass
+        if hasattr(original, "__code__"):
+            self.__code = original.__code__
+            self.__kwdefaults = original.__kwdefaults__
+        elif not hasattr(original, "__self__"):
+            raise TypeError(f"Unsupported type for original: {type(original)}")
+        self._original = original
+
+    def patch(self) -> None:
+        original = self._original
+        try:
+            self.__code
+        except AttributeError:
+            setattr(original.__self__, original.__name__, self)
+        else:
+            # this is the second dumbest code I've ever written
+
+            def caller(*args: P.args, __self: "Patcher[T, P]" = self, **kwargs: P.kwargs) -> T:
+                return __self(*args, **kwargs)
+
+            original.__code__ = caller.__code__
+            original.__kwdefaults__ = {**(original.__kwdefaults__ or {}), **caller.__kwdefaults__}
+        self.patchers.add(self)
 
     def unpatch(self):
-        original = self.original
-        container = sys.modules[original.__module__]
-        for attr in original.__qualname__.split(".")[:-1]:
-            container = getattr(original, attr)
-        setattr(container, original.__name__, original)
-        self.patchers.discard(self)
+        original = self._original
+        try:
+            self.__code
+        except AttributeError:
+            setattr(original.__self__, original.__name__, original)
+        else:
+            original.__code__ = self.__code
+            if self.__kwdefaults is not None:
+                original.__kwdefaults__ = self.__kwdefaults
+            else:
+                del original.__kwdefaults__
+        self.patchers.remove(self)
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(original={self.original!r}, new={self.new!r})"
-
-
-def _print(*args, **kwargs):
-    ctxconsole.get()  # this is here solely to raise an error if there is no redirect
-    rich.print(*args, **kwargs)
+        return repr(self._original)
 
 
 def _displayhook(obj: Any) -> None:
     if obj is not None:
+        _console = ctxconsole.get()
         builtins._ = None
-        rich.print(rich.pretty.pretty_repr(obj))
+        rich.pretty.pprint(obj, console=_console)
         builtins._ = obj
 
 
@@ -105,9 +157,8 @@ def _get_console() -> rich.console.Console:
 
 def patch_hooks():
     # monkeypatching is 👌
-    Patcher.patch(builtins.print, _print)
-    Patcher.patch(sys.displayhook, _displayhook)
-    Patcher.patch(rich.get_console, _get_console)
+    Patcher(sys.displayhook, _displayhook).patch()
+    Patcher(rich.get_console, _get_console).patch()
 
 
 def reset_hooks():
@@ -121,7 +172,7 @@ def reset_hooks():
             "Error resetting hooks - please report this error and restart your bot", exc_info=True
         )
     else:
-        logger.debug("Hooks reset")
+        logger.debug("Hooks reset successfully")
 
 
 class Exit(BaseException):
@@ -152,11 +203,13 @@ class Compiler:
 class Env(Dict[str, Any]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.imported = []
+        self.imported: List[str] = []
 
-    def __missing__(self, key):
+    def __missing__(self, key: str):
         if key in ("exit", "quit"):
             raise Exit()
+        if key == "print":
+            return rich.print
         try:
             # this is called implicitly after KeyError, but
             # some modules would overwrite builtins (e.g. bin)
@@ -179,11 +232,11 @@ class Env(Dict[str, Any]):
         raise KeyError(key)
 
     def get_formatted_imports(self) -> str:
-        if not self.imported:
+        if not (imported := self.imported):
             return ""
-        self.imported.sort()
-        message = "".join(f">>> import {imported}\n" for imported in self.imported)
-        self.imported.clear()
+        imported.sort()
+        message = "".join(f">>> import {import_}\n" for import_ in imported)
+        imported.clear()
         return message
 
 
@@ -195,8 +248,6 @@ class Dev(dev_commands.Dev):
     env_extensions: Dict[str, Callable[[commands.Context], Any]]
 
     async def my_exec(self, ctx: commands.Context, *args, **kwargs) -> bool:
-        message: discord.Message = kwargs.get("message", ctx.message)
-        assert message.channel == ctx.channel
         tasks = [
             asyncio.create_task(
                 ctx.bot.wait_for("message", check=MessagePredicate.cancelled(ctx))
@@ -211,12 +262,7 @@ class Dev(dev_commands.Dev):
         if isinstance(result, bool):
             return result
         # wait_for finished
-        assert isinstance(result, discord.Message)
-        if ctx.channel.permissions_for(ctx.me).add_reactions:
-            with contextlib.suppress(discord.HTTPException):
-                await message.add_reaction("\N{CROSS MARK}")
-                return False
-        await ctx.send("Cancelled.")
+        # do nothing
         return False
 
     async def _my_exec(
@@ -224,9 +270,10 @@ class Dev(dev_commands.Dev):
         ctx: commands.Context,
         source: str,
         env: Env,
-        compiler: Compiler = None,
+        compiler: Optional[Compiler] = None,
         **environ: Any,
     ) -> bool:
+        assert ctx.invoked_with
         compiler = compiler or Compiler()
         is_alias = False
         if ctx.command is not self.repl:
@@ -236,41 +283,43 @@ class Dev(dev_commands.Dev):
         env.update(environ)
         exited = False
         filename = f"<{ctx.invoked_with}>"
-        console = rich.console.Console(file=io.StringIO(), width=80)
-        try:
-            async with redirect(console):
+        async with redirect(width=80) as console:
+            assert isinstance(console.file, io.StringIO)
+            try:
                 if source.startswith("from __future__ import"):
                     self.handle_future(source, compiler)
                 if ctx.command is self._eval:
                     await self._eval_exec(source, env, filename, compiler)
                 else:
                     await self._debug_exec(source, env, filename, compiler)
-        except (Exit, SystemExit):
-            exited = True
-        except BaseException as e:
-            # return only frames that are part of provided code
-            tb = e.__traceback__
-            while tb:
-                if tb.tb_frame.f_code.co_filename == filename:
-                    break
-                tb = tb.tb_next
-            if tb and ctx.command is self._eval:
-                tb = tb.tb_next  # skip the func() frame
-            console.print(
-                rich.traceback.Traceback.from_exception(
-                    type(e), e, tb or e.__traceback__, extra_lines=0, word_wrap=True
-                )
-            )
-        if is_alias:
-            output = console.file.getvalue()
-        else:
-            output = env.get_formatted_imports() + console.file.getvalue()
+            except (Exit, SystemExit):
+                exited = True
+            except KeyboardInterrupt:
+                raise
+            except:
+                self._output_exception(ctx, console, filename)
+            if is_alias:
+                output = console.file.getvalue()
+            else:
+                output = env.get_formatted_imports() + console.file.getvalue()
         asyncio.ensure_future(self.send_interactive(ctx, output, message))
         return exited
 
-    async def _debug_exec(
-        self, source: str, env: Env, filename: str, compiler: Compiler = None
+    def _output_exception(
+        self, ctx: commands.Context, console: rich.console.Console, filename: str
     ) -> None:
+        exc_type, e, tb = sys.exc_info()
+        # return only frames that are part of provided code
+        while tb:
+            if tb.tb_frame.f_code.co_filename == filename:
+                break
+            tb = tb.tb_next
+        if tb and ctx.command is self._eval:
+            tb = tb.tb_next or tb  # skip the func() frame if we can
+        rich_tb = rich.traceback.Traceback.from_exception(exc_type, e, tb, extra_lines=0)
+        console.print(rich_tb)
+
+    async def _debug_exec(self, source: str, env: Env, filename: str, compiler: Compiler) -> None:
         tree: ast.Module = compiler(source, filename, "exec", flags=ast.PyCF_ONLY_AST)
         if header := tree.body[:-1]:
             body = ast.Module(header, tree.type_ignores)
@@ -285,9 +334,7 @@ class Dev(dev_commands.Dev):
             compiled = compiler(ast.Interactive([node]), filename, "single")
         await self.maybe_await(types.FunctionType(compiled, env)())
 
-    async def _eval_exec(
-        self, source: str, env: Env, filename: str, compiler: Compiler = None
-    ) -> None:
+    async def _eval_exec(self, source: str, env: Env, filename: str, compiler: Compiler) -> None:
         source = "async def func():\n" + textwrap.indent(source, "  ")
         compiled = compiler(source, filename, "exec")
         # this Function will never be a coroutine
@@ -295,24 +342,22 @@ class Dev(dev_commands.Dev):
 
         await self.maybe_await(env["func"]())
 
-    @classmethod
-    def sanitize_output(cls, ctx: commands.Context, input_: str) -> str:
-        # sanitize markdown as well
-        # \u02CB = modifier letter grave accent
-        return super().sanitize_output(ctx, input_).replace("```", "\u02CB\u02CB\u02CB")
-
     async def send_interactive(
         self,
         ctx: commands.Context,
         output: str,
-        message: discord.Message = None,
+        message: Optional[discord.Message] = None,
     ) -> None:
         message = message or ctx.message
         assert message.channel == ctx.channel
         try:
             if output:
+                # \u02CB = modifier letter grave accent
                 await ctx.send_interactive(
-                    self.get_pages(self.sanitize_output(ctx, output)), box_lang="py"
+                    self.get_pages(
+                        self.sanitize_output(ctx, output).replace("```", "\u02CB\u02CB\u02CB")
+                    ),
+                    box_lang="py",
                 )
             else:
                 if ctx.channel.permissions_for(ctx.me).add_reactions:
@@ -325,8 +370,8 @@ class Dev(dev_commands.Dev):
             self.sessions.pop(ctx.channel.id, None)
 
     @staticmethod
-    async def maybe_await(coro, *, hook=_displayhook) -> None:
-        if not coro:
+    async def maybe_await(coro: Any, *, hook: Callable[[Any], None] = _displayhook) -> None:
+        if coro is None:
             return
         if inspect.isasyncgen(coro):
             async for result in coro:
@@ -340,12 +385,13 @@ class Dev(dev_commands.Dev):
         code = super().cleanup_code(code)
         # also from stdlib's codeop
         # compiling nocode with "eval" does weird things
-        for line in code.splitlines():
-            line = line.strip()
-            if line and not line.startswith("#"):
-                break
-        else:
-            return "pass"
+        with io.StringIO(code) as codeio:
+            for line in codeio:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    break
+            else:
+                return "pass"
         return code
 
     def get_environment(self, ctx: commands.Context) -> Env:

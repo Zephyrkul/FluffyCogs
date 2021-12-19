@@ -8,3 +8,8 @@
     line-length = 99
     target-version = ['py38']
     include = '\.pyi?$'
+
+[tool.pyright]
+    useLibraryCodeForTypes = true
+#   typeCheckingMode = 'strict'
+    reportMissingTypeStubs = false
