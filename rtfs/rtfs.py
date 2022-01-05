@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 
 LOG = logging.getLogger("red.fluffy.rtfs")
-GIT_AT = re.compile(r"(?i)git@(?P<host>[^:]+):(?P<user>[^/]+)/(?P<repo>.+)\.git")
+GIT_AT = re.compile(r"(?i)git@(?P<host>[^:]+):(?P<user>[^/]+)/(?P<repo>.+)(?:\.git)?")
 
 
 class Unlicensed(Exception):
