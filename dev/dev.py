@@ -12,7 +12,6 @@ import sys
 import textwrap
 import types
 from contextvars import ContextVar
-from copy import copy
 from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
 from typing_extensions import ParamSpec
 from weakref import WeakSet
@@ -33,8 +32,11 @@ _: Callable[[str], str] = dev_commands._
 ctxconsole = ContextVar[rich.console.Console]("ctxconsole")
 T = TypeVar("T")
 P = ParamSpec("P")
-SOLARIZED = copy(get_style_by_name("solarized-dark"))
-SOLARIZED.background_color = "default"
+
+
+class SolarizedCustom(get_style_by_name("solarized-dark")):
+    background_color = None
+    line_number_background_color = None
 
 
 @contextlib.asynccontextmanager
@@ -308,7 +310,9 @@ class Dev(dev_commands.Dev):
             else:
                 with console.capture() as captured:
                     console.print(
-                        rich.syntax.Syntax(env.get_formatted_imports(), "pycon", theme=SOLARIZED)
+                        rich.syntax.Syntax(
+                            env.get_formatted_imports(), "pycon", theme=SolarizedCustom
+                        )
                     )
                 output = captured.get() + console.file.getvalue()
         asyncio.ensure_future(self.send_interactive(ctx, output, message))
@@ -326,7 +330,7 @@ class Dev(dev_commands.Dev):
         if tb and ctx.command is self._eval:
             tb = tb.tb_next or tb  # skip the func() frame if we can
         rich_tb = rich.traceback.Traceback.from_exception(
-            exc_type, e, tb, extra_lines=1, theme=SOLARIZED
+            exc_type, e, tb, extra_lines=1, theme=SolarizedCustom
         )
         console.print(rich_tb)
 
