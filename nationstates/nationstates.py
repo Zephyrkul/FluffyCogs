@@ -1,5 +1,7 @@
 import asyncio
 import bisect
+import heapq
+import operator
 import re
 import time
 from datetime import datetime
@@ -639,14 +641,14 @@ class NationStates(commands.Cog):
             )
         embed.set_thumbnail(url="https://www.nationstates.net/{}".format(img))
         if option & WA.DELEGATE:
-            for_del_votes = sorted(
-                root.iterfind("DELVOTES_FOR/DELEGATE"), key=lambda e: e.VOTES.pyval, reverse=True
-            )[:10]
-            against_del_votes = sorted(
+            for_del_votes = heapq.nlargest(
+                10, root.iterfind("DELVOTES_FOR/DELEGATE"), key=operator.attrgetter("VOTES.pyval")
+            )
+            against_del_votes = heapq.nlargest(
+                10,
                 root.iterfind("DELVOTES_AGAINST/DELEGATE"),
-                key=lambda e: e.VOTES.pyval,
-                reverse=True,
-            )[:10]
+                key=operator.attrgetter("VOTES.pyval"),
+            )
             if for_del_votes:
                 embed.add_field(
                     name="Top Delegates For",
