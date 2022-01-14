@@ -278,7 +278,7 @@ class NationStates(commands.Cog):
             embed.add_field(
                 name="{}{}".format(
                     (root.ZOMBIE.ZACTION.text or "No Action").title(),
-                    " (Unintended)" if root.ZOMBIE.ZACTIONINTENDED else "",
+                    " (Unintended)" if root.ZOMBIE.ZACTIONINTENDED.text else "",
                 ),
                 value="Survivors: {} | Zombies: {} | Dead: {}".format(
                     self._illion(root.ZOMBIE.SURVIVORS),
@@ -562,7 +562,7 @@ class NationStates(commands.Cog):
         else:
             shards.append("lastresolution")
         root = await Api(request, q=shards)
-        if not root.RESOLUTION:
+        if not root.RESOLUTION.countchildren():
             out = (
                 unescape(root.LASTRESOLUTION.text)
                 .replace("<strong>", "**")
