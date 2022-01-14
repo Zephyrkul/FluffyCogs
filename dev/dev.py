@@ -19,7 +19,9 @@ from weakref import WeakSet
 
 import discord
 import rich
+from pygments.styles import get_style_by_name
 from redbot.core import commands, dev_commands
+from redbot.core.utils.chat_formatting import pagify
 from redbot.core.utils.predicates import MessagePredicate
 
 # From stdlib's codeop
@@ -31,6 +33,8 @@ _: Callable[[str], str] = dev_commands._
 ctxconsole = ContextVar[rich.console.Console]("ctxconsole")
 T = TypeVar("T")
 P = ParamSpec("P")
+SOLARIZED = copy(get_style_by_name("solarized-dark"))
+SOLARIZED.background_color = "default"
 
 
 @contextlib.asynccontextmanager
@@ -248,7 +252,7 @@ class Dev(dev_commands.Dev):
     env_extensions: Dict[str, Callable[[commands.Context], Any]]
 
     async def my_exec(self, ctx: commands.Context, *args, **kwargs) -> bool:
-        tasks = [
+        tasks: List[asyncio.Task] = [
             asyncio.create_task(
                 ctx.bot.wait_for("message", check=MessagePredicate.cancelled(ctx))
             ),
@@ -283,7 +287,8 @@ class Dev(dev_commands.Dev):
         env.update(environ)
         exited = False
         filename = f"<{ctx.invoked_with}>"
-        async with redirect(width=80) as console:
+
+        async with redirect(width=80, color_system="standard", soft_wrap=True) as console:
             assert isinstance(console.file, io.StringIO)
             try:
                 if source.startswith("from __future__ import"):
@@ -301,7 +306,11 @@ class Dev(dev_commands.Dev):
             if is_alias:
                 output = console.file.getvalue()
             else:
-                output = env.get_formatted_imports() + console.file.getvalue()
+                with console.capture() as captured:
+                    console.print(
+                        rich.syntax.Syntax(env.get_formatted_imports(), "pycon", theme=SOLARIZED)
+                    )
+                output = captured.get() + console.file.getvalue()
         asyncio.ensure_future(self.send_interactive(ctx, output, message))
         return exited
 
@@ -316,7 +325,9 @@ class Dev(dev_commands.Dev):
             tb = tb.tb_next
         if tb and ctx.command is self._eval:
             tb = tb.tb_next or tb  # skip the func() frame if we can
-        rich_tb = rich.traceback.Traceback.from_exception(exc_type, e, tb, extra_lines=0)
+        rich_tb = rich.traceback.Traceback.from_exception(
+            exc_type, e, tb, extra_lines=1, theme=SOLARIZED
+        )
         console.print(rich_tb)
 
     async def _debug_exec(self, source: str, env: Env, filename: str, compiler: Compiler) -> None:
@@ -348,17 +359,13 @@ class Dev(dev_commands.Dev):
         output: str,
         message: Optional[discord.Message] = None,
     ) -> None:
+        # \u02CB = modifier letter grave accent
+        output = output and self.sanitize_output(ctx, output).replace("```", "\u02CB\u02CB\u02CB")
         message = message or ctx.message
         assert message.channel == ctx.channel
         try:
             if output:
-                # \u02CB = modifier letter grave accent
-                await ctx.send_interactive(
-                    self.get_pages(
-                        self.sanitize_output(ctx, output).replace("```", "\u02CB\u02CB\u02CB")
-                    ),
-                    box_lang="py",
-                )
+                await ctx.send_interactive(self.get_pages(output), box_lang="ansi")
             else:
                 if ctx.channel.permissions_for(ctx.me).add_reactions:
                     with contextlib.suppress(discord.HTTPException):
@@ -368,6 +375,11 @@ class Dev(dev_commands.Dev):
         except discord.Forbidden:
             # if this is repl, stop it
             self.sessions.pop(ctx.channel.id, None)
+
+    @staticmethod
+    def get_pages(msg: str):
+        """Pagify the given message for output to the user."""
+        return pagify(msg, delims=["\n", " "], priority=True, shorten_by=12)
 
     @staticmethod
     async def maybe_await(coro: Any, *, hook: Callable[[Any], None] = _displayhook) -> None:
@@ -500,27 +512,3 @@ class Dev(dev_commands.Dev):
                 del self.sessions[ctx.channel.id]
                 await ctx.send(_("Exiting."))
                 return
-
-    @commands.command()
-    @commands.is_owner()
-    @discord.utils.copy_doc(dev_commands.Dev.mock.callback)
-    async def mock(self, ctx: commands.Context, user: discord.Member, *, command: str):
-        if user.bot:
-            return
-
-        msg = copy(ctx.message)
-        msg.author = user
-        msg.content = ctx.prefix + command
-
-        new_ctx = await ctx.bot.get_context(msg)
-        await ctx.bot.invoke(new_ctx)
-
-    @commands.command(name="mockmsg")
-    @commands.is_owner()
-    @discord.utils.copy_doc(dev_commands.Dev.mock_msg.callback)
-    async def mock_msg(self, ctx: commands.Context, user: discord.Member, *, content: str):
-        msg = copy(ctx.message)
-        msg.author = user
-        msg.content = content
-
-        ctx.bot.dispatch("message", msg)
