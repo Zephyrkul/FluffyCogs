@@ -136,7 +136,7 @@ class NationStates(commands.Cog):
         if xra:
             raise commands.CommandOnCooldown(None, time.time() - xra)
 
-    async def cog_command_error(self, ctx, error):
+    async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         original = getattr(error, "original", None)
         if original:
             if isinstance(original, asyncio.TimeoutError):
@@ -166,7 +166,7 @@ class NationStates(commands.Cog):
     # __________ LISTENERS __________
 
     @commands.Cog.listener()
-    async def on_message_without_command(self, message):
+    async def on_message_without_command(self, message: discord.Message):
         if message.author.bot:
             return
         if not await self.bot.message_eligible_as_command(
@@ -195,7 +195,7 @@ class NationStates(commands.Cog):
     @commands.command(cooldown_after_parsing=True)
     @commands.cooldown(2, 3600)
     @checks.is_owner()
-    async def agent(self, ctx, *, agent: str):
+    async def agent(self, ctx: commands.Context, *, agent: str):
         """
         Sets the user agent.
 
@@ -207,7 +207,7 @@ class NationStates(commands.Cog):
         await ctx.send(f"Agent set: {Api.agent}")
 
     @commands.command()
-    async def nation(self, ctx, *, nation: Link[Nation]):
+    async def nation(self, ctx: commands.Context, *, nation: Link[Nation]):
         """Retrieves general info about a specified NationStates nation"""
         api: Api = Api(
             "census category dbid",
@@ -298,7 +298,7 @@ class NationStates(commands.Cog):
         await embed.send_to(ctx)
 
     @commands.command()
-    async def region(self, ctx, *, region: Link[Region]):
+    async def region(self, ctx: commands.Context, *, region: Link[Region]):
         """Retrieves general info about a specified NationStates region"""
         api: Api = Api(
             "delegate delegateauth delegatevotes flag founded founder founderauth lastupdate name numnations power tags zombie",
@@ -387,7 +387,11 @@ class NationStates(commands.Cog):
 
     @commands.command(usage="[season] <nation>")
     async def card(
-        self, ctx, season: Optional[int] = 2, *, nation: Optional[Union[int, Link[Nation]]] = None
+        self,
+        ctx: commands.Context,
+        season: Optional[int] = 2,
+        *,
+        nation: Optional[Union[int, Link[Nation]]] = None,
     ):
         """
         Retrieves general info about the specified card.
@@ -493,7 +497,7 @@ class NationStates(commands.Cog):
         await embed.send_to(ctx)
 
     @commands.command()
-    async def deck(self, ctx, *, nation: Union[int, Link[Nation]]):
+    async def deck(self, ctx: commands.Context, *, nation: Union[int, Link[Nation]]):
         """Retrieves general info about the specified nation's deck."""
         is_id = isinstance(nation, int)
         if is_id:
@@ -529,7 +533,7 @@ class NationStates(commands.Cog):
     # __________ ASSEMBLY __________
 
     @commands.command(aliases=["ga", "sc"])
-    async def wa(self, ctx, resolution_id: Optional[int] = None, *options: WA):
+    async def wa(self, ctx: commands.Context, resolution_id: Optional[int] = None, *options: WA):
         """
         Retrieves general info about World Assembly resolutions.
 
@@ -720,7 +724,7 @@ class NationStates(commands.Cog):
     # __________ SHARD __________
 
     @commands.command()
-    async def shard(self, ctx, *shards: str):
+    async def shard(self, ctx: commands.Context, *shards: str):
         """
         Retrieves the specified info from NationStates
 
@@ -755,7 +759,7 @@ class NationStates(commands.Cog):
     # __________ ENDORSE __________
 
     @commands.command()
-    async def ne(self, ctx, *, wa_nation: str):
+    async def ne(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Endorsing (NE) the specified WA nation"""
         root = await Api("endorsements fullname wa", nation=wa_nation)
         if root.UNSTATUS.text.lower() == "non-member":
@@ -768,7 +772,7 @@ class NationStates(commands.Cog):
         )
 
     @commands.command()
-    async def nec(self, ctx, *, wa_nation: str):
+    async def nec(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Endorsing [Count] (NEC) the specified WA nation"""
         root = await Api("census fullname wa", nation=wa_nation, scale="66", mode="score")
         if root.UNSTATUS.text.lower() == "non-member":
@@ -780,7 +784,7 @@ class NationStates(commands.Cog):
         )
 
     @commands.command()
-    async def spdr(self, ctx, *, nation: str):
+    async def spdr(self, ctx: commands.Context, *, nation: str):
         """Soft Power Disbursement Rating (SPDR, aka numerical Influence) of the specified nation"""
         root = await Api("census fullname", nation=nation, scale="65", mode="score")
         await ctx.send(
@@ -790,7 +794,7 @@ class NationStates(commands.Cog):
         )
 
     @commands.command()
-    async def nne(self, ctx, *, wa_nation: str):
+    async def nne(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Not Endorsing (NNE) the specified WA nation"""
         nation_root = await Api("endorsements fullname region wa", nation=wa_nation)
         if nation_root.UNSTATUS.text.lower() == "non-member":
@@ -808,7 +812,7 @@ class NationStates(commands.Cog):
         )
 
     @commands.command()
-    async def nnec(self, ctx, *, wa_nation: str):
+    async def nnec(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Not Endorsing [Count] (NNEC) the specified WA nation"""
         nation_root = await Api("endorsements fullname region wa", nation=wa_nation)
         if nation_root.UNSTATUS.text.lower() == "non-member":
