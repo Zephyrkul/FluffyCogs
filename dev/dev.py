@@ -183,7 +183,6 @@ def patch_hooks():
 
 
 def reset_hooks():
-    logger = logging.getLogger("red.fluffy.dev")
     try:
         for patched in list(Patcher.patchers):
             logger.debug("Unpatching: %r", patched)
