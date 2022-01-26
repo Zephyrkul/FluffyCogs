@@ -9,7 +9,8 @@ from .dev import Dev, patch_hooks, reset_hooks
 def setup(bot: Red):
     if not bot._cli_flags.dev:
         raise CogLoadError("This cog requires the `--dev` CLI flag.")
-    if sessions := getattr(bot.get_cog("Dev"), "sessions", None):
+    core_dev = bot.get_cog("Dev")
+    if sessions := getattr(core_dev, "sessions", None):
         s = "s" if len(sessions) > 1 else ""
         is_private = bot._connection._private_channels.__contains__
         raise CogLoadError(
@@ -19,11 +20,16 @@ def setup(bot: Red):
             )
         )
     bot.remove_cog("Dev")
-    bot.add_cog(Dev())
+    my_dev = Dev()
+    my_dev.env_extensions = getattr(core_dev, "env_extensions", {})
+    bot.add_cog(my_dev)
     patch_hooks()
 
 
 def teardown(bot: Red):
     reset_hooks()
+    my_dev = bot.get_cog("Dev")
     bot.remove_cog("Dev")
-    bot.add_cog(dev_commands.Dev())
+    core_dev = dev_commands.Dev()
+    core_dev.env_extensions = getattr(my_dev, "env_extensions", {})
+    bot.add_cog(core_dev)
