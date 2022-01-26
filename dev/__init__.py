@@ -1,4 +1,3 @@
-from redbot.core import dev_commands
 from redbot.core.bot import Red
 from redbot.core.errors import CogLoadError
 from redbot.core.utils.chat_formatting import humanize_list
@@ -20,7 +19,7 @@ def setup(bot: Red):
             )
         )
     bot.remove_cog("Dev")
-    my_dev = Dev()
+    my_dev = Dev(bot)
     my_dev.env_extensions = getattr(core_dev, "env_extensions", {})
     bot.add_cog(my_dev)
     patch_hooks()
@@ -28,8 +27,3 @@ def setup(bot: Red):
 
 def teardown(bot: Red):
     reset_hooks()
-    my_dev = bot.get_cog("Dev")
-    bot.remove_cog("Dev")
-    core_dev = dev_commands.Dev()
-    core_dev.env_extensions = getattr(my_dev, "env_extensions", {})
-    bot.add_cog(core_dev)

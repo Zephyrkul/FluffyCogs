@@ -4,6 +4,7 @@ import ast
 import asyncio
 import builtins
 import contextlib
+import functools
 import importlib
 import inspect
 import io
@@ -20,6 +21,7 @@ import discord
 import rich
 from pygments.styles import get_style_by_name
 from redbot.core import commands, dev_commands
+from redbot.core.bot import Red
 from redbot.core.utils.chat_formatting import pagify
 from redbot.core.utils.predicates import MessagePredicate
 
@@ -28,6 +30,7 @@ _features: List[__future__._Feature] = [
     getattr(__future__, fname) for fname in __future__.all_feature_names
 ]
 
+logger = logging.getLogger("red.fluffy.dev")
 _: Callable[[str], str] = dev_commands._
 ctxconsole = ContextVar[rich.console.Console]("ctxconsole")
 T = TypeVar("T")
@@ -37,6 +40,18 @@ P = ParamSpec("P")
 class SolarizedCustom(get_style_by_name("solarized-dark")):
     background_color = None
     line_number_background_color = None
+
+
+def log_exceptions(func: Callable[P, Any]) -> Callable[P, Any]:
+    @functools.wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
+        try:
+            return func(*args, **kwargs)
+        except Exception:
+            logger.exception("Exception in function %s", func.__name__)
+            raise
+
+    return wrapper
 
 
 @contextlib.asynccontextmanager
@@ -253,6 +268,17 @@ class Dev(dev_commands.Dev):
     sessions: Dict[int, bool]
     env_extensions: Dict[str, Callable[[commands.Context], Any]]
 
+    def __init__(self, bot: Red):
+        self.bot = bot
+        super().__init__()
+
+    @log_exceptions
+    def cog_unload(self) -> None:
+        self.sessions.clear()
+        core_dev = dev_commands.Dev()
+        core_dev.env_extensions = self.env_extensions
+        self.bot.add_cog(core_dev)
+
     async def my_exec(self, ctx: commands.Context, *args, **kwargs) -> bool:
         tasks: List[asyncio.Task] = [
             asyncio.create_task(
@@ -463,9 +489,6 @@ class Dev(dev_commands.Dev):
                 return "".join(lines[i + 1 :])
         # it couldn't be compiled out for whatever reason
         raise exc or AssertionError("\N{THINKING FACE} how did this happen")
-
-    def cog_unload(self):
-        self.sessions.clear()
 
     @commands.group(invoke_without_command=True)
     @commands.is_owner()
