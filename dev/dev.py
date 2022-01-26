@@ -315,7 +315,7 @@ class Dev(dev_commands.Dev):
                         )
                     )
                 output = captured.get() + console.file.getvalue()
-        asyncio.ensure_future(self.send_interactive(ctx, output, message))
+        asyncio.ensure_future(self.send_interactive(ctx, output.strip(), message))
         return exited
 
     def _output_exception(
