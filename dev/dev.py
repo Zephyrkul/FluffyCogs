@@ -8,6 +8,7 @@ import functools
 import importlib
 import inspect
 import io
+import itertools
 import logging
 import sys
 import textwrap
@@ -40,6 +41,11 @@ P = ParamSpec("P")
 class SolarizedCustom(get_style_by_name("solarized-dark")):
     background_color = None
     line_number_background_color = None
+
+
+def use(func: Callable[P, T]) -> T:
+    assert not func.__closure__
+    return func()
 
 
 def log_exceptions(func: Callable[P, Any]) -> Callable[P, Any]:
@@ -315,7 +321,23 @@ class Dev(dev_commands.Dev):
         exited = False
         filename = f"<{ctx.invoked_with}>"
 
-        async with redirect(width=80, color_system="standard", soft_wrap=True) as console:
+        if isinstance(ctx.author, discord.Member):
+            mobile = ctx.author.is_on_mobile()
+        else:
+            mobile = next(
+                filter(
+                    None,
+                    map(discord.Guild.get_member, ctx.bot.guilds, itertools.repeat(ctx.author.id)),
+                )
+            ).is_on_mobile()
+
+        async with redirect(
+            width=44 if mobile else 88,
+            no_color=mobile,
+            color_system="auto" if mobile else "standard",
+            tab_size=2,
+            soft_wrap=False,
+        ) as console:
             assert isinstance(console.file, io.StringIO)
             try:
                 if source.startswith("from __future__ import"):
@@ -340,7 +362,11 @@ class Dev(dev_commands.Dev):
                         )
                     )
                 output = captured.get() + console.file.getvalue()
-        asyncio.ensure_future(self.send_interactive(ctx, output.strip(), message))
+        asyncio.ensure_future(
+            self.send_interactive(
+                ctx, output.strip(), message, box_lang="py" if mobile else "ansi"
+            )
+        )
         return exited
 
     def _output_exception(
@@ -387,6 +413,7 @@ class Dev(dev_commands.Dev):
         ctx: commands.Context,
         output: str,
         message: Optional[discord.Message] = None,
+        box_lang: str = "",
     ) -> None:
         # \u02CB = modifier letter grave accent
         output = output and self.sanitize_output(ctx, output).replace("```", "\u02CB\u02CB\u02CB")
@@ -394,7 +421,7 @@ class Dev(dev_commands.Dev):
         assert message.channel == ctx.channel
         try:
             if output:
-                await ctx.send_interactive(self.get_pages(output), box_lang="ansi")
+                await ctx.send_interactive(self.get_pages(output), box_lang=box_lang)
             else:
                 if ctx.channel.permissions_for(ctx.me).add_reactions:
                     with contextlib.suppress(discord.HTTPException):
