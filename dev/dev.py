@@ -43,11 +43,6 @@ class SolarizedCustom(get_style_by_name("solarized-dark")):
     line_number_background_color = None
 
 
-def use(func: Callable[P, T]) -> T:
-    assert not func.__closure__
-    return func()
-
-
 def log_exceptions(func: Callable[P, Any]) -> Callable[P, Any]:
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
