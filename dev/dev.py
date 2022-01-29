@@ -327,7 +327,7 @@ class Dev(dev_commands.Dev):
             ).is_on_mobile()
 
         async with redirect(
-            width=44 if mobile else 88,
+            width=37 if mobile else 80,
             no_color=mobile,
             color_system="auto" if mobile else "standard",
             tab_size=2,
