@@ -326,13 +326,20 @@ class Dev(dev_commands.Dev):
                 )
             ).is_on_mobile()
 
-        async with redirect(
-            width=37 if mobile else 80,
-            no_color=mobile,
-            color_system="auto" if mobile else "standard",
-            tab_size=2,
-            soft_wrap=False,
-        ) as console:
+        kwargs: Dict[str, Any] = {
+            "width": 37 if mobile else 80,
+            "no_color": mobile,
+            "color_system": "auto" if mobile else "standard",
+            "tab_size": 2,
+            "soft_wrap": False,
+        }
+        if _console_custom := environ.get("_console_custom"):
+            try:
+                kwargs.update(_console_custom)
+            except Exception:
+                logger.exception("Error updating console kwargs: falling back to default values")
+
+        async with redirect(**kwargs) as console:
             assert isinstance(console.file, io.StringIO)
             try:
                 if source.startswith("from __future__ import"):
