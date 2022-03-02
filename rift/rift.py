@@ -685,17 +685,18 @@ class Rift(commands.Cog):
         self, payload: discord.RawMessageUpdateEvent, destination: discord.PartialMessage
     ):
         channel = destination.channel
-        this_channel = self.bot.get_channel(payload.channel_id)
-        this_guild: Optional[discord.Guild] = getattr(this_channel, "guild", None)
+        this_guild: Optional[discord.Guild] = payload.guild_id and self.bot.get_guild(payload.guild_id)
         if this_guild:
+            this_channel = this_guild.get_channel(payload.channel_id)
             author = this_guild.get_member(int(payload.data["author"]["id"]))
         else:
+            this_channel = self.bot._connection._get_private_channel(payload.channel_id)
             author = self.bot.get_user(int(payload.data["author"]["id"]))
-        assert author
+        assert this_channel and author
         kwargs = await self.process_kwargs(
             author,
             channel,
-            f"https://discord.com/channels/{payload.data.get('guild_id', '@me')}/{payload.channel_id}/{payload.message_id}",
+            f"https://discord.com/channels/{payload.guild_id or '@me'}/{payload.channel_id}/{payload.message_id}",
             content=payload.data.get("content"),
             attachments=[
                 cast(discord.Attachment, SimpleNamespace(**attachment))
