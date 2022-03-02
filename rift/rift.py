@@ -685,7 +685,9 @@ class Rift(commands.Cog):
         self, payload: discord.RawMessageUpdateEvent, destination: discord.PartialMessage
     ):
         channel = destination.channel
-        this_guild: Optional[discord.Guild] = payload.guild_id and self.bot.get_guild(payload.guild_id)
+        this_guild: Optional[discord.Guild] = payload.guild_id and self.bot.get_guild(
+            payload.guild_id
+        )
         if this_guild:
             this_channel = this_guild.get_channel(payload.channel_id)
             author = this_guild.get_member(int(payload.data["author"]["id"]))
