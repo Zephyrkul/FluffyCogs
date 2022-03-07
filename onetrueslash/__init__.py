@@ -9,6 +9,7 @@ except ImportError:
 import discord
 from discord import app_commands
 from redbot.core.bot import Red
+from redbot.core.errors import CogLoadError
 
 from .commands import onetrueslash
 
@@ -16,8 +17,11 @@ LOG = logging.getLogger("red.fluffy.onetrueslash")
 
 
 def setup(bot: Red) -> None:
-    if not hasattr(bot, "tree"):
-        bot.tree = app_commands.CommandTree(bot)
+    try:
+        if not hasattr(bot, "tree"):
+            bot.tree = app_commands.CommandTree(bot)
+    except AttributeError:
+        raise CogLoadError("This cog requires the latest discord.py 2.0.0a.") from None
     asyncio.create_task(_setup(bot))
 
 
