@@ -67,8 +67,11 @@ async def onetrueslash_command_autocomplete(
     _filter = commands.Command.can_run if helpsettings.show_hidden else commands.Command.can_see
     matches: Dict[commands.Command, str] = {}
     for (name, command), score in extracted:
-        if command not in matches and await _filter(command, ctx):
-            matches[command] = name
+        try:
+            if command not in matches and await _filter(command, ctx):
+                matches[command] = name
+        except Exception:
+            pass
     return [app_commands.Choice(name=name, value=name) for name in matches.values()]
 
 
