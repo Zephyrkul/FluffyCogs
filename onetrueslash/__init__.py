@@ -8,6 +8,7 @@ except ImportError:
 
 import discord
 from discord import app_commands
+from redbot.core import commands as red_commands
 from redbot.core.bot import Red
 from redbot.core.errors import CogLoadError
 
@@ -16,12 +17,18 @@ from .commands import onetrueslash
 LOG = logging.getLogger("red.fluffy.onetrueslash")
 
 
+async def before_hook(ctx: red_commands.Context):
+    if hasattr(ctx, "interaction"):
+        await ctx.trigger_typing()
+
+
 def setup(bot: Red) -> None:
     try:
         if not hasattr(bot, "tree"):
             bot.tree = app_commands.CommandTree(bot)
     except AttributeError:
         raise CogLoadError("This cog requires the latest discord.py 2.0.0a.") from None
+    bot.before_invoke(before_hook)
     asyncio.create_task(_setup(bot))
 
 
@@ -39,6 +46,7 @@ async def _setup(bot: Red):
 
 
 def teardown(bot: Red):
+    bot.remove_before_invoke_hook(before_hook)
     if bot.user:
         assert isinstance(bot.tree, app_commands.CommandTree)
         if bot.user.id == 256505473807679488:
