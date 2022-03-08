@@ -1,5 +1,6 @@
 import asyncio
 from copy import copy
+from itertools import chain
 from typing import TypeVar
 
 import discord
@@ -15,7 +16,12 @@ def __step(*args, **kwargs):
 
 
 def neuter_coros(cls: _TT) -> _TT:
-    for name in dir(cls):
+    seen = set()
+    seen_add = seen.add
+    for name in chain.from_iterable(dir(clz) for clz in cls.__bases__):
+        if name in seen:
+            continue
+        seen_add(name)
         if (attr := getattr(cls, name, None)) is None:
             continue
         if asyncio.iscoroutinefunction(attr):
@@ -97,4 +103,10 @@ class InterMessage(discord.Message):
                             self.mentions.append(user)
 
     def to_reference(self, *, fail_if_not_exists: bool = True):
-        return
+        return discord.utils.MISSING
+
+    def to_message_reference_dict(self):
+        return discord.utils.MISSING
+
+    async def reply(self, *args, **kwargs):
+        return await self.channel.send(*args, **kwargs)
