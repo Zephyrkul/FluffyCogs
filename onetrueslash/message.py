@@ -1,10 +1,29 @@
+import asyncio
 from copy import copy
+from typing import TypeVar
 
 import discord
 
 from .channel import InterChannel
 
+_TT = TypeVar("_TT", bound=type)
 
+
+def __step(*args, **kwargs):
+    # ensure the coro still yields to the event loop
+    return asyncio.sleep(0)
+
+
+def neuter_coros(cls: _TT) -> _TT:
+    for name in dir(cls):
+        if (attr := getattr(cls, name, None)) is None:
+            continue
+        if asyncio.iscoroutinefunction(attr):
+            setattr(cls, name, property(lambda self: __step))
+    return cls
+
+
+@neuter_coros
 class InterMessage(discord.Message):
     @classmethod
     def from_interaction(cls, interaction: discord.Interaction) -> "InterMessage":
