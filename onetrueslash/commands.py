@@ -8,6 +8,7 @@ from discord import app_commands
 from fuzzywuzzy import fuzz, process
 from redbot.core import commands
 from redbot.core.bot import Red
+from redbot.core.commands.help import HelpSettings
 
 from .context import InterContext
 from .utils import walk_with_aliases
@@ -46,6 +47,8 @@ async def onetrueslash_command_autocomplete(
         return [app_commands.Choice(name="help", value="help")]
 
     assert isinstance(interaction.client, Red)
+    ctx = await InterContext.from_interaction(interaction)
+    helpsettings = await HelpSettings.from_context(ctx)
 
     extracted = cast(
         List[Tuple[Tuple[str, commands.Command], int]],
@@ -54,17 +57,17 @@ async def onetrueslash_command_autocomplete(
             functools.partial(
                 process.extract,
                 (current,),
-                walk_with_aliases(interaction.client),
+                walk_with_aliases(interaction.client, show_hidden=helpsettings.show_hidden),
                 limit=5,
                 processor=operator.itemgetter(0),  # type: ignore - this typehint is incorrect
                 scorer=fuzz.QRatio,
             ),
         ),
     )
-    ctx = await InterContext.from_interaction(interaction)
+    _filter = commands.Command.can_run if helpsettings.show_hidden else commands.Command.can_see
     matches: Dict[commands.Command, str] = {}
     for (name, command), score in extracted:
-        if command not in matches and await command.can_see(ctx):
+        if command not in matches and await _filter(command, ctx):
             matches[command] = name
     return [app_commands.Choice(name=name, value=name) for name in matches.values()]
 

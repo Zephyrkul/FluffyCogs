@@ -27,11 +27,13 @@ class Thinking:
 
 
 def walk_with_aliases(
-    group: commands.GroupMixin, /, *, parent: Optional[str] = ""
+    group: commands.GroupMixin, /, *, parent: Optional[str] = "", show_hidden: bool = False
 ) -> Generator[Tuple[str, commands.Command], None, None]:
     for name, command in group.all_commands.items():
-        if command.hidden or not command.enabled:
+        if not command.enabled or (not show_hidden and command.hidden):
             continue
         yield f"{parent}{name}", command
         if isinstance(command, commands.GroupMixin):
-            yield from walk_with_aliases(command, parent=f"{parent}{name} ")
+            yield from walk_with_aliases(
+                command, parent=f"{parent}{name} ", show_hidden=show_hidden
+            )
