@@ -56,7 +56,7 @@ async def onetrueslash_command_autocomplete(
                 (current,),
                 walk_with_aliases(interaction.client),
                 limit=5,
-                processor=operator.itemgetter(0),
+                processor=operator.itemgetter(0),  # type: ignore - this typehint is incorrect
                 scorer=fuzz.QRatio,
             ),
         ),
@@ -67,3 +67,14 @@ async def onetrueslash_command_autocomplete(
         if command not in matches and await command.can_see(ctx):
             matches[command] = name
     return [app_commands.Choice(name=name, value=name) for name in matches.values()]
+
+
+@onetrueslash.error
+async def onetrueslash_error(
+    interaction: discord.Interaction, error: app_commands.AppCommandError
+):
+    assert isinstance(interaction.client, Red)
+    error = getattr(error, "original", error)
+    await interaction.client.on_command_error(
+        InterContext.from_interaction(interaction), commands.CommandInvokeError(error)
+    )
