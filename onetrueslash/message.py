@@ -32,7 +32,7 @@ def neuter_coros(cls: _TT) -> _TT:
 @neuter_coros
 class InterMessage(discord.Message):
     @classmethod
-    def from_interaction(cls, interaction: discord.Interaction) -> "InterMessage":
+    async def from_interaction(cls, interaction: discord.Interaction) -> "InterMessage":
         assert interaction.data
         self = InterMessage.__new__(InterMessage)
 
@@ -40,7 +40,6 @@ class InterMessage(discord.Message):
         self._edited_timestamp = None
 
         self.tts = False
-        self.channel = copy(interaction.channel)
         self.webhook_id = None
         self.mention_everyone = False
         self.embeds = []
@@ -58,6 +57,11 @@ class InterMessage(discord.Message):
         self.stickers = []
         self.components = []
         self.guild = interaction.guild
+
+        if not interaction.guild_id:
+            self.channel = copy(await interaction.user.create_dm())
+        else:
+            self.channel = copy(interaction.channel)
 
         self.channel.__class__ = type(
             InterChannel.__name__, (InterChannel, self.channel.__class__), {"__slots__": ()}
@@ -103,7 +107,7 @@ class InterMessage(discord.Message):
                             self.mentions.append(user)
 
     def to_reference(self, *, fail_if_not_exists: bool = True):
-        return discord.utils.MISSING
+        return None
 
     def to_message_reference_dict(self):
         return discord.utils.MISSING

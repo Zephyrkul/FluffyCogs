@@ -16,7 +16,7 @@ class InterContext(InterChannel, commands.Context):
     message: InterMessage
 
     @classmethod
-    def from_interaction(
+    async def from_interaction(
         cls: Type["InterContext"],
         interaction: discord.Interaction,
         *,
@@ -35,13 +35,13 @@ class InterContext(InterChannel, commands.Context):
             return self
         except LookupError:
             pass
-        message = InterMessage.from_interaction(interaction)
+        message = await InterMessage.from_interaction(interaction)
         prefix = f"/{interaction.data['name']} "
         view = dpy_commands.view.StringView(message.content)
         view.skip_string(prefix)
         invoker = view.get_word()
         self = cls(
-            message=InterMessage.from_interaction(interaction),
+            message=message,
             prefix=prefix,
             bot=interaction.client,
             view=view,

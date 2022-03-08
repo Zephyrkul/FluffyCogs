@@ -24,7 +24,7 @@ async def onetrueslash(
     The one true slash command.
     """
     assert isinstance(interaction.client, Red)
-    ctx = InterContext.from_interaction(interaction, recreate_message=True)
+    ctx = await InterContext.from_interaction(interaction, recreate_message=True)
     await interaction.client.invoke(ctx)
     await asyncio.sleep(2)
     if not ctx._deferred:
@@ -61,7 +61,7 @@ async def onetrueslash_command_autocomplete(
             ),
         ),
     )
-    ctx = InterContext.from_interaction(interaction)
+    ctx = await InterContext.from_interaction(interaction)
     matches: Dict[commands.Command, str] = {}
     for (name, command), score in extracted:
         if command not in matches and await command.can_see(ctx):
@@ -76,5 +76,5 @@ async def onetrueslash_error(
     assert isinstance(interaction.client, Red)
     error = getattr(error, "original", error)
     await interaction.client.on_command_error(
-        InterContext.from_interaction(interaction), commands.CommandInvokeError(error)
+        await InterContext.from_interaction(interaction), commands.CommandInvokeError(error)
     )
