@@ -33,7 +33,7 @@ class InterChannel:
         if not ctx._deferred:
             ctx._deferred = True
             if _ephemeral is None:
-                ephemeral = ctx.command_failed or not ctx.command
+                _ephemeral = ctx.command_failed or not ctx.command
             await ctx.interaction.response.defer(ephemeral=_ephemeral)
 
     def typing(self):
