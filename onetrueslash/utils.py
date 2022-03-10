@@ -26,7 +26,7 @@ class Thinking:
         pass
 
 
-def walk_with_aliases(
+def walk_aliases(
     group: commands.GroupMixin, /, *, parent: Optional[str] = "", show_hidden: bool = False
 ) -> Generator[Tuple[str, commands.Command], None, None]:
     for name, command in group.all_commands.items():
@@ -34,6 +34,4 @@ def walk_with_aliases(
             continue
         yield f"{parent}{name}", command
         if isinstance(command, commands.GroupMixin):
-            yield from walk_with_aliases(
-                command, parent=f"{parent}{name} ", show_hidden=show_hidden
-            )
+            yield from walk_aliases(command, parent=f"{parent}{name} ", show_hidden=show_hidden)

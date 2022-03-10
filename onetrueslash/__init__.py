@@ -1,15 +1,21 @@
 import asyncio
 import logging
+from typing import Optional
 
 try:
     import regex as re
 except ImportError:
     import re
 
-from discord import app_commands
+import discord
 from redbot.core import commands as red_commands
 from redbot.core.bot import Red
 from redbot.core.errors import CogLoadError
+
+try:
+    from discord import app_commands
+except ImportError:
+    raise CogLoadError("This cog requires the latest discord.py 2.0.0a.") from None
 
 from .commands import onetrueslash
 
@@ -17,16 +23,15 @@ LOG = logging.getLogger("red.fluffy.onetrueslash")
 
 
 async def before_hook(ctx: red_commands.Context):
-    if hasattr(ctx, "interaction"):
-        await ctx.trigger_typing()
+    interaction: Optional[discord.Interaction]
+    if (interaction := getattr(ctx, "interaction", None)) and not interaction.response.is_done():
+        ctx._deferring = True  # type: ignore
+        await interaction.response.defer(ephemeral=False)
 
 
 def setup(bot: Red) -> None:
-    try:
-        if not hasattr(bot, "tree"):
-            bot.tree = app_commands.CommandTree(bot)
-    except AttributeError:
-        raise CogLoadError("This cog requires the latest discord.py 2.0.0a.") from None
+    if not hasattr(bot, "tree"):
+        bot.tree = app_commands.CommandTree(bot)
     bot.before_invoke(before_hook)
     asyncio.create_task(_setup(bot))
 
@@ -46,4 +51,10 @@ def teardown(bot: Red):
         assert isinstance(bot.tree, app_commands.CommandTree)
         bot.tree.remove_command(onetrueslash.name, guild=None)
         # delay the slash removal a bit in case this is a reload
-        asyncio.get_event_loop().call_later(2, asyncio.create_task, bot.tree.sync(guild=None))
+        asyncio.create_task(_teardown(bot))
+
+
+async def _teardown(bot: Red):
+    assert isinstance(bot.tree, app_commands.CommandTree)
+    await asyncio.sleep(2)
+    await bot.tree.sync(guild=None)

@@ -1,7 +1,7 @@
-from typing import Optional, Type
+from typing import Optional, Type, Union
 
 import discord
-from discord.ext import commands as dpy_commands
+from discord.ext.commands.view import StringView
 from redbot.core import commands
 from redbot.core.bot import Red
 
@@ -11,7 +11,8 @@ from .utils import contexts
 
 
 class InterContext(InterChannel, commands.Context):
-    _deferred: bool
+    _deferring: bool = False
+    _ticked: Optional[str] = None
     interaction: discord.Interaction
     message: InterMessage
 
@@ -27,7 +28,7 @@ class InterContext(InterChannel, commands.Context):
             self = contexts.get()
             if recreate_message:
                 self.message.recreate_from_interaction(interaction)
-                view = self.view = dpy_commands.view.StringView(self.message.content)
+                view = self.view = StringView(self.message.content)
                 view.skip_string(self.prefix)
                 invoker = view.get_word()
                 self.invoked_with = invoker
@@ -37,7 +38,7 @@ class InterContext(InterChannel, commands.Context):
             pass
         message = await InterMessage.from_interaction(interaction)
         prefix = f"/{interaction.data['name']} "
-        view = dpy_commands.view.StringView(message.content)
+        view = StringView(message.content)
         view.skip_string(prefix)
         invoker = view.get_word()
         self = cls(
@@ -49,9 +50,15 @@ class InterContext(InterChannel, commands.Context):
             command=interaction.client.all_commands.get(invoker),
         )
         self.interaction = interaction
-        self._deferred = False
         contexts.set(self)
         return self
 
-    async def tick(self, *, message: Optional[str] = None) -> bool:
+    async def react_quietly(
+        self,
+        reaction: Union[discord.Emoji, discord.Reaction, discord.PartialEmoji, str],
+        *,
+        message: Optional[str] = None,
+    ) -> bool:
+        message = message or "Done."
+        self._ticked = f"{reaction} {message}"
         return False

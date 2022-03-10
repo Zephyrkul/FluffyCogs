@@ -1,17 +1,17 @@
 import asyncio
-import functools
+import heapq
 import operator
 from typing import Dict, List, Optional, Tuple, cast
 
 import discord
 from discord import app_commands
-from fuzzywuzzy import fuzz, process
+from rapidfuzz import fuzz, process
 from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.commands.help import HelpSettings
 
 from .context import InterContext
-from .utils import walk_with_aliases
+from .utils import walk_aliases
 
 
 @app_commands.command()
@@ -26,17 +26,27 @@ async def onetrueslash(
     """
     assert isinstance(interaction.client, Red)
     ctx = await InterContext.from_interaction(interaction, recreate_message=True)
+    error = None
+    ferror: asyncio.Task[Tuple[InterContext, commands.CommandError]] = asyncio.create_task(
+        interaction.client.wait_for("command_error", check=lambda c, e: c is ctx)
+    )
     await interaction.client.invoke(ctx)
-    await asyncio.sleep(2)
-    if not ctx._deferred:
-        if not ctx.command:
+    if not interaction.response.is_done():
+        ctx._deferring = True
+        await interaction.response.defer(ephemeral=True)
+    if ferror.done():
+        error = ferror.exception() or ferror.result()[1]
+    ferror.cancel()
+    if ctx._deferring:
+        if error is None:
+            if ctx._ticked:
+                await ctx.send(ctx._ticked, ephemeral=True)
+            else:
+                await interaction.followup.delete_message("@original")  # type: ignore - https://discord.com/developers/docs/interactions/receiving-and-responding#delete-original-interaction-response
+        elif isinstance(error, commands.CommandNotFound):
             await ctx.send(f"❌ Command `{command}` was not found.", ephemeral=True)
-        elif ctx.command_failed:
-            await ctx.send(
-                "❌ Command failed. Do you have the required permissions?", ephemeral=True
-            )
-        else:
-            await ctx.send("✅ Done.", ephemeral=True)
+        elif isinstance(error, commands.CheckFailure):
+            await ctx.send(f"❌ You don't have permission to run `{command}`.", ephemeral=True)
 
 
 @onetrueslash.autocomplete("command")
@@ -48,29 +58,30 @@ async def onetrueslash_command_autocomplete(
 
     assert isinstance(interaction.client, Red)
     ctx = await InterContext.from_interaction(interaction)
-    helpsettings = await HelpSettings.from_context(ctx)
+    help_settings = await HelpSettings.from_context(ctx)
 
     extracted = cast(
-        List[Tuple[Tuple[str, commands.Command], int]],
+        List[Tuple[Tuple[str, commands.Command], float, int]],
         await asyncio.get_event_loop().run_in_executor(
             None,
-            functools.partial(
-                process.extract,
+            heapq.nlargest,
+            6,
+            process.extract_iter(
                 (current,),
-                walk_with_aliases(interaction.client, show_hidden=helpsettings.show_hidden),
-                limit=5,
-                processor=operator.itemgetter(0),  # type: ignore - this typehint is incorrect
+                walk_aliases(interaction.client, show_hidden=help_settings.show_hidden),
+                processor=operator.itemgetter(0),
                 scorer=fuzz.QRatio,
             ),
+            operator.itemgetter(1),
         ),
     )
-    _filter = commands.Command.can_run if helpsettings.show_hidden else commands.Command.can_see
+    _filter = commands.Command.can_run if help_settings.show_hidden else commands.Command.can_see
     matches: Dict[commands.Command, str] = {}
-    for (name, command), score in extracted:
+    for (name, command), _, _ in extracted:
         try:
             if command not in matches and await _filter(command, ctx):
                 matches[command] = name
-        except Exception:
+        except commands.CommandError:
             pass
     return [app_commands.Choice(name=name, value=name) for name in matches.values()]
 

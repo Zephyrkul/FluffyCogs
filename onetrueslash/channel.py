@@ -1,5 +1,4 @@
 import inspect
-from typing import Optional
 
 import discord
 
@@ -17,10 +16,10 @@ class InterChannel:
 
     async def send(self, *args, **kwargs):
         ctx = contexts.get()
+        await self.trigger_typing()
+        ctx._deferring = False
         interaction = ctx.interaction
-        await self.trigger_typing(_ephemeral=kwargs.pop("ephemeral", None))
         delete_after = kwargs.pop("delete_after", None)
-        kwargs["wait"] = True
         for key in INCOMPATABLE_PARAMETERS_DISCARD:
             kwargs.pop(key, None)
         m = await interaction.followup.send(*args, **kwargs)
@@ -28,13 +27,11 @@ class InterChannel:
             await m.delete(delay=delete_after)
         return m
 
-    async def trigger_typing(self, *, _ephemeral: Optional[bool] = None) -> None:
+    async def trigger_typing(self) -> None:
         ctx = contexts.get()
-        if not ctx._deferred:
-            ctx._deferred = True
-            if _ephemeral is None:
-                _ephemeral = ctx.command_failed or not ctx.command
-            await ctx.interaction.response.defer(ephemeral=_ephemeral)
+        if not ctx._deferring and not ctx.interaction.response.is_done():
+            ctx._deferring = True
+            await ctx.interaction.response.defer(ephemeral=True)
 
     def typing(self):
         return Thinking(self)
