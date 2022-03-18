@@ -61,15 +61,14 @@ async def onetrueslash_command_autocomplete(
     help_settings = await HelpSettings.from_context(ctx)
 
     extracted = cast(
-        List[Tuple[Tuple[str, commands.Command], float, int]],
+        List[Tuple[str, float, int]],
         await asyncio.get_event_loop().run_in_executor(
             None,
             heapq.nlargest,
             6,
             process.extract_iter(
-                (current,),
+                current,
                 walk_aliases(interaction.client, show_hidden=help_settings.show_hidden),
-                processor=operator.itemgetter(0),
                 scorer=fuzz.QRatio,
             ),
             operator.itemgetter(1),
@@ -77,7 +76,10 @@ async def onetrueslash_command_autocomplete(
     )
     _filter = commands.Command.can_run if help_settings.show_hidden else commands.Command.can_see
     matches: Dict[commands.Command, str] = {}
-    for (name, command), _, _ in extracted:
+    for name, score, index in extracted:
+        command = interaction.client.get_command(name)
+        if not command:
+            continue
         try:
             if command not in matches and await _filter(command, ctx):
                 matches[command] = name

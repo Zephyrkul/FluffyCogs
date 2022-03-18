@@ -1,5 +1,5 @@
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Generator, Optional, Protocol, Tuple
+from typing import TYPE_CHECKING, Generator, Optional, Protocol
 
 from redbot.core import commands
 
@@ -28,10 +28,12 @@ class Thinking:
 
 def walk_aliases(
     group: commands.GroupMixin, /, *, parent: Optional[str] = "", show_hidden: bool = False
-) -> Generator[Tuple[str, commands.Command], None, None]:
+) -> Generator[str, None, None]:
+    name: str
+    command: commands.Command
     for name, command in group.all_commands.items():
         if not command.enabled or (not show_hidden and command.hidden):
             continue
-        yield f"{parent}{name}", command
+        yield f"{parent}{name}"
         if isinstance(command, commands.GroupMixin):
             yield from walk_aliases(command, parent=f"{parent}{name} ", show_hidden=show_hidden)
