@@ -35,7 +35,6 @@ def setup(bot: Red) -> None:
 
 
 async def _setup(bot: Red):
-    assert isinstance(bot.tree, app_commands.CommandTree)
     await bot.wait_until_red_ready()
     assert bot.user
     onetrueslash.name = re.sub(r"[^\w-]+", "_", bot.user.name.casefold())
@@ -46,7 +45,6 @@ async def _setup(bot: Red):
 def teardown(bot: Red):
     bot.remove_before_invoke_hook(before_hook)
     if bot.user:
-        assert isinstance(bot.tree, app_commands.CommandTree)
         bot.tree.remove_command(onetrueslash.name, guild=None)
         # delay the slash removal a bit in case this is a reload
         asyncio.create_task(_teardown(bot))
