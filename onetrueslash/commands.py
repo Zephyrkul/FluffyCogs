@@ -51,7 +51,7 @@ async def onetrueslash(
 
 @onetrueslash.autocomplete("command")
 async def onetrueslash_command_autocomplete(
-    interaction: discord.Interaction, current: str, namespace: app_commands.Namespace
+    interaction: discord.Interaction, current: str, namespace: None = None
 ) -> List[app_commands.Choice[str]]:
     if not current:
         return [app_commands.Choice(name="help", value="help")]
