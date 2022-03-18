@@ -27,6 +27,7 @@ class InterContext(InterChannel, commands.Context):
         try:
             self = contexts.get()
             if recreate_message:
+                assert self.prefix is not None
                 self.message.recreate_from_interaction(interaction)
                 view = self.view = StringView(self.message.content)
                 view.skip_string(self.prefix)
@@ -53,12 +54,14 @@ class InterContext(InterChannel, commands.Context):
         contexts.set(self)
         return self
 
+    async def tick(self, *, message: Optional[str] = None) -> bool:
+        return await super().tick(message="Done." if message is None else message)
+
     async def react_quietly(
         self,
         reaction: Union[discord.Emoji, discord.Reaction, discord.PartialEmoji, str],
         *,
         message: Optional[str] = None,
     ) -> bool:
-        message = message or "Done."
-        self._ticked = f"{reaction} {message}"
+        self._ticked = f"{reaction} {message}" if message else str(reaction)
         return False
