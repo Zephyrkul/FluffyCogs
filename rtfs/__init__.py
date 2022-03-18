@@ -1,5 +1,7 @@
+from redbot.core.bot import Red
+
 from .rtfs import RTFS
 
 
-def setup(bot):
-    bot.add_cog(RTFS())
+async def setup(bot: Red):
+    await bot.add_cog(RTFS())
