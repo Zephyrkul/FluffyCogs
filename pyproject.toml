@@ -11,5 +11,6 @@
 
 [tool.pyright]
     useLibraryCodeForTypes = true
+    reportUnnecessaryTypeIgnoreComment = true
 #   typeCheckingMode = 'strict'
     reportMissingTypeStubs = false
