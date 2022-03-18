@@ -30,8 +30,6 @@ async def before_hook(ctx: red_commands.Context):
 
 
 def setup(bot: Red) -> None:
-    if not hasattr(bot, "tree"):
-        bot.tree = app_commands.CommandTree(bot)
     bot.before_invoke(before_hook)
     asyncio.create_task(_setup(bot))
 
