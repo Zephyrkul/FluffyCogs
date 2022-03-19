@@ -67,7 +67,9 @@ class InterMessage(discord.Message):
     def recreate_from_interaction(self, interaction: discord.Interaction):
         assert interaction.data
 
-        self.content = f"/{interaction.data['name']} {interaction.namespace.command} {interaction.namespace.arguments}"
+        self.content = f"/{interaction.data['name']} {interaction.namespace.command}"
+        if "arguments" in interaction.namespace and interaction.namespace.arguments:
+            self.content = f"{self.content} {interaction.namespace.arguments}"
         if "attachment" in interaction.namespace and interaction.namespace.attachment:
             self.attachments = [interaction.namespace.attachment]
         else:
