@@ -44,12 +44,24 @@ class SolarizedCustom(get_style_by_name("solarized-dark")):
 
 
 def log_exceptions(func: Callable[P, Any]) -> Callable[P, Any]:
+    if asyncio.iscoroutinefunction(func):
+
+        @functools.wraps(func)
+        async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
+            try:
+                return await func(*args, **kwargs)
+            except Exception:
+                logger.exception("Exception in coroutine %s", func.__qualname__)
+                raise
+
+        return async_wrapper
+
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
         try:
             return func(*args, **kwargs)
         except Exception:
-            logger.exception("Exception in function %s", func.__name__)
+            logger.exception("Exception in function %s", func.__qualname__)
             raise
 
     return wrapper
@@ -273,11 +285,11 @@ class Dev(dev_commands.Dev):
         super().__init__()
 
     @log_exceptions
-    def cog_unload(self) -> None:
+    async def cog_unload(self) -> None:
         self.sessions.clear()
         core_dev = dev_commands.Dev()
         core_dev.env_extensions = self.env_extensions
-        self.bot.add_cog(core_dev)
+        await self.bot.add_cog(core_dev)
 
     async def my_exec(self, ctx: commands.Context, *args, **kwargs) -> bool:
         tasks: List[asyncio.Task] = [
@@ -329,7 +341,7 @@ class Dev(dev_commands.Dev):
         kwargs: Dict[str, Any] = {
             "width": 37 if mobile else 80,
             "no_color": mobile,
-            "color_system": "auto" if mobile else "standard",
+            "color_system": None if mobile else "standard",
             "tab_size": 2,
             "soft_wrap": False,
         }
@@ -366,7 +378,10 @@ class Dev(dev_commands.Dev):
                 output = captured.get() + console.file.getvalue()
         asyncio.ensure_future(
             self.send_interactive(
-                ctx, output.strip(), message, box_lang="py" if mobile else "ansi"
+                ctx,
+                output.strip(),
+                message,
+                box_lang="ansi" if console.color_system else "py",
             )
         )
         return exited

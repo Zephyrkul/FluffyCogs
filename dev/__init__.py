@@ -5,8 +5,8 @@ from redbot.core.utils.chat_formatting import humanize_list
 from .dev import Dev, patch_hooks, reset_hooks
 
 
-def setup(bot: Red):
-    if not bot._cli_flags.dev:
+async def setup(bot: Red):
+    if not bot._cli_flags.dev:  # type: ignore
         raise CogLoadError("This cog requires the `--dev` CLI flag.")
     core_dev = bot.get_cog("Dev")
     if sessions := getattr(core_dev, "sessions", None):
@@ -18,10 +18,10 @@ def setup(bot: Red):
                 ["Private channel" if is_private(id) else f"<#{id}>" for id in sessions]
             )
         )
-    bot.remove_cog("Dev")
+    await bot.remove_cog("Dev")
     my_dev = Dev(bot)
     my_dev.env_extensions = getattr(core_dev, "env_extensions", {})
-    bot.add_cog(my_dev)
+    await bot.add_cog(my_dev)
     patch_hooks()
 
 
