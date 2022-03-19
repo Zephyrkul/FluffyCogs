@@ -40,7 +40,6 @@ class InterMessage(discord.Message):
         self.embeds = []
         self.id = interaction.id
         self.author = interaction.user
-        self.attachments = []  # TODO: application command attachments
         self.nonce = None
         self.pinned = False
         self.type = discord.MessageType.default
@@ -68,10 +67,8 @@ class InterMessage(discord.Message):
     def recreate_from_interaction(self, interaction: discord.Interaction):
         assert interaction.data
 
-        self.content = f"/{interaction.data['name']} "
-        for option in interaction.data["options"]:
-            self.content += f"{option['value']} "
-        self.content = self.content.rstrip()
+        self.content = f"/{interaction.data['name']} {interaction.namespace.command} {interaction.namespace.arguments}"
+        self.attachments = [interaction.namespace.attachment]
 
         self.mentions = []
         self.role_mentions = []

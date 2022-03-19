@@ -16,10 +16,15 @@ from .utils import walk_aliases
 
 @app_commands.command()
 @app_commands.describe(
-    command="The text-based command to run.", arguments="The arguments to provide."
+    command="The text-based command to run.",
+    arguments="The arguments to provide.",
+    attachment="Any files to provide to the command.",
 )
 async def onetrueslash(
-    interaction: discord.Interaction, command: str, arguments: Optional[str] = None
+    interaction: discord.Interaction,
+    command: str,
+    arguments: Optional[str] = None,
+    attachment: Optional[discord.Attachment] = None,
 ):
     """
     The one true slash command.
