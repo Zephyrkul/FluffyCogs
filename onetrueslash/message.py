@@ -68,7 +68,10 @@ class InterMessage(discord.Message):
         assert interaction.data
 
         self.content = f"/{interaction.data['name']} {interaction.namespace.command} {interaction.namespace.arguments}"
-        self.attachments = [interaction.namespace.attachment]
+        if "attachment" in interaction.namespace:
+            self.attachments = [interaction.namespace.attachment]
+        else:
+            self.attachments = []
 
         self.mentions = []
         self.role_mentions = []
