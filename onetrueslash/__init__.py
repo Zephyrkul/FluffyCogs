@@ -29,7 +29,7 @@ async def before_hook(ctx: red_commands.Context):
         await interaction.response.defer(ephemeral=False)
 
 
-def setup(bot: Red) -> None:
+async def setup(bot: Red) -> None:
     bot.before_invoke(before_hook)
     asyncio.create_task(_setup(bot))
 
@@ -42,7 +42,7 @@ async def _setup(bot: Red):
     await bot.tree.sync(guild=None)
 
 
-def teardown(bot: Red):
+async def teardown(bot: Red):
     bot.remove_before_invoke_hook(before_hook)
     if bot.user:
         bot.tree.remove_command(onetrueslash.name, guild=None)

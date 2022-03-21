@@ -25,5 +25,5 @@ async def setup(bot: Red):
     patch_hooks()
 
 
-def teardown(bot: Red):
+async def teardown(bot: Red):
     reset_hooks()
