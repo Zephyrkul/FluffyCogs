@@ -31,6 +31,7 @@ async def before_hook(ctx: red_commands.Context):
 
 async def setup(bot: Red) -> None:
     bot.before_invoke(before_hook)
+    bot.add_dev_env_value("interaction", lambda ctx: getattr(ctx, "interaction", None))
     asyncio.create_task(_setup(bot))
 
 
@@ -48,6 +49,7 @@ async def teardown(bot: Red):
         bot.tree.remove_command(onetrueslash.name, guild=None)
         # delay the slash removal a bit in case this is a reload
         asyncio.create_task(_teardown(bot))
+    bot.remove_dev_env_value("interaction")
 
 
 async def _teardown(bot: Red):
