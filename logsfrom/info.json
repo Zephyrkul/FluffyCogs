@@ -15,5 +15,6 @@
         7,
         0
     ],
+    "max_bot_version": "3.5.0.dev0",
     "end_user_data_statement": "This cog enables logging messages for bot owners and admins. The bot itself does not persistently store this data."
 }

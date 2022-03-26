@@ -11,5 +11,6 @@
         "audio",
         "fun"
     ],
+    "max_bot_version": "3.5.0.dev0",
     "end_user_data_statement": "This cog stores data provided via command by users for the purposes of replaying."
 }

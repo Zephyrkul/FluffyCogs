@@ -13,5 +13,6 @@
     "tags": [
         "utility"
     ],
+    "max_bot_version": "3.5.0.dev0",
     "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
 }
