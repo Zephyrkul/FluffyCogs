@@ -43,9 +43,10 @@ class SolarizedCustom(get_style_by_name("solarized-dark")):
     line_number_background_color = None
 
 
-def log_exceptions(func: Callable[P, Any]) -> Callable[P, Any]:
+def log_exceptions(func: Callable[P, T]) -> Callable[P, T]:
     if asyncio.iscoroutinefunction(func):
 
+        # returning T would be incorrect since T is Coroutine[Any, Any, R] here
         @functools.wraps(func)
         async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
             try:
@@ -54,10 +55,10 @@ def log_exceptions(func: Callable[P, Any]) -> Callable[P, Any]:
                 logger.exception("Exception in coroutine %s", func.__qualname__)
                 raise
 
-        return async_wrapper
+        return async_wrapper  # type: ignore - see previous comment
 
     @functools.wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         try:
             return func(*args, **kwargs)
         except Exception:
@@ -329,14 +330,16 @@ class Dev(dev_commands.Dev):
         filename = f"<{ctx.invoked_with}>"
 
         if isinstance(ctx.author, discord.Member):
-            mobile = ctx.author.is_on_mobile()
+            member = ctx.author
         else:
-            mobile = next(
+            member = next(
                 filter(
                     None,
                     map(discord.Guild.get_member, ctx.bot.guilds, itertools.repeat(ctx.author.id)),
                 )
-            ).is_on_mobile()
+            )
+        mobile = member.status == member.mobile_status
+        del member
 
         kwargs: Dict[str, Any] = {
             "width": 37 if mobile else 80,
