@@ -9,6 +9,7 @@ from rapidfuzz import fuzz, process
 from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.commands.help import HelpSettings
+from redbot.core.i18n import set_contextual_locale
 
 from .context import InterContext
 from .utils import walk_aliases
@@ -33,8 +34,9 @@ async def onetrueslash(
     ctx = await InterContext.from_interaction(interaction, recreate_message=True)
     error = None
     ferror: asyncio.Task[Tuple[InterContext, commands.CommandError]] = asyncio.create_task(
-        interaction.client.wait_for("command_error", check=lambda c, e: c is ctx)
+        interaction.client.wait_for("command_error", check=lambda c, _: c is ctx)
     )
+    set_contextual_locale(str(interaction.guild_locale or interaction.locale))
     await interaction.client.invoke(ctx)
     if not interaction.response.is_done():
         ctx._deferring = True
