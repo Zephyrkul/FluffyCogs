@@ -14,6 +14,7 @@ from .utils import contexts
 class InterContext(InterChannel, commands.Context):
     _deferring: bool = False
     _ticked: Optional[str] = None
+    _first_response: int = 0
     interaction: discord.Interaction
     message: InterMessage
 
