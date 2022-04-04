@@ -1,4 +1,3 @@
-import logging
 from typing import Optional
 
 try:
@@ -11,8 +10,6 @@ from redbot.core import commands as red_commands
 from redbot.core.bot import Red
 
 from .commands import onetrueslash
-
-LOG = logging.getLogger("red.fluffy.onetrueslash.events")
 
 
 async def before_hook(ctx: red_commands.Context):
@@ -34,8 +31,7 @@ async def on_user_update(before: discord.User, after: discord.User):
     bot.tree.add_command(onetrueslash, guild=None)
     await bot.send_to_owners(
         "The bot's username has changed. onetrueslash's slash command has been updated to reflect this.\n"
+        "**You will need to re-sync the command tree yourself to see this change.**\n"
         "It is recommended not to change the bot's name too often with this cog, as this can potentially "
         "create confusion for users as well as ratelimiting issues for the bot."
     )
-    LOG.debug("Syncing slash tree in response to username change.")
-    await bot.tree.sync(guild=None)
