@@ -1,6 +1,7 @@
 import asyncio
 import heapq
 import operator
+from copy import copy
 from typing import Awaitable, Callable, Dict, List, Optional, Tuple, cast
 
 import discord
@@ -26,25 +27,37 @@ async def onetrueslash(
     command: str,
     arguments: Optional[str] = None,
     attachment: Optional[discord.Attachment] = None,
-):
+) -> None:
     """
     The one true slash command.
     """
     assert isinstance(interaction.client, Red)
+    set_contextual_locale(str(interaction.guild_locale or interaction.locale))
     ctx = await InterContext.from_interaction(interaction, recreate_message=True)
     error = None
-    ferror: asyncio.Task[Tuple[InterContext, commands.CommandError]] = asyncio.create_task(
-        interaction.client.wait_for("command_error", check=lambda c, _: c is ctx)
-    )
-    set_contextual_locale(str(interaction.guild_locale or interaction.locale))
-    await interaction.client.invoke(ctx)
-    if not interaction.response.is_done():
-        ctx._deferring = True
-        await interaction.response.defer(ephemeral=True)
-    if ferror.done():
-        error = ferror.exception() or ferror.result()[1]
-    ferror.cancel()
-    if ctx._deferring:
+    if command == "help":
+        await ctx.trigger_typing()
+        actual_command: Optional[commands.Command] = None
+        if arguments:
+            actual_command = interaction.client.get_command(arguments)
+            if actual_command:
+                actual_command = copy(actual_command)
+                actual_command.usage = f"arguments: {actual_command.signature}"
+        await interaction.client.send_help_for(
+            ctx, actual_command or interaction.client, from_help_command=True
+        )
+    else:
+        ferror: asyncio.Task[Tuple[InterContext, commands.CommandError]] = asyncio.create_task(
+            interaction.client.wait_for("command_error", check=lambda c, _: c is ctx)
+        )
+        await interaction.client.invoke(ctx)
+        if not interaction.response.is_done():
+            ctx._deferring = True
+            await interaction.response.defer(ephemeral=True)
+        if ferror.done():
+            error = ferror.exception() or ferror.result()[1]
+        ferror.cancel()
+    if ctx._deferring and not interaction.is_expired():
         if error is None:
             if ctx._ticked:
                 await ctx.send(ctx._ticked, ephemeral=True)

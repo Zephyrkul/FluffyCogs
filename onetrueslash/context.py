@@ -1,3 +1,4 @@
+from copy import copy
 from typing import Optional, Type, Union
 
 import discord
@@ -38,7 +39,7 @@ class InterContext(InterChannel, commands.Context):
         except LookupError:
             pass
         message = await InterMessage.from_interaction(interaction)
-        prefix = f"/{interaction.data['name']} "
+        prefix = f"/{interaction.data['name']} command: "
         view = StringView(message.content)
         view.skip_string(prefix)
         invoker = view.get_word()
@@ -65,3 +66,16 @@ class InterContext(InterChannel, commands.Context):
     ) -> bool:
         self._ticked = f"{reaction} {message}" if message else str(reaction)
         return False
+
+    async def send_help(
+        self, command: Optional[Union[commands.Command, commands.GroupMixin, str]] = None
+    ):
+        command = command or self.command
+        if isinstance(command, str):
+            command = self.bot.get_command(command) or command
+        signature: str
+        if signature := getattr(command, "signature", ""):
+            assert not isinstance(command, str)
+            command = copy(command)
+            command.usage = f"arguments: {signature}"
+        return await super().send_help(command)
