@@ -1,7 +1,7 @@
 import asyncio
 import heapq
 import operator
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Awaitable, Callable, Dict, List, Optional, Tuple, cast
 
 import discord
 from discord import app_commands
@@ -49,7 +49,7 @@ async def onetrueslash(
             if ctx._ticked:
                 await ctx.send(ctx._ticked, ephemeral=True)
             else:
-                await interaction.followup.delete_message("@original")  # type: ignore - https://discord.com/developers/docs/interactions/receiving-and-responding#delete-original-interaction-response
+                await interaction.delete_original_message()
         elif isinstance(error, commands.CommandNotFound):
             await ctx.send(f"❌ Command `{command}` was not found.", ephemeral=True)
         elif isinstance(error, commands.CheckFailure):
@@ -77,18 +77,21 @@ async def onetrueslash_command_autocomplete(
                 current,
                 walk_aliases(interaction.client, show_hidden=help_settings.show_hidden),
                 scorer=fuzz.QRatio,
+                score_cutoff=50,
             ),
             operator.itemgetter(1),
         ),
     )
-    _filter = commands.Command.can_run if help_settings.show_hidden else commands.Command.can_see
+    _filter: Callable[[commands.Command], Awaitable[bool]] = operator.methodcaller(
+        "can_run" if help_settings.show_hidden else "can_see", ctx
+    )
     matches: Dict[commands.Command, str] = {}
     for name, score, index in extracted:
         command = interaction.client.get_command(name)
         if not command:
             continue
         try:
-            if command not in matches and await _filter(command, ctx):
+            if command not in matches and await _filter(command):
                 matches[command] = name
         except commands.CommandError:
             pass
