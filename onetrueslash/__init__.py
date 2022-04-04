@@ -35,24 +35,14 @@ async def _setup(bot: Red):
         raise CogLoadError(
             f"A slash command named {onetrueslash.name} is already registered."
         ) from None
-    except discord.app_commands.MaxCommandsReached:
+    except discord.app_commands.CommandLimitReached:
         raise CogLoadError(
             f"{bot.user.name} has already reached the maximum of 100 global slash commands."
         ) from None
-    else:
-        await bot.tree.sync(guild=None)
 
 
 async def teardown(bot: Red):
     bot.remove_before_invoke_hook(before_hook)
     bot.remove_listener(on_user_update)
     bot.remove_dev_env_value("interaction")
-
     bot.tree.remove_command(onetrueslash.name, guild=None)
-    # delay the slash sync using a task in case of shutdowns
-    asyncio.create_task(_teardown(bot))
-
-
-async def _teardown(bot: Red):
-    await asyncio.sleep(2)
-    await bot.tree.sync(guild=None)
