@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 LOG = logging.getLogger("red.fluffy.rtfs")
 GIT_AT = re.compile(r"(?i)git@(?P<host>[^:]+):(?P<user>[^/]+)/(?P<repo>.+)(?:\.git)?")
 RED_DEV_VERSION_RE = re.compile(
-    r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)\.dev(?P<distance>\d+)\+g(?P<hash>[a-f0-9]+)(?P<dirty>\.dirty)$"
+    r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)\.dev(?P<distance>\d+)\+g(?P<hash>[a-f0-9]+)(?P<dirty>\.dirty)?$"
 )
 
 
