@@ -1,6 +1,5 @@
 import inspect
 import logging
-import re
 import traceback
 from functools import partial, partialmethod
 from importlib.metadata import PackageNotFoundError, version
@@ -13,6 +12,11 @@ from redbot.core import commands
 from redbot.core.utils.chat_formatting import box, pagify
 
 try:
+    import regex as re
+except ImportError:
+    import re
+
+try:
     from discord.ext import menus
 except ImportError:
     from redbot.vendored.discord.ext import menus
@@ -20,9 +24,11 @@ except ImportError:
 if TYPE_CHECKING:
     from redbot.cogs.downloader import Downloader
 
-
 LOG = logging.getLogger("red.fluffy.rtfs")
 GIT_AT = re.compile(r"(?i)git@(?P<host>[^:]+):(?P<user>[^/]+)/(?P<repo>.+)(?:\.git)?")
+RED_DEV_VERSION_RE = re.compile(
+    r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)\.dev(?P<distance>\d+)\+g(?P<hash>[a-f0-9]+)(?P<dirty>\.dirty)$"
+)
 
 
 class Unlicensed(Exception):
@@ -30,7 +36,7 @@ class Unlicensed(Exception):
     Exception class for when the source code is known to have too restrictive of a license to redistribute code.
     """
 
-    def __init__(self, *args, cite: str = None, **kwargs):
+    def __init__(self, *args, cite: Optional[str] = None, **kwargs):
         super.__init__(*args, **kwargs)
         self.cite = cite
 
@@ -55,7 +61,7 @@ class SourceSource(menus.ListPageSource):
             return f"{self.header}\n{box(page, lang='py')}\nPage {menu.current_page + 1} / {self.get_max_pages()}"
         except Exception as e:
             # since d.py menus likes to suppress all errors
-            LOG.debug(exc_info=e)
+            LOG.debug("Exception while formatting page %s in menu %s", page, menu, exc_info=e)
             raise
 
 
@@ -71,7 +77,7 @@ class SourceMenu(menus.MenuPages):
                 await self.message.edit(**kwargs)
         except Exception as e:
             # since d.py menus likes to suppress all errors
-            LOG.debug(exc_info=e)
+            LOG.debug("Exception occurred while finalizing", exc_info=e)
             raise
 
 
@@ -110,40 +116,46 @@ class RTFS(commands.Cog):
             source = type(source)
             lines, line = inspect.getsourcelines(source)
         source_file = inspect.getsourcefile(source)
-        comments = inspect.getcomments(source) if line > 0 else ""
+        if line > 0:
+            comments = inspect.getcomments(source) or ""
+            line_suffix = f"#L{line - len(comments.splitlines())}-L{line + len(lines) - 1}"
+        else:
+            comments = ""
+            # no reason to highlight entire files
+            line_suffix = ""
         module = getattr(inspect.getmodule(source), "__name__", None)
         if source_file and module and source_file.endswith("__init__.py"):
             full_module = f"{module}.__init__"
         else:
             full_module = module
         is_installed = False
-        # no reason to highlight entire files
-        line_suffix = f"#L{line}-L{line + len(lines) - 1}" if line > 0 else ""
         header: str = ""
+        dl: Optional[Downloader]
         if full_module:
-            dl: Optional[Downloader]
             if full_module.startswith("discord."):
                 is_installed = True
                 if discord.__version__[-1].isdigit():
                     dpy_commit = "v" + discord.__version__
                 else:
                     try:
-                        dpy_version = version("discord.py").split("+g")
+                        _, _, dpy_commit = version("discord.py").partition("+g")
                     except PackageNotFoundError:
                         dpy_commit = "master"
-                    else:
-                        dpy_commit = dpy_version[1] if len(dpy_version) == 2 else "master"
-                header = f"<https://github.com/Rapptz/discord.py/blob/{dpy_commit}/{full_module.replace('.', '/')}.py{line_suffix}>"
+                header = f"<https://github.com/Rapptz/discord.py/blob/{dpy_commit or 'master'}/{full_module.replace('.', '/')}.py{line_suffix}>"
             elif full_module.startswith("redbot."):
                 is_installed = True
-                if "dev" in redbot.__version__:
-                    red_commit = "V3/develop"
+                if match := RED_DEV_VERSION_RE.match(redbot.__version__):
+                    if match.group("dirty"):
+                        is_installed = False
+                    red_commit = match.group("hash")
                 else:
                     red_commit = redbot.__version__
-                header = f"<https://github.com/Cog-Creators/Red-DiscordBot/blob/{red_commit}/{full_module.replace('.', '/')}.py{line_suffix}>"
+                if is_installed:
+                    header = f"<https://github.com/Cog-Creators/Red-DiscordBot/blob/{red_commit}/{full_module.replace('.', '/')}.py{line_suffix}>"
             elif dl := ctx.bot.get_cog("Downloader"):
                 is_installed, installable = await dl.is_installed(full_module.split(".")[0])
                 if is_installed:
+                    assert installable
                     if installable.repo is None:
                         is_installed = False
                     else:
