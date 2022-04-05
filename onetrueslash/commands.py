@@ -42,7 +42,7 @@ async def onetrueslash(
             actual_command = interaction.client.get_command(arguments)
             if actual_command and (signature := actual_command.signature):
                 actual_command = copy(actual_command)
-                actual_command.usage = f"arguments: {actual_command.signature}"
+                actual_command.usage = f"arguments: {signature}"
         await interaction.client.send_help_for(
             ctx, actual_command or interaction.client, from_help_command=True
         )
