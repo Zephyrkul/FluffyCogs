@@ -26,6 +26,8 @@ def neuter_coros(cls: _TT) -> _TT:
 
 @neuter_coros
 class InterMessage(discord.Message):
+    __slots__ = ()
+
     @classmethod
     async def from_interaction(cls, interaction: discord.Interaction) -> "InterMessage":
         assert interaction.data
