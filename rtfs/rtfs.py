@@ -1,3 +1,4 @@
+import ast
 import inspect
 import logging
 import traceback
@@ -23,6 +24,7 @@ except ImportError:
 
 if TYPE_CHECKING:
     from redbot.cogs.downloader import Downloader
+    from redbot.core.dev_commands import Dev
 
 LOG = logging.getLogger("red.fluffy.rtfs")
 GIT_AT = re.compile(r"(?i)git@(?P<host>[^:]+):(?P<user>[^/]+)/(?P<repo>.+)(?:\.git)?")
@@ -235,15 +237,24 @@ class RTFS(commands.Cog):
             return await ctx.send(
                 f"The source code for `{thing}` has no license, so I cannot show it here."
             )
-        dev = ctx.bot.get_cog("Dev")
+        dev: Optional[Dev] = ctx.bot.get_cog("Dev")
         if not is_owner or not dev:
             raise commands.UserFeedbackCheckFailure(
                 f"I couldn't find any cog or command named `{thing}`."
             )
         thing = dev.cleanup_code(thing)
         env = dev.get_environment(ctx)
+        env["getattr_static"] = inspect.getattr_static
         try:
-            obj = eval(thing, env)
+            tree = ast.parse(thing, "<rtfs>", "eval")
+            if isinstance(tree.body, ast.Attribute) and isinstance(tree.body.ctx, ast.Load):
+                tree.body = ast.Call(
+                    func=ast.Name(id="getattr_static", ctx=ast.Load()),
+                    args=[tree.body.value, ast.Constant(value=tree.body.attr)],
+                    keywords=[],
+                )
+                tree = ast.fix_missing_locations(tree)
+            obj = eval(compile(tree, "<rtfs>", "eval"), env)
         except NameError:
             return await ctx.send(f"I couldn't find any cog, command, or object named `{thing}`.")
         except Exception as e:
