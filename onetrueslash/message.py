@@ -38,6 +38,7 @@ class InterMessage(discord.Message):
         self.webhook_id = None
         self.mention_everyone = False
         self.embeds = []
+        self.role_mentions = []
         self.id = interaction.id
         self.author = interaction.user
         self.nonce = None
@@ -65,7 +66,7 @@ class InterMessage(discord.Message):
         return self
 
     def recreate_from_interaction(self, interaction: discord.Interaction):
-        assert interaction.data
+        assert interaction.data and interaction.client.user
 
         self.content = f"/{interaction.data['name']} command: {interaction.namespace.command}"
         if getattr(interaction.namespace, "arguments", None):
@@ -75,33 +76,33 @@ class InterMessage(discord.Message):
         else:
             self.attachments = []
 
+        state = self._state
+        if interaction.guild_id:
+            guild = interaction.guild or discord.Object(interaction.guild_id)
+        else:
+            guild = None
         self.mentions = []
-        self.role_mentions = []
-        if resolved := interaction.data.get("resolved"):
-            if interaction.guild_id:
-                guild = interaction.guild
-                if "members" in resolved:
-                    for id, data in resolved["members"].items():
-                        id = int(id)
-                        if id == interaction.user.id:
-                            self.mentions.append(interaction.user)
-                        elif guild and (member := guild.get_member(id)):
-                            self.mentions.append(member)
-                        # TODO: edge cases
-                if "roles" in resolved:
-                    for id, data in resolved["roles"].items():
-                        id = int(id)
-                        if guild and (role := guild.get_role(id)):
-                            self.role_mentions.append(role)
-                        # TODO: edge cases
+        resolved = interaction.data.get("resolved", {})
+        members = resolved.get("members", {})
+        for user_id, user_data in resolved.get("users", {}).items():
+            try:
+                member_data = members[user_id]
+            except KeyError:
+                if not guild:
+                    uid = int(user_id)
+                    if uid == interaction.user.id:
+                        self.mentions.append(interaction.user)
+                    elif uid == interaction.client.user.id:
+                        self.mentions.append(interaction.client.user)  # type: ignore
             else:
-                if "users" in resolved:
-                    for id, data in resolved["users"].items():
-                        id = int(id)
-                        if id == interaction.user.id:
-                            self.mentions.append(interaction.user)
-                        elif user := interaction.client.get_user(id):
-                            self.mentions.append(user)
+                member_data["user"] = user_data
+                self.mentions.append(
+                    discord.Member(
+                        data=member_data,
+                        guild=guild,  # type: ignore
+                        state=state,
+                    )
+                )
 
     def to_reference(self, *, fail_if_not_exists: bool = True):
         return None
