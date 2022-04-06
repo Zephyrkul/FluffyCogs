@@ -28,9 +28,6 @@ if TYPE_CHECKING:
 
 LOG = logging.getLogger("red.fluffy.rtfs")
 GIT_AT = re.compile(r"(?i)git@(?P<host>[^:]+):(?P<user>[^/]+)/(?P<repo>.+)(?:\.git)?")
-RED_DEV_VERSION_RE = re.compile(
-    r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)\.dev(?P<distance>\d+)\+g(?P<hash>[a-f0-9]+)(?P<dirty>\.dirty)?$"
-)
 
 
 class Unlicensed(Exception):
@@ -145,11 +142,9 @@ class RTFS(commands.Cog):
                         dpy_commit = "master"
                 header = f"<https://github.com/Rapptz/discord.py/blob/{dpy_commit or 'master'}/{full_module.replace('.', '/')}.py{line_suffix}>"
             elif full_module.startswith("redbot."):
-                is_installed = True
-                if match := RED_DEV_VERSION_RE.match(redbot.__version__):
-                    if match.group("dirty"):
-                        is_installed = False
-                    red_commit = match.group("hash")
+                is_installed = not redbot.version_info.dirty
+                if redbot.version_info.dev_release:
+                    red_commit = redbot.version_info.short_commit_hash or "V3/develop"
                 else:
                     red_commit = redbot.__version__
                 if is_installed:
