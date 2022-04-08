@@ -13,6 +13,6 @@ stylecheck:
 	$(PYTHON) -m isort --check-only $(DIFF)
 	$(PYTHON) -m black --check $(DIFF)
 reformat:
-	$(PYTHON) -m autoflake --in-place --imports=aiohttp,discord,redbot $(DIFF)
+	$(PYTHON) -m autoflake --in-place --ignore-init-module-imports --imports=aiohttp,discord,redbot $(DIFF)
 	$(PYTHON) -m isort $(DIFF)
 	$(PYTHON) -m black $(DIFF)

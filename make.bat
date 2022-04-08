@@ -36,7 +36,7 @@ black --check !DIFF!
 goto :eof
 
 :reformat
-autoflake --in-place --imports=aiohttp,discord,redbot !DIFF! || goto :eof
+autoflake --in-place --ignore-init-module-imports --imports=aiohttp,discord,redbot  !DIFF! || goto :eof
 isort !DIFF! || goto :eof
 black !DIFF!
 goto :eof
