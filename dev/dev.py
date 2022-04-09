@@ -14,7 +14,7 @@ import sys
 import textwrap
 import types
 from contextvars import ContextVar
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Callable, ClassVar, Dict, Generic, List, Optional, Set, TypeVar
 from typing_extensions import ParamSpec
 from weakref import WeakSet
 
@@ -280,6 +280,7 @@ class Dev(dev_commands.Dev):
     _last_result: Any
     sessions: Dict[int, bool]
     env_extensions: Dict[str, Callable[[commands.Context], Any]]
+    _tasks: ClassVar[Set[asyncio.Task]] = set()
 
     def __init__(self, bot: Red):
         self.bot = bot
@@ -316,6 +317,7 @@ class Dev(dev_commands.Dev):
         source: str,
         env: Env,
         compiler: Optional[Compiler] = None,
+        wait: bool = True,
         **environ: Any,
     ) -> bool:
         assert ctx.invoked_with
@@ -379,14 +381,19 @@ class Dev(dev_commands.Dev):
                         )
                     )
                 output = captured.get() + console.file.getvalue()
-        asyncio.ensure_future(
-            self.send_interactive(
-                ctx,
-                output.strip(),
-                message,
-                box_lang="ansi" if console.color_system else "py",
-            )
+        coro = self.send_interactive(
+            ctx,
+            output.strip(),
+            message,
+            box_lang="ansi" if console.color_system else "py",
         )
+        if wait:
+            await coro
+        else:
+            task = asyncio.create_task(coro)
+            # keep a ref to the task around so it doesn't garbage collect
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
         return exited
 
     def _output_exception(
@@ -579,6 +586,7 @@ class Dev(dev_commands.Dev):
                 variables,
                 compiler=compiler,
                 message=response,
+                wait=False,
             )
 
             if exited:
