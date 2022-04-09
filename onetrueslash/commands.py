@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import heapq
 import operator
 from copy import copy
@@ -36,13 +37,13 @@ async def onetrueslash(
     ctx = await InterContext.from_interaction(interaction, recreate_message=True)
     error = None
     if command == "help":
-        await ctx.trigger_typing()
+        await interaction.response.defer(ephemeral=True)
         actual_command: Optional[commands.Command] = None
         if arguments:
             actual_command = interaction.client.get_command(arguments)
             if actual_command and (signature := actual_command.signature):
                 actual_command = copy(actual_command)
-                actual_command.usage = f"arguments: {signature}"
+                actual_command.usage = f"arguments:{signature}"
         await interaction.client.send_help_for(
             ctx, actual_command or interaction.client, from_help_command=True
         )
@@ -60,51 +61,54 @@ async def onetrueslash(
     if ctx._deferring and not interaction.is_expired():
         if error is None:
             if ctx._ticked:
-                await ctx.send(ctx._ticked, ephemeral=True)
+                await interaction.followup.send(ctx._ticked, ephemeral=True)
             else:
                 await interaction.delete_original_message()
         elif isinstance(error, commands.CommandNotFound):
-            await ctx.send(f"❌ Command `{command}` was not found.", ephemeral=True)
+            await interaction.followup.send(
+                f"❌ Command `{command}` was not found.", ephemeral=True
+            )
         elif isinstance(error, commands.CheckFailure):
-            await ctx.send(f"❌ You don't have permission to run `{command}`.", ephemeral=True)
+            await interaction.followup.send(
+                f"❌ You don't have permission to run `{command}`.", ephemeral=True
+            )
 
 
 @onetrueslash.autocomplete("command")
 async def onetrueslash_command_autocomplete(
     interaction: discord.Interaction, current: str
 ) -> List[app_commands.Choice[str]]:
-    if not current:
-        return [app_commands.Choice(name="help", value="help")]
-
     assert isinstance(interaction.client, Red)
+
+    if not await interaction.client.allowed_by_whitelist_blacklist(interaction.user):
+        return []
+
     ctx = await InterContext.from_interaction(interaction)
     help_settings = await HelpSettings.from_context(ctx)
 
-    extracted = cast(
-        List[Tuple[str, float, int]],
-        await asyncio.get_event_loop().run_in_executor(
-            None,
-            heapq.nlargest,
-            6,
-            process.extract_iter(
-                current,
+    if current:
+        extracted = cast(
+            List[str],
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                heapq.nlargest,
+                6,
                 walk_aliases(interaction.client, show_hidden=help_settings.show_hidden),
-                scorer=fuzz.QRatio,
-                score_cutoff=50,
+                functools.partial(fuzz.QRatio, current),
             ),
-            operator.itemgetter(1),
-        ),
-    )
+        )
+    else:
+        extracted = ["help"]
     _filter: Callable[[commands.Command], Awaitable[bool]] = operator.methodcaller(
         "can_run" if help_settings.show_hidden else "can_see", ctx
     )
     matches: Dict[commands.Command, str] = {}
-    for name, score, index in extracted:
+    for name in extracted:
         command = interaction.client.get_command(name)
-        if not command:
+        if not command or command in matches:
             continue
         try:
-            if command not in matches and await _filter(command):
+            if await _filter(command):
                 matches[command] = name
         except commands.CommandError:
             pass
