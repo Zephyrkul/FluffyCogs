@@ -93,7 +93,7 @@ class RTFS(commands.Cog):
     ) -> None:
         obj = inspect.unwrap(obj)
         source = getattr(obj, "__func__", obj)
-        if isinstance(obj, commands.Command):
+        if isinstance(obj, (commands.Command, discord.app_commands.Command)):
             source = obj.callback
             if not inspect.getmodule(source):
                 # probably some kind of custom-coded command
@@ -216,11 +216,8 @@ class RTFS(commands.Cog):
         """
         is_owner = await ctx.bot.is_owner(ctx.author)
         try:
-            if thing.startswith("/"):
-                thing = thing[1:]
-                return await self.format_and_send(
-                    ctx, ctx.bot.tree.get_command(thing), is_owner=is_owner
-                )
+            if thing.startswith("/") and (obj := ctx.bot.tree.get_command(thing[1:])):
+                return await self.format_and_send(ctx, obj, is_owner=is_owner)
             elif obj := ctx.bot.get_cog(thing):
                 return await self.format_and_send(ctx, type(obj), is_owner=is_owner)
             elif obj := ctx.bot.get_command(thing):
