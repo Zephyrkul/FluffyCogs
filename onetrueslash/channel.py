@@ -1,5 +1,5 @@
 import inspect
-from typing import TYPE_CHECKING
+from typing import Optional
 
 import discord
 
@@ -12,7 +12,7 @@ INCOMPATABLE_PARAMETERS_DISCARD = frozenset(
 )
 
 
-class InterChannel(discord.abc.Messageable if TYPE_CHECKING else object):
+class InterChannel:
     __slots__ = ()
 
     async def send(self, *args, **kwargs):
@@ -24,7 +24,7 @@ class InterChannel(discord.abc.Messageable if TYPE_CHECKING else object):
                 message_id=ctx._first_response,
                 fail_if_not_exists=False,
             )
-            return await super().send(*args, **kwargs)
+            return await ctx.interaction.channel.send(*args, **kwargs)
         await self.trigger_typing()
         ctx._deferring = False
         interaction = ctx.interaction
@@ -33,11 +33,11 @@ class InterChannel(discord.abc.Messageable if TYPE_CHECKING else object):
             kwargs.pop(key, None)
         m = await interaction.followup.send(*args, **kwargs)
         ctx._first_response = min(filter(None, (ctx._first_response, m.id)))
-        if delete_after is not None:
+        if delete_after is not None and not m.flags.ephemeral:
             await m.delete(delay=delete_after)
         return m
 
-    async def trigger_typing(self) -> None:
+    async def trigger_typing(self, *, ephemeral: Optional[bool] = None) -> None:
         ctx = contexts.get()
         if (
             not ctx._deferring
@@ -45,7 +45,9 @@ class InterChannel(discord.abc.Messageable if TYPE_CHECKING else object):
             and not ctx.interaction.is_expired()
         ):
             ctx._deferring = True
-            await ctx.interaction.response.defer(ephemeral=True)
+            await ctx.interaction.response.defer(
+                ephemeral=ctx.command_failed if ephemeral is None else ephemeral
+            )
 
     def typing(self):
         return Thinking(self)
