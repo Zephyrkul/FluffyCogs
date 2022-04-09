@@ -40,7 +40,7 @@ class InterContext(InterChannel, commands.Context):
         except LookupError:
             pass
         message = await InterMessage.from_interaction(interaction)
-        prefix = f"/{interaction.data['name']} command: "
+        prefix = f"/{interaction.data['name']} command:"
         view = StringView(message.content)
         view.skip_string(prefix)
         invoker = view.get_word()
@@ -78,5 +78,5 @@ class InterContext(InterChannel, commands.Context):
         if signature := getattr(command, "signature", ""):
             assert not isinstance(command, str)
             command = copy(command)
-            command.usage = f"arguments: {signature}"
+            command.usage = f"arguments:{signature}"
         return await super().send_help(command)
