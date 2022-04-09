@@ -22,10 +22,7 @@
 
 # Copyright (c) 2022, MPL and GPL Eryk De Marco
 
-import enum
-from posixpath import normpath
 from typing import List, Literal, Optional, Set, Union
-from typing_extensions import reveal_type
 
 import discord
 from redbot.core import commands
