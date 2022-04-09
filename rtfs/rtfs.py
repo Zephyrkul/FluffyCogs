@@ -92,7 +92,7 @@ class RTFS(commands.Cog):
         cls, ctx: commands.Context, obj: Any, *, is_owner: bool = False
     ) -> None:
         obj = inspect.unwrap(obj)
-        source = obj
+        source = getattr(obj, "__func__", obj)
         if isinstance(obj, commands.Command):
             source = obj.callback
             if not inspect.getmodule(source):
@@ -216,7 +216,12 @@ class RTFS(commands.Cog):
         """
         is_owner = await ctx.bot.is_owner(ctx.author)
         try:
-            if obj := ctx.bot.get_cog(thing):
+            if thing.startswith("/"):
+                thing = thing[1:]
+                return await self.format_and_send(
+                    ctx, ctx.bot.tree.get_command(thing), is_owner=is_owner
+                )
+            elif obj := ctx.bot.get_cog(thing):
                 return await self.format_and_send(ctx, type(obj), is_owner=is_owner)
             elif obj := ctx.bot.get_command(thing):
                 return await self.format_and_send(ctx, obj, is_owner=is_owner)
