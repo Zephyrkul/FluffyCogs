@@ -13,6 +13,8 @@ from .commands import onetrueslash
 
 
 async def before_hook(ctx: red_commands.Context):
+    if getattr(ctx.command, "__commands_is_hybrid__", False):
+        return
     interaction: Optional[discord.Interaction]
     if (interaction := getattr(ctx, "interaction", None)) and not interaction.response.is_done():
         ctx._deferring = True  # type: ignore

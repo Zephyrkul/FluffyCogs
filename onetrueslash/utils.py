@@ -1,5 +1,5 @@
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Generator, Optional, Protocol
+from typing import TYPE_CHECKING, Generator, Optional
 
 from redbot.core import commands
 
@@ -10,17 +10,18 @@ if TYPE_CHECKING:
 contexts = ContextVar["InterContext"]("contexts")
 
 
-class SupportsTyping(Protocol):
-    async def trigger_typing(self) -> None:
-        ...
-
-
 class Thinking:
-    def __init__(self, destination: SupportsTyping):
-        self.destination = destination
+    def __await__(self) -> Generator[None, None, None]:
+        ctx = contexts.get()
+        interaction = ctx.interaction
+        if not ctx._deferring and not interaction.response.is_done():
+            # yield from is necessary here to force this function to be a generator
+            # even in the negative case
+            ctx._deferring = True
+            return (yield from ctx.interaction.response.defer())
 
     async def __aenter__(self):
-        await self.destination.trigger_typing()
+        await self
 
     async def __aexit__(self, *args):
         pass

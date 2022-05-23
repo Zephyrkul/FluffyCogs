@@ -7,7 +7,7 @@ from typing import Awaitable, Callable, Dict, List, Optional, Tuple, cast
 
 import discord
 from discord import app_commands
-from rapidfuzz import fuzz, process
+from rapidfuzz import fuzz
 from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.commands.help import HelpSettings
@@ -34,7 +34,7 @@ async def onetrueslash(
     """
     assert isinstance(interaction.client, Red)
     set_contextual_locale(str(interaction.guild_locale or interaction.locale))
-    ctx = await InterContext.from_interaction(interaction, recreate_message=True)
+    ctx = InterContext.from_interaction(interaction, recreate_message=True)
     error = None
     if command == "help":
         await interaction.response.defer(ephemeral=True)
@@ -83,9 +83,11 @@ async def onetrueslash_command_autocomplete(
     if not await interaction.client.allowed_by_whitelist_blacklist(interaction.user):
         return []
 
-    ctx = await InterContext.from_interaction(interaction)
-    help_settings = await HelpSettings.from_context(ctx)
+    ctx = InterContext.from_interaction(interaction)
+    if not await interaction.client.message_eligible_as_command(ctx.message):
+        return []
 
+    help_settings = await HelpSettings.from_context(ctx)
     if current:
         extracted = cast(
             List[str],
@@ -122,5 +124,5 @@ async def onetrueslash_error(
     assert isinstance(interaction.client, Red)
     error = getattr(error, "original", error)
     await interaction.client.on_command_error(
-        await InterContext.from_interaction(interaction), commands.CommandInvokeError(error)
+        InterContext.from_interaction(interaction), commands.CommandInvokeError(error)
     )

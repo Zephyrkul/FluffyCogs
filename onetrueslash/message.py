@@ -29,7 +29,7 @@ class InterMessage(discord.Message):
     __slots__ = ()
 
     @classmethod
-    async def from_interaction(cls, interaction: discord.Interaction) -> "InterMessage":
+    def from_interaction(cls, interaction: discord.Interaction) -> "InterMessage":
         assert interaction.data
         self = InterMessage.__new__(InterMessage)
 
@@ -56,7 +56,11 @@ class InterMessage(discord.Message):
         self.guild = interaction.guild
 
         if not interaction.guild_id:
-            self.channel = copy(await interaction.user.create_dm())
+            channel = self.channel = discord.DMChannel.__new__(discord.DMChannel)
+            channel._state = interaction._state
+            channel.recipient = interaction.user
+            channel.me = interaction.client.user
+            channel.id = interaction.channel_id
         else:
             self.channel = copy(interaction.channel)
 

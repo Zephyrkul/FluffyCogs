@@ -19,7 +19,7 @@ class InterContext(InterChannel, commands.Context):
     message: InterMessage
 
     @classmethod
-    async def from_interaction(
+    def from_interaction(
         cls: Type["InterContext"],
         interaction: discord.Interaction,
         *,
@@ -39,7 +39,7 @@ class InterContext(InterChannel, commands.Context):
             return self
         except LookupError:
             pass
-        message = await InterMessage.from_interaction(interaction)
+        message = InterMessage.from_interaction(interaction)
         prefix = f"/{interaction.data['name']} command:"
         view = StringView(message.content)
         view.skip_string(prefix)
