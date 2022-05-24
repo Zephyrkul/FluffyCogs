@@ -1,6 +1,5 @@
 import asyncio
 from copy import copy
-from itertools import chain
 from typing import TypeVar
 
 import discord
