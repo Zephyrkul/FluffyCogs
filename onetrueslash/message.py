@@ -118,3 +118,6 @@ class InterMessage(discord.Message):
 
     async def reply(self, *args, **kwargs):
         return await self.channel.send(*args, **kwargs)
+
+    async def edit(self, *args, **kwargs):
+        return self
