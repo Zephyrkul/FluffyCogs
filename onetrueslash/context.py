@@ -8,7 +8,7 @@ from redbot.core.bot import Red
 
 from .channel import InterChannel
 from .message import InterMessage
-from .utils import contexts
+from .utils import Thinking, contexts
 
 
 class InterContext(InterChannel, commands.Context):
@@ -67,6 +67,9 @@ class InterContext(InterChannel, commands.Context):
     ) -> bool:
         self._ticked = f"{reaction} {message}" if message else str(reaction)
         return False
+
+    def typing(self, *, ephemeral: bool = False) -> Thinking:
+        return Thinking(ephemeral=ephemeral)
 
     async def send_help(
         self, command: Optional[Union[commands.Command, commands.GroupMixin, str]] = None

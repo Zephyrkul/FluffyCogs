@@ -11,6 +11,9 @@ contexts = ContextVar["InterContext"]("contexts")
 
 
 class Thinking:
+    def __init__(self, *, ephemeral: bool = False):
+        self.ephemeral = ephemeral
+
     def __await__(self) -> Generator[None, None, None]:
         ctx = contexts.get()
         interaction = ctx.interaction
@@ -18,7 +21,7 @@ class Thinking:
             # yield from is necessary here to force this function to be a generator
             # even in the negative case
             ctx._deferring = True
-            return (yield from ctx.interaction.response.defer())
+            return (yield from ctx.interaction.response.defer(ephemeral=self.ephemeral))
 
     async def __aenter__(self):
         await self

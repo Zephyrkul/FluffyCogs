@@ -75,7 +75,7 @@ class InterChannel:
             await m.delete(delay=delete_after)
         return m
 
-    def typing(self):
+    def typing(self) -> Thinking:
         return Thinking()
 
     if hasattr(discord.abc.Messageable, "trigger_typing"):
