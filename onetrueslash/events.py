@@ -1,15 +1,11 @@
 from typing import Optional
 
-try:
-    import regex as re
-except ImportError:
-    import re
-
 import discord
 from redbot.core import commands as red_commands
 from redbot.core.bot import Red
 
 from .commands import onetrueslash
+from .utils import valid_app_name
 
 
 async def before_hook(ctx: red_commands.Context):
@@ -29,7 +25,7 @@ async def on_user_update(before: discord.User, after: discord.User):
     if before.name == after.name:
         return
     bot.tree.remove_command(onetrueslash.name)
-    onetrueslash.name = re.sub(r"[^\w-]+", "-", bot.user.name.casefold())
+    onetrueslash.name = valid_app_name(after.name)
     bot.tree.add_command(onetrueslash, guild=None)
     await bot.send_to_owners(
         "The bot's username has changed. onetrueslash's slash command has been updated to reflect this.\n"

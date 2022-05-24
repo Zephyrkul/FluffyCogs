@@ -1,17 +1,13 @@
 import asyncio
 import logging
 
-try:
-    import regex as re
-except ImportError:
-    import re
-
 import discord
 from redbot.core.bot import Red
 from redbot.core.errors import CogLoadError
 
 from .commands import onetrueslash
 from .events import before_hook, on_user_update
+from .utils import valid_app_name
 
 LOG = logging.getLogger("red.fluffy.onetrueslash")
 
@@ -28,7 +24,7 @@ async def setup(bot: Red) -> None:
 async def _setup(bot: Red):
     await bot.wait_until_red_ready()
     assert bot.user
-    onetrueslash.name = re.sub(r"[^\w-]+", "_", bot.user.name.casefold())
+    onetrueslash.name = valid_app_name(bot.user.name)
     try:
         bot.tree.add_command(onetrueslash, guild=None)
     except discord.app_commands.CommandAlreadyRegistered:
