@@ -16,7 +16,9 @@ def __step(*args, **kwargs):
 
 
 def neuter_coros(cls: _TT) -> _TT:
-    for name in dict.fromkeys(chain.from_iterable(dir(clz) for clz in cls.__bases__)):
+    for name in dir(cls):
+        if name in cls.__dict__:
+            continue
         if (attr := getattr(cls, name, None)) is None:
             continue
         if asyncio.iscoroutinefunction(attr):
