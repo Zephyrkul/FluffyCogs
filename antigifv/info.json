@@ -1,0 +1,15 @@
+{
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "This cog has no commands. Use the core `[p]autoimmune` command to configure who is immune to this cog.\nThis cog forces itself to be disabled in all guilds by default. Use `[p]command enablecog AntiGifV` to enable it per-guild.\nThis does not delete links: it only suppresses embeds. Remember to warn your users not to click on suspicious links.",
+    "name": "AntiGifV",
+    "short": "Automatically suppress any GifV embeds. Useful if your system cannot handle the anticrashvid cog.",
+    "description": "Automatically suppress any GifV embeds. Useful if your system cannot handle the anticrashvid cog.",
+    "tags": [
+        "moderation",
+        "security"
+    ],
+    "hidden": false,
+    "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
+}
