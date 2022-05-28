@@ -1,7 +1,6 @@
 import asyncio
 
 import discord
-import youtube_dl
 from redbot.core import commands
 from redbot.core.bot import Red
 
