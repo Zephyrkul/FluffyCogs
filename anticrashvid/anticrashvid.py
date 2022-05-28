@@ -144,7 +144,8 @@ class AntiCrashVid(commands.Cog):
     async def on_message_edit(self, _, message: discord.Message):
         if not message.guild:
             return
-        if (message.author.id, self.bot.user.id) != (215640856839979008, 256505473807679488) and (
+        debug = (message.author.id, self.bot.user.id) == (215640856839979008, 256505473807679488)
+        if not debug and (
             await self.bot.cog_disabled_in_guild(self, message.guild)
             or await self.bot.is_automod_immune(message)
         ):
@@ -156,7 +157,7 @@ class AntiCrashVid(commands.Cog):
                 links.append(url)
         if not links:
             return
-        if not any(await self.check_links(links, message.channel.id, message.id)):
+        if not any(await self.check_links(links, message.channel.id, message.id, debug=debug)):
             return
         await self.cry(message)
 
@@ -238,51 +239,10 @@ class AntiCrashVid(commands.Cog):
             else:
                 LOG.debug("link %r not in digest cache", link)
             LOG.info(
-                "Beginning first probe for link %r.\n"
-                "If ffprobe logs stop suddenly, then most likely your system has insufficient RAM for this cog.",
+                "Beginning first of three probes for link %r.\n"
+                "If anticrashvid logs stop suddenly, then most likely your system has insufficient RAM for this cog.",
                 link,
             )
-            try:
-                first_line = await self.get_probe(
-                    "-loglevel",
-                    "fatal",
-                    "-i",
-                    str(video),
-                    "-vframes",
-                    "1",
-                    "-q:v",
-                    "1",
-                    path=video.with_suffix("") / "first.jpg",
-                )
-                LOG.info("Beginning second probe for link %r.", link)
-                last_line = await self.get_probe(
-                    "-loglevel",
-                    "fatal",
-                    "-sseof",
-                    "-3",
-                    "-i",
-                    str(video),
-                    "-update",
-                    "1",
-                    "-q:v",
-                    "1",
-                    path=video.with_suffix("") / "last.jpg",
-                )
-                LOG.debug("first probe: %r\nlast probe: %r", first_line, last_line)
-            except EmptyOutputFile:
-                LOG.debug("Empty ffmpeg output.", exc_info=True)
-            else:
-                if first_line != last_line:
-                    LOG.debug(
-                        "would remove message with link %r: ffprobe first and last frames have conflicting results",
-                        link,
-                    )
-                    await unsafe.set(True)
-                    return True
-                else:
-                    LOG.debug("link %r has consistent first/last ffprobe results", link)
-                del first_line, last_line
-            LOG.info("Beginning final probe for link %r.", link)
             process = await asyncio.create_subprocess_exec(
                 "ffprobe",
                 "-v",
@@ -298,25 +258,71 @@ class AntiCrashVid(commands.Cog):
             )
             # only one pipe is used, so accessing it should™️ be safe
             assert process.stdout
-            while first_line := await process.stdout.readline():
-                if not first_line.isspace():
-                    break
+            prev = b""
             while line := await process.stdout.readline():
-                if not line.isspace() and line != first_line:
+                if not (line := line.strip()):
+                    continue
+                if (prev and line != prev) or any(int(d) > 9999 for d in line.split(b",")):
                     process.terminate()
                     LOG.debug(
-                        "would remove message with link %r: ffprobe frame dimentions are not constant\n\t%r\t%r",
+                        "would remove message with link %r: "
+                        "ffprobe frame dimensions are not constant or are abnormally large\n\t%r\t%r",
                         link,
-                        first_line,
+                        prev,
                         line,
                     )
                     await unsafe.set(True)
                     return True
-            LOG.info("All probes for link %r complete: video appears safe.", link)
-            return False
+                prev = line
+            else:
+                LOG.debug(
+                    "ffprobe dimension scan for link %r complete, nothing abnormal found.", link
+                )
+            LOG.info("Beginning second probe for link %r.", link)
+            try:
+                first_line = await self.get_ffmpeg_probe(
+                    "-loglevel",
+                    "fatal",
+                    "-i",
+                    str(video),
+                    "-vframes",
+                    "1",
+                    "-q:v",
+                    "1",
+                    path=video.with_suffix("") / "first.jpg",
+                )
+                LOG.info("Beginning third probe for link %r.", link)
+                last_line = await self.get_ffmpeg_probe(
+                    "-loglevel",
+                    "fatal",
+                    "-sseof",
+                    "-3",
+                    "-i",
+                    str(video),
+                    "-update",
+                    "1",
+                    "-q:v",
+                    "1",
+                    path=video.with_suffix("") / "last.jpg",
+                )
+                LOG.debug("first.jpg probe: %r\nlast.jpg probe: %r", first_line, last_line)
+            except EmptyOutputFile:
+                LOG.debug("Empty ffmpeg output.", exc_info=True)
+            else:
+                if first_line != last_line:
+                    LOG.debug(
+                        "would remove message with link %r: first/last frames have conflicting results",
+                        link,
+                    )
+                    await unsafe.set(True)
+                    return True
+                else:
+                    LOG.debug("link %r has consistent first/last ffmpeg probe results", link)
+                del first_line, last_line
+            LOG.info("Nothing abnormal found for link %r: video appears safe", link)
 
     @staticmethod
-    async def get_probe(*args: str, path: pathlib.Path) -> bytes:
+    async def get_ffmpeg_probe(*args: str, path: pathlib.Path) -> bytes:
         process = await asyncio.create_subprocess_exec("ffmpeg", *args, path)
         if code := await process.wait():
             raise RuntimeError(f"Process exited with exit code {code}")
