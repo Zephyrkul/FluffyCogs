@@ -1,5 +1,5 @@
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Generator, Optional
+from typing import TYPE_CHECKING, Any, Generator, Optional
 
 from redbot.core import commands
 from redbot.core.errors import CogLoadError
@@ -25,14 +25,16 @@ class Thinking:
     def __init__(self, *, ephemeral: bool = False):
         self.ephemeral = ephemeral
 
-    def __await__(self) -> Generator[None, None, None]:
+    def __await__(self) -> Generator[Any, Any, None]:
         ctx = contexts.get()
         interaction = ctx.interaction
         if not ctx._deferring and not interaction.response.is_done():
             # yield from is necessary here to force this function to be a generator
             # even in the negative case
             ctx._deferring = True
-            return (yield from ctx.interaction.response.defer(ephemeral=self.ephemeral))
+            return (
+                yield from ctx.interaction.response.defer(ephemeral=self.ephemeral).__await__()
+            )
 
     async def __aenter__(self):
         await self
