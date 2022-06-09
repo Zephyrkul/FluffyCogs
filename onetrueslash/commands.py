@@ -37,6 +37,7 @@ async def onetrueslash(
     ctx = InterContext.from_interaction(interaction, recreate_message=True)
     error = None
     if command == "help":
+        ctx._deferring = True
         await interaction.response.defer(ephemeral=True)
         actual_command: Optional[commands.Command] = None
         if arguments:
@@ -110,7 +111,7 @@ async def onetrueslash_command_autocomplete(
         if not command or command in matches:
             continue
         try:
-            if await _filter(command):
+            if name == "help" or await _filter(command):
                 matches[command] = name
         except commands.CommandError:
             pass
