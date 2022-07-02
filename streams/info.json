@@ -1,0 +1,12 @@
+{
+    "author": [
+        "Cog-Creators",
+        "Zephyrkul (Zephyrkul #1089)"
+    ],
+    "install_msg": "Usage: `[p]help Streams`.",
+    "name": "Streams",
+    "short": "A custom fork of the core Red Streams cog.",
+    "description": "A custom fork of the core Red Streams cog. Includes Trovo support and removes force-mentioning roles.",
+    "max_bot_version": "3.5.0.dev0",
+    "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
+}
