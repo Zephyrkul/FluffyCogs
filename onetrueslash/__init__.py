@@ -24,9 +24,14 @@ async def setup(bot: Red) -> None:
 async def _setup(bot: Red):
     await bot.wait_until_red_ready()
     assert bot.user
-    onetrueslash.name = valid_app_name(bot.user.name)
     try:
+        onetrueslash.name = valid_app_name(bot.user.name)
         bot.tree.add_command(onetrueslash, guild=None)
+    except ValueError:
+        await bot.send_to_owners(
+            f"`onetrueslash` was unable to make the name {bot.user.name!r} "
+            "into a valid slash command name. The command name was left unchanged."
+        )
     except discord.app_commands.CommandAlreadyRegistered:
         raise CogLoadError(
             f"A slash command named {onetrueslash.name} is already registered."
