@@ -6,6 +6,11 @@ from redbot.core import commands
 if TYPE_CHECKING:
     from .context import InterContext
 
+try:
+    import regex as re
+except ImportError:
+    import re
+
 
 contexts = ContextVar["InterContext"]("contexts")
 
@@ -13,7 +18,7 @@ contexts = ContextVar["InterContext"]("contexts")
 def valid_app_name(name: str) -> str:
     from discord.app_commands.commands import VALID_SLASH_COMMAND_NAME, validate_name
 
-    name = "_".join(VALID_SLASH_COMMAND_NAME.findall(name.lower()))
+    name = "_".join(re.findall(VALID_SLASH_COMMAND_NAME.pattern.strip("^$"), name.lower()))
     return validate_name(name)
 
 
