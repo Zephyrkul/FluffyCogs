@@ -2,7 +2,6 @@ from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, Generator, Optional
 
 from redbot.core import commands
-from redbot.core.errors import CogLoadError
 
 if TYPE_CHECKING:
     from .context import InterContext
@@ -15,10 +14,7 @@ def valid_app_name(name: str) -> str:
     from discord.app_commands.commands import VALID_SLASH_COMMAND_NAME, validate_name
 
     name = "_".join(VALID_SLASH_COMMAND_NAME.findall(name.lower()))
-    try:
-        return validate_name(name)
-    except ValueError as ve:
-        raise CogLoadError(*ve.args) from None
+    return validate_name(name)
 
 
 class Thinking:
