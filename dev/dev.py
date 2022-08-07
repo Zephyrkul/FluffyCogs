@@ -242,8 +242,6 @@ class Env(Dict[str, Any]):
     def __missing__(self, key: str):
         if key in ("exit", "quit"):
             raise Exit()
-        if key == "print":
-            return rich.print
         try:
             # this is called implicitly after KeyError, but
             # some modules would overwrite builtins (e.g. bin)
@@ -350,7 +348,7 @@ class Dev(dev_commands.Dev):
             "tab_size": 2,
             "soft_wrap": False,
         }
-        if _console_custom := environ.get("_console_custom"):
+        if _console_custom := env.get("_console_custom"):
             try:
                 kwargs.update(_console_custom)
             except Exception:
@@ -495,6 +493,9 @@ class Dev(dev_commands.Dev):
         env = Env(
             {
                 "me": ctx.me,
+                # redirect builtin console functions to rich
+                "print": rich.print,
+                "help": functools.partial(rich.inspect, help=True),
                 # eval and exec automatically put this in, but types.FunctionType does not
                 "__builtins__": builtins,
                 # fill in various other environment keys that some code might expect

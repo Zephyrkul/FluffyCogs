@@ -1,0 +1,18 @@
+{
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "Both FFmpeg and ffprobe must be installed and in your system's PATH for this cog to work. I do not offer support for setting up either.\n⚠ This cog downloads and processes videos in order to analyze whether they are malicious or not, and thus uses a lot of resources, especially memory. Unload this cog if you do not consent to this.\nThis cog has no commands. Use the core `[p]autoimmune` command to configure who is immune to this cog, and core ModLog's `[p]modlogset` command to configure this cog's logging.",
+    "name": "AntiCrashVid",
+    "short": "Automatically delete and log malicious videos that attempt to crash Discord clients.",
+    "description": "Automatically delete and log malicious videos that attempt to crash Discord clients.",
+    "tags": [
+        "moderation",
+        "security"
+    ],
+    "requirements": [
+        "youtube-dl"
+    ],
+    "hidden": false,
+    "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
+}
