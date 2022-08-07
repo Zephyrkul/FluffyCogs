@@ -331,7 +331,7 @@ class Dev(dev_commands.Dev):
             "tab_size": 2,
             "soft_wrap": False,
         }
-        if _console_custom := environ.get("_console_custom"):
+        if _console_custom := env.get("_console_custom"):
             try:
                 kwargs.update(_console_custom)
             except Exception:
