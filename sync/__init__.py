@@ -22,7 +22,8 @@
 
 # Copyright (c) 2022, MPL and GPL Eryk De Marco
 
-from typing import List, Literal, Optional, Set, Union
+import itertools
+from typing import List, Literal, Optional
 
 import discord
 from redbot.core import commands
@@ -30,33 +31,42 @@ from redbot.core.bot import Red
 
 
 # The below is adapted from AbstractUmbra's sync command, with modifications.
-# Original source may be found here: https://github.com/AbstractUmbra/Kukiko/blob/0a96ee4/cogs/admin.py#L185
+# Original source may be found here: https://github.com/AbstractUmbra/Kukiko/blob/fa10b81/extensions/admin.py#L160
 @commands.is_owner()
 @commands.command()
-async def sync(ctx: commands.Context, *guilds: Union[Literal["~"], discord.Guild]):
+async def sync(
+    ctx: commands.Context,
+    guilds: commands.Greedy[discord.Guild],
+    spec: Optional[Literal["~", "*", "^"]] = None,
+):
     """
     Sync the bot with the specified guild(s), or globally if no guilds are provided.
 
-    You can provide `~` as shorthand for the current guild.
-    `~` will sync globally if this command is invoked in direct messages.
+    Special shorthand symbols can be used as per below. Note that "current guild"
+    will mean global commands if this command is used in direct messages.
+
+    Passing `~` will count as shorthand for the current guild.
+    Passing `*` will copy the global tree to the current guild's tree and sync to this guild.
+    Passing `^` will clear this guild's tree and sync, removing all app commands from this guild.
 
     **Note that global commands can take up to one hour to propagate to the bot's guilds.**
     """
     if not guilds:
+        if spec == "^":
+            ctx.bot.tree.clear_commands(guild=None)
         num = len(await ctx.bot.tree.sync(guild=None))
         fmt = "1 command" if num == 1 else f"{num} commands"
         await ctx.send(f"Synced {fmt} globally.")
         return
-    seen: Set[Optional[discord.Guild]] = set()
-    seen_add = seen.add
     results: List[str] = []
     results_append = results.append
+    if spec:
+        if ctx.guild and spec == "*":
+            ctx.bot.tree.copy_global_to(guild=ctx.guild)
+        elif spec == "^":
+            ctx.bot.tree.clear_commands(guild=ctx.guild)
+        guilds.append(ctx.guild)  # type: ignore
     for guild in guilds:
-        if guild == "~":
-            guild = ctx.guild
-        if guild in seen:
-            continue
-        seen_add(guild)
         num = len(await ctx.bot.tree.sync(guild=guild))
         fmt = "1 command" if num == 1 else f"{num} commands"
         scope = f"in {guild.name}" if guild else "globally"
