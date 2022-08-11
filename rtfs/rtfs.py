@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import discord
 import redbot
 from redbot.core import commands
+from redbot.core.bot import Red
 from redbot.core.utils.chat_formatting import box, pagify
 
 try:
@@ -81,6 +82,16 @@ class SourceMenu(menus.MenuPages):
 
 
 class RTFS(commands.Cog):
+    def __init__(self, bot: Red):
+        super().__init__()
+        self.bot = bot
+        bot.add_dev_env_value(
+            "rtfs", lambda ctx: partial(self.format_and_send, ctx, is_owner=True)
+        )
+
+    def cog_unload(self):
+        self.bot.remove_dev_env_value("rtfs")
+
     async def red_get_data_for_user(self, *, user_id):
         return {}  # Nothing to get
 
