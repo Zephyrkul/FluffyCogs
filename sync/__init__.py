@@ -63,9 +63,12 @@ async def sync(
         elif spec == "^":
             ctx.bot.tree.clear_commands(guild=ctx.guild)
         guilds.append(ctx.guild)
+    if not guilds:
+        guilds.append(None)
+    else:
+        guilds = list(dict.fromkeys(guilds))
     results: List[str] = []
     results_append = results.append
-    guilds = list(dict.fromkeys(guilds))
     for guild in guilds:
         num = len(await ctx.bot.tree.sync(guild=guild))
         fmt = "1 command" if num == 1 else f"{num} commands"
