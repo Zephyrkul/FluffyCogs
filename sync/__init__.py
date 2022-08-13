@@ -23,11 +23,17 @@
 # Copyright (c) 2022, MPL and GPL Eryk De Marco
 
 import itertools
-from typing import List, Literal, Optional
+from typing import TYPE_CHECKING, List, Literal, Optional
 
 import discord
 from redbot.core import commands
 from redbot.core.bot import Red
+from redbot.core.utils.chat_formatting import pagify
+
+if TYPE_CHECKING:
+    Guilds = List[Optional[discord.Guild]]
+else:
+    Guilds = commands.Greedy[discord.Guild]
 
 
 # The below is adapted from AbstractUmbra's sync command, with modifications.
@@ -36,7 +42,7 @@ from redbot.core.bot import Red
 @commands.command()
 async def sync(
     ctx: commands.Context,
-    guilds: commands.Greedy[discord.Guild],
+    guilds: Guilds,
     spec: Optional[Literal["~", "*", "^"]] = None,
 ):
     """
@@ -51,27 +57,21 @@ async def sync(
 
     **Note that global commands can take up to one hour to propagate to the bot's guilds.**
     """
-    if not guilds:
-        if spec == "^":
-            ctx.bot.tree.clear_commands(guild=None)
-        num = len(await ctx.bot.tree.sync(guild=None))
-        fmt = "1 command" if num == 1 else f"{num} commands"
-        await ctx.send(f"Synced {fmt} globally.")
-        return
-    results: List[str] = []
-    results_append = results.append
     if spec:
         if ctx.guild and spec == "*":
             ctx.bot.tree.copy_global_to(guild=ctx.guild)
         elif spec == "^":
             ctx.bot.tree.clear_commands(guild=ctx.guild)
-        guilds.append(ctx.guild)  # type: ignore
+        guilds.append(ctx.guild)
+    results: List[str] = []
+    results_append = results.append
+    guilds = list(dict.fromkeys(guilds))
     for guild in guilds:
         num = len(await ctx.bot.tree.sync(guild=guild))
         fmt = "1 command" if num == 1 else f"{num} commands"
         scope = f"in {guild.name}" if guild else "globally"
         results_append(f"Synced {fmt} {scope}.")
-    await ctx.send("\n".join(results))
+    await ctx.send_interactive(pagify("\n".join(results), shorten_by=0))
 
 
 async def setup(bot: Red):
