@@ -22,7 +22,6 @@
 
 # Copyright (c) 2022, MPL and GPL Eryk De Marco
 
-import itertools
 from typing import TYPE_CHECKING, List, Literal, Optional
 
 import discord
