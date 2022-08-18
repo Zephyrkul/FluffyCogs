@@ -22,17 +22,13 @@
 
 # Copyright (c) 2022, MPL and GPL Eryk De Marco
 
-from typing import TYPE_CHECKING, List, Literal, Optional
+from typing import List, Literal, Optional
+from typing_extensions import Annotated
 
 import discord
 from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.utils.chat_formatting import pagify
-
-if TYPE_CHECKING:
-    Guilds = List[Optional[discord.Guild]]
-else:
-    Guilds = commands.Greedy[discord.Guild]
 
 
 # The below is adapted from AbstractUmbra's sync command, with modifications.
@@ -41,7 +37,7 @@ else:
 @commands.command()
 async def sync(
     ctx: commands.Context,
-    guilds: Guilds,
+    guilds: Annotated[List[Optional[discord.Guild]], commands.Greedy[discord.Guild]],
     spec: Optional[Literal["~", "*", "^"]] = None,
 ):
     """
