@@ -44,6 +44,4 @@ async def _setup(bot: Red):
 
 async def teardown(bot: Red):
     bot.remove_before_invoke_hook(before_hook)
-    bot.remove_listener(on_user_update)
     bot.remove_dev_env_value("interaction")
-    bot.tree.remove_command(onetrueslash.name, guild=None)
