@@ -78,9 +78,3 @@ async def sync(
 
 async def setup(bot: Red):
     bot.add_command(sync)
-
-
-async def teardown(bot: Red):
-    cmd = bot.remove_command("sync")
-    if cmd and cmd is not sync:
-        bot.add_command(cmd)
