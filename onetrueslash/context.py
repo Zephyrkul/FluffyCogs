@@ -1,3 +1,4 @@
+import types
 from copy import copy
 from typing import Optional, Type, Union
 
@@ -17,6 +18,16 @@ class InterContext(InterChannel, commands.Context):
     _first_response: int = 0
     _interaction: discord.Interaction
     message: InterMessage
+
+    @classmethod
+    def _get_type(cls, bot: Red) -> Type["InterContext"]:
+        default = bot.get_context.__kwdefaults__.get("cls", None)
+        if not isinstance(default, type) or default in cls.__mro__:
+            return cls
+        try:
+            return types.new_class(cls.__name__, (cls, default))  # type: ignore
+        except Exception:
+            return cls
 
     @classmethod
     async def from_interaction(
@@ -44,7 +55,7 @@ class InterContext(InterChannel, commands.Context):
         view = StringView(message.content)
         view.skip_string(prefix)
         invoker = view.get_word()
-        self = cls(
+        self = cls._get_type(interaction.client)(
             message=message,
             prefix=prefix,
             bot=interaction.client,
