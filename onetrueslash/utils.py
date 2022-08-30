@@ -28,14 +28,12 @@ class Thinking:
 
     def __await__(self) -> Generator[Any, Any, None]:
         ctx = contexts.get()
-        interaction = ctx.interaction
+        interaction = ctx._interaction
         if not ctx._deferring and not interaction.response.is_done():
             # yield from is necessary here to force this function to be a generator
             # even in the negative case
             ctx._deferring = True
-            return (
-                yield from ctx.interaction.response.defer(ephemeral=self.ephemeral).__await__()
-            )
+            return (yield from interaction.response.defer(ephemeral=self.ephemeral).__await__())
 
     async def __aenter__(self):
         await self

@@ -18,11 +18,6 @@ from .utils import walk_aliases
 
 
 @app_commands.command()
-@app_commands.describe(
-    command="The text-based command to run.",
-    arguments="The arguments to provide.",
-    attachment="Any files to provide to the command.",
-)
 async def onetrueslash(
     interaction: discord.Interaction,
     command: str,
@@ -31,27 +26,39 @@ async def onetrueslash(
 ) -> None:
     """
     The one true slash command.
+
+    Parameters
+    -----------
+    command: str
+        The text-based command to run.
+    arguments: Optional[str]
+        The arguments to provide to the command, if any.
+    attachment: Optional[Attachment]
+        The attached file to provide to the command, if any.
     """
     assert isinstance(interaction.client, Red)
     set_contextual_locale(str(interaction.guild_locale or interaction.locale))
-    ctx = InterContext.from_interaction(interaction, recreate_message=True)
+    actual = interaction.client.get_command(command)
+    ctx = await InterContext.from_interaction(interaction, recreate_message=True)
     error = None
     if command == "help":
         ctx._deferring = True
+        ctx.interaction = interaction
         await interaction.response.defer(ephemeral=True)
-        actual_command: Optional[commands.Command] = None
+        actual = None
         if arguments:
-            actual_command = interaction.client.get_command(arguments)
-            if actual_command and (signature := actual_command.signature):
-                actual_command = copy(actual_command)
-                actual_command.usage = f"arguments:{signature}"
+            actual = interaction.client.get_command(arguments)
+            if actual and (signature := actual.signature):
+                actual = copy(actual)
+                actual.usage = f"arguments:{signature}"
         await interaction.client.send_help_for(
-            ctx, actual_command or interaction.client, from_help_command=True
+            ctx, actual or interaction.client, from_help_command=True
         )
     else:
         ferror: asyncio.Task[Tuple[InterContext, commands.CommandError]] = asyncio.create_task(
             interaction.client.wait_for("command_error", check=lambda c, _: c is ctx)
         )
+        ferror.add_done_callback(lambda _: setattr(ctx, "interaction", interaction))
         await interaction.client.invoke(ctx)
         if not interaction.response.is_done():
             ctx._deferring = True
@@ -64,7 +71,7 @@ async def onetrueslash(
             if ctx._ticked:
                 await interaction.followup.send(ctx._ticked, ephemeral=True)
             else:
-                await interaction.delete_original_message()
+                await interaction.delete_original_response()
         elif isinstance(error, commands.CommandNotFound):
             await interaction.followup.send(
                 f"❌ Command `{command}` was not found.", ephemeral=True
@@ -84,7 +91,7 @@ async def onetrueslash_command_autocomplete(
     if not await interaction.client.allowed_by_whitelist_blacklist(interaction.user):
         return []
 
-    ctx = InterContext.from_interaction(interaction)
+    ctx = await InterContext.from_interaction(interaction)
     if not await interaction.client.message_eligible_as_command(ctx.message):
         return []
 
@@ -125,5 +132,6 @@ async def onetrueslash_error(
     assert isinstance(interaction.client, Red)
     error = getattr(error, "original", error)
     await interaction.client.on_command_error(
-        InterContext.from_interaction(interaction), commands.CommandInvokeError(error)
+        await InterContext.from_interaction(interaction, recreate_message=True),
+        commands.CommandInvokeError(error),
     )

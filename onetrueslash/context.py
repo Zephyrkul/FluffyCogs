@@ -15,11 +15,11 @@ class InterContext(InterChannel, commands.Context):
     _deferring: bool = False
     _ticked: Optional[str] = None
     _first_response: int = 0
-    interaction: discord.Interaction
+    _interaction: discord.Interaction
     message: InterMessage
 
     @classmethod
-    def from_interaction(
+    async def from_interaction(
         cls: Type["InterContext"],
         interaction: discord.Interaction,
         *,
@@ -39,8 +39,8 @@ class InterContext(InterChannel, commands.Context):
             return self
         except LookupError:
             pass
-        message = InterMessage.from_interaction(interaction)
-        prefix = f"/{interaction.data['name']} command:"
+        prefix = f"</{interaction.data['name']}:{interaction.data['id']}> command:"
+        message = InterMessage.from_interaction(interaction, prefix)
         view = StringView(message.content)
         view.skip_string(prefix)
         invoker = view.get_word()
@@ -52,9 +52,15 @@ class InterContext(InterChannel, commands.Context):
             invoked_with=invoker,
             command=interaction.client.all_commands.get(invoker),
         )
-        self.interaction = interaction
+        # delay setting self.interaction to make d.py parse commands the old way
+        self._interaction = interaction
+        interaction._baton = self
         contexts.set(self)
         return self
+
+    @property
+    def clean_prefix(self) -> str:
+        return f"/{self._interaction.data['name']} command:"
 
     async def tick(self, *, message: Optional[str] = None) -> bool:
         return await super().tick(message="Done." if message is None else message)
@@ -83,3 +89,19 @@ class InterContext(InterChannel, commands.Context):
             command = copy(command)
             command.usage = f"arguments:{signature}"
         return await super().send_help(command)
+
+    @discord.utils.cached_property
+    def permissions(self):
+        self.interaction, old = self._interaction, self.interaction
+        try:
+            return super().permissions
+        finally:
+            self.interaction = old
+
+    @discord.utils.cached_property
+    def bot_permissions(self):
+        self.interaction, old = self._interaction, self.interaction
+        try:
+            return super().bot_permissions
+        finally:
+            self.interaction = old

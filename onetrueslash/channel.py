@@ -16,56 +16,29 @@ class InterChannel:
 
     def permissions_for(self, obj: discord.abc.Snowflake, /) -> discord.Permissions:
         ctx = contexts.get()
+        interaction = ctx._interaction
         assert ctx.bot.user
-        if obj.id not in (ctx.interaction.user.id, ctx.bot.user.id):
-            return super().permissions_for(obj)  # type: ignore
-        if ctx.interaction.is_expired():
-            return super().permissions_for(obj)  # type: ignore
-        assert ctx.interaction.channel
-        channel = ctx.interaction.channel
-        if channel.type == discord.ChannelType.private:
-            # DMChannel.permissions_for doesn't care about its arguments
-            return discord.DMChannel.permissions_for(None, None)  # type: ignore
-        if obj.id == ctx.interaction.user.id:
-            # bypass all the permissions resolving stuff
-            return ctx.interaction.permissions
-        guild = ctx.interaction.guild
-        if not guild:
-            default_perms = discord.Permissions.none()
+        if obj.id == interaction.user.id:
+            return ctx.permissions
+        elif obj.id == interaction.client.user.id:
+            return ctx.bot_permissions
         else:
-            assert not isinstance(channel, discord.PartialMessageable)
-            default_perms = channel.permissions_for(guild.default_role)
-        my_perms = channel.permissions_for(ctx.me)  # type: ignore
-        # webhooks are weird
-        my_perms.update(
-            administrator=False,
-            embed_links=True,
-            attach_files=True,
-            external_emojis=default_perms.external_emojis,
-            external_stickers=default_perms.external_stickers,
-            mention_everyone=default_perms.mention_everyone,
-            send_tts_messages=default_perms.send_tts_messages,
-        )
-        if isinstance(channel, discord.Thread):
-            my_perms.send_messages_in_threads = True
-        else:
-            my_perms.send_messages = True
-        return my_perms
+            return super().permissions_for(obj)  # type: ignore
 
     async def send(self, *args, **kwargs):
         ctx = contexts.get()
-        if ctx.interaction.is_expired() and ctx._first_response:
-            assert ctx.interaction.channel_id
+        interaction = ctx._interaction
+        if interaction.is_expired() and ctx._first_response:
+            assert interaction.channel_id
             kwargs["reference"] = discord.MessageReference(
-                guild_id=ctx.interaction.guild_id,
-                channel_id=ctx.interaction.channel_id,
+                guild_id=interaction.guild_id,
+                channel_id=interaction.channel_id,
                 message_id=ctx._first_response,
                 fail_if_not_exists=False,
             )
-            return await ctx.interaction.channel.send(*args, **kwargs)  # type: ignore
+            return await interaction.channel.send(*args, **kwargs)  # type: ignore
         await self.typing()
         ctx._deferring = False
-        interaction = ctx.interaction
         delete_after = kwargs.pop("delete_after", None)
         for key in INCOMPATABLE_PARAMETERS_DISCARD:
             kwargs.pop(key, None)

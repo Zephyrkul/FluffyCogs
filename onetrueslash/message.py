@@ -30,7 +30,7 @@ class InterMessage(discord.Message):
     __slots__ = ()
 
     @classmethod
-    def from_interaction(cls, interaction: discord.Interaction) -> "InterMessage":
+    def from_interaction(cls, interaction: discord.Interaction, prefix: str) -> "InterMessage":
         assert interaction.data
         self = InterMessage.__new__(InterMessage)
 
@@ -68,17 +68,17 @@ class InterMessage(discord.Message):
         self.channel.__class__ = type(
             InterChannel.__name__, (InterChannel, self.channel.__class__), {"__slots__": ()}
         )
-        self.recreate_from_interaction(interaction)
+        self.recreate_from_interaction(interaction, prefix)
 
         return self
 
-    def recreate_from_interaction(self, interaction: discord.Interaction):
+    def recreate_from_interaction(self, interaction: discord.Interaction, prefix: str):
         assert interaction.data and interaction.client.user
 
-        self.content = f"/{interaction.data['name']} command:{interaction.namespace.command}"
-        if getattr(interaction.namespace, "arguments", None):
+        self.content = f"{prefix}{interaction.namespace.command}"
+        if interaction.namespace.arguments:
             self.content = f"{self.content} {interaction.namespace.arguments}"
-        if getattr(interaction.namespace, "attachment", None):
+        if interaction.namespace.attachment:
             self.attachments = [interaction.namespace.attachment]
         else:
             self.attachments = []

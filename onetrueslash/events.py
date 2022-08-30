@@ -9,10 +9,11 @@ from .utils import valid_app_name
 
 
 async def before_hook(ctx: red_commands.Context):
-    if getattr(ctx.command, "__commands_is_hybrid__", False):
+    interaction: Optional[discord.Interaction] = getattr(ctx, "_interaction", None)
+    if not interaction or getattr(ctx.command, "__commands_is_hybrid__", False):
         return
-    interaction: Optional[discord.Interaction]
-    if (interaction := getattr(ctx, "interaction", None)) and not interaction.response.is_done():
+    ctx.interaction = interaction
+    if not interaction.response.is_done():
         ctx._deferring = True  # type: ignore
         await interaction.response.defer(ephemeral=False)
 
