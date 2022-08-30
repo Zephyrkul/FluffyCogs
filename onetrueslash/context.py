@@ -77,6 +77,9 @@ class InterContext(InterChannel, commands.Context):
     def typing(self, *, ephemeral: bool = False) -> Thinking:
         return Thinking(ephemeral=ephemeral)
 
+    async def defer(self, *, ephemeral: bool = False) -> None:
+        await self._interaction.response.defer(ephemeral=ephemeral)
+
     async def send_help(
         self, command: Optional[Union[commands.Command, commands.GroupMixin, str]] = None
     ):
