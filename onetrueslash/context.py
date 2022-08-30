@@ -26,11 +26,12 @@ class InterContext(InterChannel, commands.Context):
         recreate_message: bool = False,
     ) -> "InterContext":
         assert isinstance(interaction.client, Red)
+        prefix = f"</{interaction.data['name']}:{interaction.data['id']}> command:"
         try:
             self = contexts.get()
             if recreate_message:
                 assert self.prefix is not None
-                self.message.recreate_from_interaction(interaction)
+                self.message.recreate_from_interaction(interaction, prefix)
                 view = self.view = StringView(self.message.content)
                 view.skip_string(self.prefix)
                 invoker = view.get_word()
@@ -39,7 +40,6 @@ class InterContext(InterChannel, commands.Context):
             return self
         except LookupError:
             pass
-        prefix = f"</{interaction.data['name']}:{interaction.data['id']}> command:"
         message = InterMessage.from_interaction(interaction, prefix)
         view = StringView(message.content)
         view.skip_string(prefix)
