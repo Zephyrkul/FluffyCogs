@@ -119,6 +119,8 @@ async def onetrueslash_command_autocomplete(
             continue
         try:
             if await _filter(command):
+                if len(name) > 100:
+                    name = name[:99] + "\N{HORIZONTAL ELLIPSIS}"
                 matches[command] = name
         except commands.CommandError:
             pass
