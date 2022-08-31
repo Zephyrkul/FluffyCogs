@@ -30,10 +30,39 @@ from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.utils.chat_formatting import pagify
 
+# Thanks for the tag, Soheab_#6240
+MOREINFOMESSAGE = """**Sync when you...**
+- Added/removed a command
+- Changed a command's...
+    - name (`name=` kwarg or function name)
+    - description (`description=` kwarg or docstring)
+- Added/removed an argument
+- Changed an argument's...
+    - name (rename decorator)
+    - description (describe decorator)
+    - type (`arg: str` str is the type here)
+- Added/modified permissions:
+    - `guild_only` decorator or kwarg
+    - `default_permissions` decorator or kwarg
+    - `nsfw` kwarg
+- Converted the global/guild command to a guild/global command"""
+
+
+class MoreInfo(discord.ui.View):
+    # theoretically anyone can click this button and get a response since there's no check
+    # but it's just a simple response so I don't care to do so
+    @discord.ui.button(
+        label="When should I sync?", emoji="\N{INFORMATION SOURCE}\N{VARIATION SELECTOR-16}"
+    )
+    async def more(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(MOREINFOMESSAGE, ephemeral=True)
+
 
 # The below is adapted from AbstractUmbra's sync command, with modifications.
 # Original source may be found here: https://github.com/AbstractUmbra/Kukiko/blob/fa10b81/extensions/admin.py#L160
 @commands.is_owner()
+@commands.cooldown(2, 60)
+@commands.max_concurrency(1)
 @commands.command()
 async def sync(
     ctx: commands.Context,
@@ -50,7 +79,7 @@ async def sync(
     Passing `*` will copy the global tree to the current guild's tree and sync to this guild.
     Passing `^` will clear this guild's tree and sync, removing all app commands from this guild.
 
-    **Note that global commands can take up to one hour to propagate to the bot's guilds.**
+    Note that global commands can take up to one hour to propagate to the bot's guilds.
     """
     if spec:
         if ctx.guild and spec == "*":
@@ -64,12 +93,42 @@ async def sync(
         guilds = list(dict.fromkeys(guilds))
     results: List[str] = []
     results_append = results.append
-    for guild in guilds:
-        num = len(await ctx.bot.tree.sync(guild=guild))
-        fmt = "1 command" if num == 1 else f"{num} commands"
-        scope = f"in {guild.name}" if guild else "globally"
-        results_append(f"Synced {fmt} {scope}.")
+    async with ctx.typing():
+        for guild in guilds:
+            num = len(await ctx.bot.tree.sync(guild=guild))
+            fmt = "1 command" if num == 1 else f"{num} commands"
+            scope = f"in {guild.name}" if guild else "globally"
+            results_append(f"Synced {fmt} {scope}.")
     await ctx.send_interactive(pagify("\n".join(results), shorten_by=0))
+
+
+@sync.error
+async def sync_error(ctx: commands.Context, error: commands.CommandError):
+    view = None
+    if isinstance(error, commands.CommandOnCooldown):
+        message = (
+            "It seems you are syncing excessively. "
+            "Please keep in mind that syncing has a heavy ratelimit on it, "
+            "and it is up to you to sync responsibly.\n"
+            "Only sync once you have finished managing your cogs, and remember that "
+            "syncing after restarting your bot is **unnecessary**."
+        )
+        if ctx.bot.get_cog("Dev"):
+            timeout = 60
+            view = MoreInfo(timeout=timeout)
+            message += (
+                "\n\nIf you are testing slash commands, it is recommended to use the `*` special flag "
+                "to sync to the guild instead and use the more forgiving guild sync ratelimit (\\~5/60s). "
+                "Once you have finished testing, you can sync globally and then use the `^` flag to clear "
+                "your testing commands.\n"
+                "`The cooldown has been reset so you can try again.`"
+            )
+            ctx.command.reset_cooldown(ctx)
+        else:
+            timeout = max(30, error.retry_after)
+        await ctx.send(message, view=view, delete_after=timeout)
+    if not view:
+        await ctx.bot.on_command_error(ctx, error, unhandled_by_cog=True)  # type: ignore
 
 
 async def setup(bot: Red):
