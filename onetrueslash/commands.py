@@ -107,8 +107,9 @@ async def onetrueslash_command_autocomplete(
                 functools.partial(fuzz.QRatio, current),
             ),
         )
+        extracted.append("help")
     else:
-        extracted = []
+        extracted = ["help"]
     _filter: Callable[[commands.Command], Awaitable[bool]] = operator.methodcaller(
         "can_run" if help_settings.show_hidden else "can_see", ctx
     )
@@ -118,16 +119,12 @@ async def onetrueslash_command_autocomplete(
         if not command or command in matches:
             continue
         try:
-            if await _filter(command):
+            if name == "help" and await command.can_run(ctx) or await _filter(command):
                 if len(name) > 100:
                     name = name[:99] + "\N{HORIZONTAL ELLIPSIS}"
                 matches[command] = name
         except commands.CommandError:
             pass
-    help_command = interaction.client.get_command("help")
-    if help_command and help_command not in matches:
-        if await help_command.can_run(ctx):
-            matches[help_command] = "help"
     return [app_commands.Choice(name=name, value=name) for name in matches.values()]
 
 
