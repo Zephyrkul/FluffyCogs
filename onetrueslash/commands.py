@@ -108,7 +108,7 @@ async def onetrueslash_command_autocomplete(
             ),
         )
     else:
-        extracted = ["help"]
+        extracted = []
     _filter: Callable[[commands.Command], Awaitable[bool]] = operator.methodcaller(
         "can_run" if help_settings.show_hidden else "can_see", ctx
     )
@@ -118,18 +118,22 @@ async def onetrueslash_command_autocomplete(
         if not command or command in matches:
             continue
         try:
-            if name == "help" or await _filter(command):
+            if await _filter(command):
                 matches[command] = name
         except commands.CommandError:
             pass
+    help_command = interaction.client.get_command("help")
+    if help_command and help_command not in matches:
+        if await help_command.can_run(ctx):
+            matches[help_command] = "help"
     return [app_commands.Choice(name=name, value=name) for name in matches.values()]
 
 
 @onetrueslash.error
-async def onetrueslash_error(
-    interaction: discord.Interaction, error: app_commands.AppCommandError
-):
+async def onetrueslash_error(interaction: discord.Interaction, error: Exception):
     assert isinstance(interaction.client, Red)
+    if isinstance(error, app_commands.CommandInvokeError):
+        error = error.original
     error = getattr(error, "original", error)
     await interaction.client.on_command_error(
         await InterContext.from_interaction(interaction, recreate_message=True),

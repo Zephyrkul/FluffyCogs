@@ -48,6 +48,8 @@ def walk_aliases(
     name: str
     command: commands.Command
     for name, command in group.all_commands.items():
+        if name == "help":
+            continue
         if not command.enabled or (not show_hidden and command.hidden):
             continue
         yield f"{parent}{name}"
