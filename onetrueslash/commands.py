@@ -104,7 +104,7 @@ async def onetrueslash_command_autocomplete(
                 heapq.nlargest,
                 6,
                 walk_aliases(interaction.client, show_hidden=help_settings.show_hidden),
-                functools.partial(fuzz.QRatio, current),
+                functools.partial(fuzz.token_sort_ratio, current),
             ),
         )
         extracted.append("help")
