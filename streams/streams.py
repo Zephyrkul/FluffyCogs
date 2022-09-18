@@ -548,6 +548,29 @@ class Streams(commands.Cog):
 
         await ctx.maybe_send_embed(message)
 
+    @streamset.command()
+    @checks.is_owner()
+    async def trovokey(self, ctx: commands.Context):
+        """Explain how to set the Trovo token."""
+
+        message = _(
+            "To obtain and set a Trovo client ID, follow these steps:\n"
+            "1. Visit the Trovo developer portal at {link}\n"
+            '2. Click the "New Application" button in the top right\n'
+            "3. Fill out the application. The Redirect URIs should be left empty\n"
+            "4. Copy your Client ID and run the command "
+            "{command}\n\n"
+            "Note: These tokens are sensitive and should only be used in a private channel\n"
+            "or in DM with the bot.\n"
+        ).format(
+            link="https://developer.trovo.live/",
+            command="`{}set api trovo client_id {}`".format(
+                ctx.clean_prefix, _("<your_client_ID_here>")
+            ),
+        )
+
+        await ctx.maybe_send_embed(message)
+
     @streamset.group()
     @commands.guild_only()
     async def message(self, ctx: commands.Context):
