@@ -7,7 +7,7 @@ from .dev import Dev, patch_hooks, reset_hooks
 
 def setup(bot: Red):
     if not bot._cli_flags.dev:
-        raise CogLoadError("This cog requires the `--dev` CLI flag.")
+        raise CogLoadError("This cog requires the `--dev` CLI flag.\nIf you don't know what this means, uninstall this cog.")
     core_dev = bot.get_cog("Dev")
     if sessions := getattr(core_dev, "sessions", None):
         s = "s" if len(sessions) > 1 else ""
