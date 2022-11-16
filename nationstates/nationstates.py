@@ -391,7 +391,7 @@ class NationStates(commands.Cog):
     async def card(
         self,
         ctx: commands.Context,
-        season: Optional[int] = 2,
+        season: Optional[int] = 3,
         *,
         nation: Optional[Union[int, Link[Nation]]] = None,
     ):
@@ -406,7 +406,7 @@ class NationStates(commands.Cog):
         A season must be specified if this is the case.
         """
         if season is not None and nation is None:
-            season, nation = 2, season
+            season, nation = 3, season
         if isinstance(nation, str) and nation not in self.db_cache:
             api = Api("dbid", nation=nation)
             try:
