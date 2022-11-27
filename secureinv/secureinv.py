@@ -70,9 +70,9 @@ class SecureInv(commands.Cog):
             channel = ctx.guild.get_channel(settings["channel"])
         channel = channel or ctx.channel
         if not channel.permissions_for(ctx.me).create_instant_invite:
-            raise commands.BotMissingPermissions(["create_instant_invite"])
+            raise commands.BotMissingPermissions(discord.Permissions(1))
         if not channel.permissions_for(ctx.author).create_instant_invite:
-            raise commands.MissingPermissions(["create_instant_invite"])
+            raise commands.MissingPermissions(discord.Permissions(1))
         if days is None:
             days = settings["days"]
         if uses is None:
