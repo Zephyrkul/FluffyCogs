@@ -5,7 +5,7 @@ from typing import Dict, Final, Optional, TypedDict, Union, cast
 import discord
 from redbot.core import Config, commands
 from redbot.core.bot import Red
-from redbot.core.utils.chat_formatting import quote
+from redbot.core.utils.chat_formatting import quote, spoiler
 
 button: Final = "\N{WHITE SQUARE BUTTON}"
 content_re: Final = re.compile(r"(?i)^(?:image|video)/")
@@ -42,6 +42,41 @@ class Spoilerer(commands.Cog):
         ):
             return await ctx.send("You didn't attach any images or videos for me to spoil.")
         await self._spoil(ctx.message, message)
+
+    @commands.mod_or_permissions(manage_messages=True)
+    @commands.guild_only()
+    @spoiler.command()
+    async def message(
+        self,
+        ctx: commands.GuildContext,
+        spoiler_content: Optional[bool],
+        *,
+        message: discord.Message = None,
+    ):
+        """
+        Spoilers the specified message's attachments by deleting it and re-posting it.
+
+        Pass `True` to `spoiler_content` to also spoiler the message text, e.g.:
+        `[p]spoiler message True 1053802538056548392`
+
+        If `message` is not specified, then this will default to the message you reply to
+        when using the command.
+        """
+        if not message:
+            if ctx.message.reference:
+                message = ctx.message.reference.resolved
+            else:
+                await ctx.send_help()
+                return
+        if (
+            message.author != ctx.me
+            and not message.channel.permissions_for(ctx.me).manage_messages
+        ):
+            raise commands.BotMissingPermissions(discord.Permissions(manage_messages=True))
+        await self._spoil(
+            message, spoiler(message.content) if spoiler_content else message.content
+        )
+        await ctx.tick()
 
     @commands.admin_or_permissions(manage_messages=True)
     @commands.guild_only()
@@ -140,5 +175,5 @@ class Spoilerer(commands.Cog):
             me = channel.me
             content = None
         await message.channel.send(
-            content, files=cast(list, files), reference=message.reference, mention_author=False
+            content, files=files, reference=message.reference, mention_author=False
         )
