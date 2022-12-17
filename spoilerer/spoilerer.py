@@ -1,6 +1,6 @@
 import asyncio
 import re
-from typing import Dict, Final, Optional, TypedDict, Union, cast
+from typing import Dict, Final, Optional, TypedDict, Union
 
 import discord
 from redbot.core import Config, commands
