@@ -94,7 +94,7 @@ class LogsFrom(commands.Cog):
             channel = ctx.channel
             ctxc = ctx
         if not channel.permissions_for(ctx.me).read_message_history:
-            raise commands.BotMissingPermissions(["read_message_history"])
+            raise commands.BotMissingPermissions(discord.Permissions(read_message_history=True))
         if not await check_permissions(ctxc, {"read_message_history": True}):
             raise commands.MissingPermissions(["read_message_history"])
         after, before = getattr(after, "id", after), getattr(before, "id", before)
