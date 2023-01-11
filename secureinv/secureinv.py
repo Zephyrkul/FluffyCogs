@@ -72,7 +72,7 @@ class SecureInv(commands.Cog):
         if not channel.permissions_for(ctx.me).create_instant_invite:
             raise commands.BotMissingPermissions(discord.Permissions(create_instant_invite=True))
         if not channel.permissions_for(ctx.author).create_instant_invite:
-            raise commands.MissingPermissions(discord.Permissions(create_instant_invite=True))
+            raise commands.MissingPermissions(["create_instant_invite"])
         if days is None:
             days = settings["days"]
         if uses is None:
