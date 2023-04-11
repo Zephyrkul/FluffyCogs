@@ -6,9 +6,8 @@ from copy import copy
 from typing import Awaitable, Callable, Dict, List, Optional, Tuple, cast
 
 import discord
-from discord import app_commands
 from rapidfuzz import fuzz
-from redbot.core import commands
+from redbot.core import commands, app_commands
 from redbot.core.bot import Red
 from redbot.core.commands.help import HelpSettings
 from redbot.core.i18n import set_contextual_locale
