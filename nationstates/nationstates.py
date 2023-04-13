@@ -30,7 +30,7 @@ from proxyembed import ProxyEmbed
 from redbot.core import Config, checks, commands, version_info as red_version
 from redbot.core.bot import Red
 from redbot.core.utils.chat_formatting import box, escape, humanize_list, pagify
-from redbot.core.utils.menus import DEFAULT_CONTROLS, menu
+from redbot.core.utils.menus import DEFAULT_CONTROLS, menu, close_menu
 from sans.api import Api
 
 # pylint: disable=E0611
@@ -51,14 +51,17 @@ def batched(iterable: Iterable[_T], n: int) -> Generator[Tuple[_T, ...], None, N
         yield batch
 
 
-def controls(data: str, filename: str):
-    async def save(ctx: commands.Context, *_):
+def controls(data: str, *, paged: bool):
+    async def save(ctx: commands.Context, *args):
         with BytesIO(
             "\n".join(",".join(batch) for batch in batched(data.split(","), 8)).encode("utf-8")
         ) as bio:
-            await ctx.send(file=discord.File(bio, filename=filename))
+            await ctx.send(file=discord.File(bio, filename=f"{ctx.invoked_with}.txt"))
+        return await menu(ctx, *args[:-1])
 
-    return {**DEFAULT_CONTROLS, "\N{FLOPPY DISK}": save}
+    if paged:
+        return {**DEFAULT_CONTROLS, "\N{FLOPPY DISK}": save}
+    return {"\N{CROSS MARK}": close_menu, "\N{FLOPPY DISK}": save}
 
 
 class Options(Flag):
@@ -799,7 +802,7 @@ class NationStates(commands.Cog):
     @commands.command()
     async def ne(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Endorsing (NE) the specified WA nation"""
-        root = await Api("endorsements fullname wa", nation=wa_nation)
+        root = await Api("endorsements flag fullname wa", nation=wa_nation)
         if root.UNSTATUS.text.lower() == "non-member":
             return await ctx.send(f"{root.FULLNAME.text} is not a WA member.")
         if not root.ENDORSEMENTS.text:
@@ -815,11 +818,12 @@ class NationStates(commands.Cog):
                 description=f"Nations endorsing [{root.FULLNAME.text}](https://www.nationstates.net/{root.get('id')})",
                 color=await ctx.embed_color(),
             )
+            embed.set_thumbnail(url=root.FLAG.text)
             for endo in batch:
                 embed.add_field(name="\u200b", value=endo, inline=True)
             embeds.append(embed)
         await menu(
-            ctx, embeds, controls(root.ENDORSEMENTS.text, f"{ctx.invoked_with}.txt"), timeout=180
+            ctx, embeds, controls(root.ENDORSEMENTS.text, paged=len(embeds) > 1), timeout=180
         )
 
     @commands.command()
@@ -847,7 +851,7 @@ class NationStates(commands.Cog):
     @commands.command()
     async def nne(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Not Endorsing (NNE) the specified WA nation"""
-        nation_root = await Api("endorsements fullname region wa", nation=wa_nation)
+        nation_root = await Api("endorsements flag fullname region wa", nation=wa_nation)
         if nation_root.UNSTATUS.text.lower() == "non-member":
             return await ctx.send(f"{nation_root.FULLNAME.text} is not a WA member.")
         wa_root = await Api("members", wa="1")
@@ -870,13 +874,14 @@ class NationStates(commands.Cog):
                 description=f"Nations not endorsing [{nation_root.FULLNAME.text}](https://www.nationstates.net/{nation_root.get('id')})",
                 color=await ctx.embed_color(),
             )
+            embed.set_thumbnail(url=nation_root.FLAG.text)
             for endo in batch:
                 embed.add_field(name="\u200b", value=endo, inline=True)
             embeds.append(embed)
         await menu(
             ctx,
             embeds,
-            controls(nation_root.ENDORSEMENTS.text, f"{ctx.invoked_with}.txt"),
+            controls(nation_root.ENDORSEMENTS.text, paged=len(embeds) > 1),
             timeout=180,
         )
 
