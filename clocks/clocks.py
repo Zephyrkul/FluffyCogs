@@ -22,7 +22,6 @@ def nonzero_int(argument):
 
 
 class Clocks(commands.Cog):
-
     # TODO: async def red_get_data_for_user(self, *, user_id):
 
     async def red_delete_data_for_user(self, *, requester, user_id):

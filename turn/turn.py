@@ -150,7 +150,8 @@ class Turn(commands.Cog):
     async def pause(self, ctx):
         """Pauses the timer.
 
-        The bot will wait indefinitely for the current member, rather than skipping when time is up."""
+        The bot will wait indefinitely for the current member, rather than skipping when time is up.
+        """
         self.games[ctx.guild].paused = True
         await ctx.tick()
 

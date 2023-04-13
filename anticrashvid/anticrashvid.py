@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 else:
     Hex = bytes.fromhex
 
+
 # backport of 3.9's to_thread
 async def to_thread(func: Callable[..., T], /, *args, **kwargs) -> T:
     loop = asyncio.get_running_loop()

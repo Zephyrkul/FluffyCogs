@@ -30,13 +30,12 @@ from proxyembed import ProxyEmbed
 from redbot.core import Config, checks, commands, version_info as red_version
 from redbot.core.bot import Red
 from redbot.core.utils.chat_formatting import box, escape, humanize_list, pagify
-from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
+from redbot.core.utils.menus import DEFAULT_CONTROLS, menu
 from sans.api import Api
 
 # pylint: disable=E0611
 from sans.errors import HTTPException, NotFound
 from sans.utils import pretty_string
-
 
 _T = TypeVar("_T")
 
@@ -128,7 +127,6 @@ class Link(str, Generic[T]):
 
 
 class NationStates(commands.Cog):
-
     # __________ DATA API __________
 
     async def red_get_data_for_user(self, *, user_id):

@@ -57,7 +57,6 @@ def get_video_ids_from_feed(feed):
 
 
 class Stream:
-
     token_name: ClassVar[Optional[str]] = None
 
     def __init__(self, **kwargs):
@@ -88,7 +87,6 @@ class Stream:
 
 
 class YoutubeStream(Stream):
-
     token_name = "youtube"
 
     def __init__(self, **kwargs):
@@ -219,7 +217,6 @@ class YoutubeStream(Stream):
         return snippet["title"]
 
     async def _fetch_channel_resource(self, resource: str):
-
         params = {"key": self._token["api_key"], "part": resource}
         if resource == "id":
             params["forUsername"] = self.name
@@ -257,7 +254,6 @@ class YoutubeStream(Stream):
 
 
 class TwitchStream(Stream):
-
     token_name = "twitch"
 
     def __init__(self, **kwargs):
@@ -385,7 +381,6 @@ class TwitchStream(Stream):
 
 
 class HitboxStream(Stream):
-
     token_name = None  # This streaming services don't currently require an API key
 
     async def is_online(self):
@@ -424,7 +419,6 @@ class HitboxStream(Stream):
 
 
 class PicartoStream(Stream):
-
     token_name = None  # This streaming services don't currently require an API key
 
     async def is_online(self):
