@@ -9,19 +9,57 @@ from enum import Flag, auto
 from functools import partial, reduce
 from html import unescape
 from io import BytesIO
+from itertools import islice
 from operator import or_
-from typing import Dict, Generic, List, Literal, Optional, Tuple, Type, TypeVar, Union
+from typing import (
+    Dict,
+    Generator,
+    Generic,
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import discord
 from proxyembed import ProxyEmbed
 from redbot.core import Config, checks, commands, version_info as red_version
 from redbot.core.bot import Red
 from redbot.core.utils.chat_formatting import box, escape, humanize_list, pagify
+from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
 from sans.api import Api
 
 # pylint: disable=E0611
 from sans.errors import HTTPException, NotFound
 from sans.utils import pretty_string
+
+
+_T = TypeVar("_T")
+
+
+# from https://docs.python.org/3/library/itertools.html#itertools-recipes
+def batched(iterable: Iterable[_T], n: int) -> Generator[Tuple[_T, ...], None, None]:
+    "Batch data into tuples of length n. The last batch may be shorter."
+    # batched('ABCDEFG', 3) --> ABC DEF G
+    if n < 1:
+        raise ValueError("n must be at least one")
+    it = iter(iterable)
+    while batch := tuple(islice(it, n)):
+        yield batch
+
+
+def controls(data: str, filename: str):
+    async def save(ctx: commands.Context, *_):
+        with BytesIO(
+            "\n".join(",".join(batch) for batch in batched(data.split(","), 8)).encode("utf-8")
+        ) as bio:
+            await ctx.send(file=discord.File(bio, filename=filename))
+
+    return {**DEFAULT_CONTROLS, "\N{FLOPPY DISK}": save}
 
 
 class Options(Flag):
@@ -768,9 +806,22 @@ class NationStates(commands.Cog):
             return await ctx.send(f"{root.FULLNAME.text} is not a WA member.")
         if not root.ENDORSEMENTS.text:
             return await ctx.send(f"{root.FULLNAME.text} has no endorsements.")
-        await ctx.send(
-            "Nations endorsing " + root.FULLNAME.text,
-            file=discord.File(BytesIO(root.ENDORSEMENTS.text.encode()), "ne.txt"),
+        endos = "\n".join(
+            f"[{' '.join(endo.split('_')).title()}](https://www.nationstates.net/{endo})"
+            for endo in root.ENDORSEMENTS.text.split(",")
+        )
+        pages = pagify(endos, page_length=1024, shorten_by=0)
+        embeds: List[discord.Embed] = []
+        for batch in batched(pages, 3):
+            embed = discord.Embed(
+                description=f"Nations endorsing [{root.FULLNAME.text}](https://www.nationstates.net/{root.get('id')})",
+                color=await ctx.embed_color(),
+            )
+            for endo in batch:
+                embed.add_field(name="\u200b", value=endo, inline=True)
+            embeds.append(embed)
+        await menu(
+            ctx, embeds, controls(root.ENDORSEMENTS.text, f"{ctx.invoked_with}.txt"), timeout=180
         )
 
     @commands.command()
@@ -808,9 +859,27 @@ class NationStates(commands.Cog):
             .intersection(wa_root.MEMBERS.text.split(","))
             .difference((nation_root.ENDORSEMENTS.text or "").split(","))
         )
-        await ctx.send(
-            "Nations not endorsing " + nation_root.FULLNAME.text,
-            file=discord.File(BytesIO(",".join(final).encode()), "nne.txt"),
+        if not final:
+            return await ctx.send(f"No nation is not endorsing {nation_root.FULLNAME.text}.")
+        endos = "\n".join(
+            f"[{' '.join(endo.split('_')).title()}](https://www.nationstates.net/{endo})"
+            for endo in final
+        )
+        pages = pagify(endos, page_length=1024, shorten_by=0)
+        embeds: List[discord.Embed] = []
+        for batch in batched(pages, 3):
+            embed = discord.Embed(
+                description=f"Nations not endorsing [{nation_root.FULLNAME.text}](https://www.nationstates.net/{nation_root.get('id')})",
+                color=await ctx.embed_color(),
+            )
+            for endo in batch:
+                embed.add_field(name="\u200b", value=endo, inline=True)
+            embeds.append(embed)
+        await menu(
+            ctx,
+            embeds,
+            controls(nation_root.ENDORSEMENTS.text, f"{ctx.invoked_with}.txt"),
+            timeout=180,
         )
 
     @commands.command()
