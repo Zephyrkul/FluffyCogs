@@ -11,6 +11,7 @@ import discord
 import redbot
 from redbot.core import commands
 from redbot.core.bot import Red
+from redbot.core.dev_commands import cleanup_code
 from redbot.core.utils.chat_formatting import box, pagify
 
 try:
@@ -250,7 +251,7 @@ class RTFS(commands.Cog):
             raise commands.UserFeedbackCheckFailure(
                 f"I couldn't find any cog or command named `{thing}`."
             )
-        thing = dev.cleanup_code(thing)
+        thing = cleanup_code(thing)
         env = dev.get_environment(ctx)
         env["getattr_static"] = inspect.getattr_static
         try:
