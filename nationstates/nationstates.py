@@ -885,10 +885,16 @@ class NationStates(commands.Cog):
     @commands.command()
     async def nnec(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Not Endorsing [Count] (NNEC) the specified WA nation"""
-        nation_root = await Api("census fullname region wa", nation=wa_nation, scale="66", mode="score")
+        nation_root = await Api(
+            "census fullname region wa", nation=wa_nation, scale="66", mode="score"
+        )
         if nation_root.UNSTATUS.text.lower() == "non-member":
             return await ctx.send(f"{nation_root.NAME.text} is not a WA member.")
         region_root = await Api("numwanations", region=nation_root.REGION.text)
         await ctx.send(
-            "{:.0f} nations are not endorsing {}".format(region_root.NUMUNNATIONS.pyval - nation_root.find(".//SCALE[@id='66']/SCORE").pyval, nation_root.FULLNAME.text)
+            "{:.0f} nations are not endorsing {}".format(
+                region_root.NUMUNNATIONS.pyval
+                - nation_root.find(".//SCALE[@id='66']/SCORE").pyval,
+                nation_root.FULLNAME.text,
+            )
         )
