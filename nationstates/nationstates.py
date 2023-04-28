@@ -890,5 +890,5 @@ class NationStates(commands.Cog):
             return await ctx.send(f"{nation_root.NAME.text} is not a WA member.")
         region_root = await Api("numwanations", region=nation_root.REGION.text)
         await ctx.send(
-            "{:.0f} nations are not endorsing {}".format(region_root.NUMUNNATIONS.pyval - root.find(".//SCALE[@id='66']/SCORE").pyval, nation_root.FULLNAME.text)
+            "{:.0f} nations are not endorsing {}".format(region_root.NUMUNNATIONS.pyval - nation_root.find(".//SCALE[@id='66']/SCORE").pyval, nation_root.FULLNAME.text)
         )
