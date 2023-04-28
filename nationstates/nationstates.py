@@ -854,13 +854,10 @@ class NationStates(commands.Cog):
         nation_root = await Api("endorsements flag fullname region wa", nation=wa_nation)
         if nation_root.UNSTATUS.text.lower() == "non-member":
             return await ctx.send(f"{nation_root.FULLNAME.text} is not a WA member.")
+        region_root = await Api("wanations", region=nation_root.REGION.text)
         wa_root = await Api("members", wa="1")
         region_root = await Api("nations", region=nation_root.REGION.text)
-        final = (
-            set(region_root.NATIONS.text.split(":"))
-            .intersection(wa_root.MEMBERS.text.split(","))
-            .difference((nation_root.ENDORSEMENTS.text or "").split(","))
-        )
+        final = region_root.UNNATIONS.text.split(",")
         if not final:
             return await ctx.send(f"No nation is not endorsing {nation_root.FULLNAME.text}.")
         endos = "\n".join(
@@ -888,16 +885,10 @@ class NationStates(commands.Cog):
     @commands.command()
     async def nnec(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Not Endorsing [Count] (NNEC) the specified WA nation"""
-        nation_root = await Api("endorsements fullname region wa", nation=wa_nation)
+        nation_root = await Api("census fullname region wa", nation=wa_nation, scale="66", mode="score")
         if nation_root.UNSTATUS.text.lower() == "non-member":
             return await ctx.send(f"{nation_root.NAME.text} is not a WA member.")
-        wa_root = await Api("members", wa="1")
-        region_root = await Api("nations", region=nation_root.REGION.text)
-        final = (
-            set(region_root.NATIONS.text.split(":"))
-            .intersection(wa_root.MEMBERS.text.split(","))
-            .difference((nation_root.ENDORSEMENTS.text or "").split(","))
-        )
+        region_root = await Api("numwanations", region=nation_root.REGION.text)
         await ctx.send(
-            "{:.0f} nations are not endorsing {}".format(len(final), nation_root.FULLNAME.text)
+            "{:.0f} nations are not endorsing {}".format(region_root.NUMUNNATIONS.pyval - root.find(".//SCALE[@id='66']/SCORE").pyval, nation_root.FULLNAME.text)
         )
