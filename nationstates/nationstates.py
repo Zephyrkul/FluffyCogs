@@ -855,8 +855,6 @@ class NationStates(commands.Cog):
         if nation_root.UNSTATUS.text.lower() == "non-member":
             return await ctx.send(f"{nation_root.FULLNAME.text} is not a WA member.")
         region_root = await Api("wanations", region=nation_root.REGION.text)
-        wa_root = await Api("members", wa="1")
-        region_root = await Api("nations", region=nation_root.REGION.text)
         final = region_root.UNNATIONS.text.split(",")
         if not final:
             return await ctx.send(f"No nation is not endorsing {nation_root.FULLNAME.text}.")
