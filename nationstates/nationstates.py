@@ -51,10 +51,10 @@ def batched(iterable: Iterable[_T], n: int) -> Generator[Tuple[_T, ...], None, N
         yield batch
 
 
-def controls(data: str, *, paged: bool):
+def controls(data: Iterable[str], *, paged: bool):
     async def save(ctx: commands.Context, *args):
         with BytesIO(
-            "\n".join(",".join(batch) for batch in batched(data.split(","), 8)).encode("utf-8")
+            "\n".join(",".join(batch) for batch in batched(data, 8)).encode("utf-8")
         ) as bio:
             await ctx.send(file=discord.File(bio, filename=f"{ctx.invoked_with}.txt"))
         return await menu(ctx, *args[:-1])
@@ -807,9 +807,10 @@ class NationStates(commands.Cog):
             return await ctx.send(f"{root.FULLNAME.text} is not a WA member.")
         if not root.ENDORSEMENTS.text:
             return await ctx.send(f"{root.FULLNAME.text} has no endorsements.")
+        final = root.ENDORSEMENTS.text.split(",")
         endos = "\n".join(
             f"[{' '.join(endo.split('_')).title()}](https://www.nationstates.net/{endo})"
-            for endo in root.ENDORSEMENTS.text.split(",")
+            for endo in final
         )
         pages = pagify(endos, page_length=1024, shorten_by=0)
         embeds: List[discord.Embed] = []
@@ -822,9 +823,7 @@ class NationStates(commands.Cog):
             for endo in batch:
                 embed.add_field(name="\u200b", value=endo, inline=True)
             embeds.append(embed)
-        await menu(
-            ctx, embeds, controls(root.ENDORSEMENTS.text, paged=len(embeds) > 1), timeout=180
-        )
+        await menu(ctx, embeds, controls(final, paged=len(embeds) > 1), timeout=180)
 
     @commands.command()
     async def nec(self, ctx: commands.Context, *, wa_nation: str):
@@ -855,7 +854,9 @@ class NationStates(commands.Cog):
         if nation_root.UNSTATUS.text.lower() == "non-member":
             return await ctx.send(f"{nation_root.FULLNAME.text} is not a WA member.")
         region_root = await Api("wanations", region=nation_root.REGION.text)
-        final = region_root.UNNATIONS.text.split(",")
+        final = set((region_root.UNNATIONS.text or "").split(",")).difference(
+            (nation_root.ENDORSEMENTS.text or "").split(",")
+        )
         if not final:
             return await ctx.send(f"No nation is not endorsing {nation_root.FULLNAME.text}.")
         endos = "\n".join(
@@ -876,7 +877,7 @@ class NationStates(commands.Cog):
         await menu(
             ctx,
             embeds,
-            controls(nation_root.ENDORSEMENTS.text, paged=len(embeds) > 1),
+            controls(final, paged=len(embeds) > 1),
             timeout=180,
         )
 
