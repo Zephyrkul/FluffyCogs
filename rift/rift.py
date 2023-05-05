@@ -765,7 +765,7 @@ class Rift(commands.Cog):
                 raise RiftError(_("Your message was filtered."))
         embed: Optional[discord.Embed]
         if await self.bot.embed_requested(
-            channel, getattr(channel, "recipient", author), command=self.rift
+            getattr(channel, "recipient", channel), command=self.rift  # type: ignore
         ):
             embed = discord.Embed(
                 colour=oga.colour or await self.bot.get_embed_color(channel), url=jump_url
@@ -779,7 +779,7 @@ class Rift(commands.Cog):
                     embed.title = filter_invites(f"in {ogg}")
             embed.set_author(
                 name=filter_invites(str(author)),
-                icon_url=author.avatar_url_as(size=32),
+                icon_url=author.display_avatar.replace(size=32).url,
             )
         else:
             content = f"{author}\n{quote(content)}" if content else str(author)
@@ -824,14 +824,14 @@ class Rift(commands.Cog):
     # EVENTS
 
     @commands.Cog.listener()
-    async def on_typing(self, channel: UnionChannel, user: UnionUser, when: datetime):
+    async def on_typing(self, channel: "Messageable", user: UnionUser, when: datetime):
         if user.bot:
             return
         destinations = deduplicate_iterables(
             self.rifts.get(Limited(author=user, channel=channel), ()), self.rifts.get(channel, ())
         )
         await asyncio.gather(
-            *(channel.trigger_typing() for channel in destinations), return_exceptions=True
+            *(channel.typing() for channel in destinations), return_exceptions=True
         )
 
     @commands.Cog.listener()
