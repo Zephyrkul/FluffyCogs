@@ -779,7 +779,7 @@ class Rift(commands.Cog):
                     embed.title = filter_invites(f"in {ogg}")
             embed.set_author(
                 name=filter_invites(str(author)),
-                icon_url=author.display_avatar.replace(size=32).url,
+                icon_url=oga.display_avatar.replace(size=32).url,
             )
         else:
             content = f"{author}\n{quote(content)}" if content else str(author)
