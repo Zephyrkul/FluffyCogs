@@ -42,9 +42,9 @@ async def before_hook(ctx: Context):
         ctx.send = partial(new_send, ctx.send)
 
 
-def setup(bot: Red):
+async def setup(bot: Red):
     bot.before_invoke(before_hook)
 
 
-def teardown(bot: Red):
+async def teardown(bot: Red):
     bot.remove_before_invoke_hook(before_hook)

@@ -2,6 +2,7 @@ import json
 import warnings
 from pathlib import Path
 
+from redbot.core.bot import Red
 from redbot.core.errors import CogLoadError
 
 with open(Path(__file__).parent / "info.json") as fp:
@@ -19,11 +20,11 @@ except ImportError as e:
     import_failed = e
 
 
-def setup(bot):
+async def setup(bot: Red):
     if import_failed or sans.version_info < type(sans.version_info)("0.0.1b6"):
         raise CogLoadError(
             "The sans library is out of date or not installed.\n"
             "Run this command to update it: [p]pipinstall sans\n"
             "You may have to [p]restart your bot to have the new version take effect."
         ) from import_failed
-    bot.add_cog(NationStates(bot))
+    await bot.add_cog(NationStates(bot))

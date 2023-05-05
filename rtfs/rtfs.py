@@ -1,6 +1,6 @@
+import ast
 import inspect
 import logging
-import re
 import traceback
 from functools import partial, partialmethod
 from importlib.metadata import PackageNotFoundError, version
@@ -11,7 +11,13 @@ import discord
 import redbot
 from redbot.core import commands
 from redbot.core.bot import Red
+from redbot.core.dev_commands import cleanup_code
 from redbot.core.utils.chat_formatting import box, pagify
+
+try:
+    import regex as re
+except ImportError:
+    import re
 
 try:
     from discord.ext import menus
@@ -20,7 +26,7 @@ except ImportError:
 
 if TYPE_CHECKING:
     from redbot.cogs.downloader import Downloader
-
+    from redbot.core.dev_commands import Dev
 
 LOG = logging.getLogger("red.fluffy.rtfs")
 GIT_AT = re.compile(r"(?i)git@(?P<host>[^:]+):(?P<user>[^/]+)/(?P<repo>.+)(?:\.git)?")
@@ -31,7 +37,7 @@ class Unlicensed(Exception):
     Exception class for when the source code is known to have too restrictive of a license to redistribute code.
     """
 
-    def __init__(self, *args, cite: str = None, **kwargs):
+    def __init__(self, *args, cite: Optional[str] = None, **kwargs):
         super.__init__(*args, **kwargs)
         self.cite = cite
 
@@ -56,7 +62,7 @@ class SourceSource(menus.ListPageSource):
             return f"{self.header}\n{box(page, lang='py')}\nPage {menu.current_page + 1} / {self.get_max_pages()}"
         except Exception as e:
             # since d.py menus likes to suppress all errors
-            LOG.debug("Exception in SourceSource", exc_info=e)
+            LOG.debug("Exception while formatting page %s in menu %s", page, menu, exc_info=e)
             raise
 
 
@@ -72,7 +78,7 @@ class SourceMenu(menus.MenuPages):
                 await self.message.edit(**kwargs)
         except Exception as e:
             # since d.py menus likes to suppress all errors
-            LOG.debug("Exception in SourceMenu", exc_info=e)
+            LOG.debug("Exception occurred while finalizing", exc_info=e)
             raise
 
 
@@ -98,8 +104,8 @@ class RTFS(commands.Cog):
         cls, ctx: commands.Context, obj: Any, *, is_owner: bool = False
     ) -> None:
         obj = inspect.unwrap(obj)
-        source = obj
-        if isinstance(obj, commands.Command):
+        source = getattr(obj, "__func__", obj)
+        if isinstance(obj, (commands.Command, discord.app_commands.Command)):
             source = obj.callback
             if not inspect.getmodule(source):
                 # probably some kind of custom-coded command
@@ -121,40 +127,44 @@ class RTFS(commands.Cog):
             source = type(source)
             lines, line = inspect.getsourcelines(source)
         source_file = inspect.getsourcefile(source)
-        comments = inspect.getcomments(source) if line > 0 else ""
+        if line > 0:
+            comments = inspect.getcomments(source) or ""
+            line_suffix = f"#L{line - len(comments.splitlines())}-L{line + len(lines) - 1}"
+        else:
+            comments = ""
+            # no reason to highlight entire files
+            line_suffix = ""
         module = getattr(inspect.getmodule(source), "__name__", None)
         if source_file and module and source_file.endswith("__init__.py"):
             full_module = f"{module}.__init__"
         else:
             full_module = module
         is_installed = False
-        # no reason to highlight entire files
-        line_suffix = f"#L{line}-L{line + len(lines) - 1}" if line > 0 else ""
         header: str = ""
+        dl: Optional[Downloader]
         if full_module:
-            dl: Optional[Downloader]
             if full_module.startswith("discord."):
                 is_installed = True
                 if discord.__version__[-1].isdigit():
                     dpy_commit = "v" + discord.__version__
                 else:
                     try:
-                        dpy_version = version("discord.py").split("+g")
+                        _, _, dpy_commit = version("discord.py").partition("+g")
                     except PackageNotFoundError:
                         dpy_commit = "master"
-                    else:
-                        dpy_commit = dpy_version[1] if len(dpy_version) == 2 else "master"
-                header = f"<https://github.com/Rapptz/discord.py/blob/{dpy_commit}/{full_module.replace('.', '/')}.py{line_suffix}>"
+                header = f"<https://github.com/Rapptz/discord.py/blob/{dpy_commit or 'master'}/{full_module.replace('.', '/')}.py{line_suffix}>"
             elif full_module.startswith("redbot."):
-                is_installed = True
-                if "dev" in redbot.__version__:
-                    red_commit = "V3/develop"
+                is_installed = not redbot.version_info.dirty
+                if redbot.version_info.dev_release:
+                    red_commit = redbot.version_info.short_commit_hash or "V3/develop"
                 else:
                     red_commit = redbot.__version__
-                header = f"<https://github.com/Cog-Creators/Red-DiscordBot/blob/{red_commit}/{full_module.replace('.', '/')}.py{line_suffix}>"
+                if is_installed:
+                    header = f"<https://github.com/Cog-Creators/Red-DiscordBot/blob/{red_commit}/{full_module.replace('.', '/')}.py{line_suffix}>"
             elif dl := ctx.bot.get_cog("Downloader"):
                 is_installed, installable = await dl.is_installed(full_module.split(".")[0])
                 if is_installed:
+                    assert installable
                     if installable.repo is None:
                         is_installed = False
                     else:
@@ -218,7 +228,9 @@ class RTFS(commands.Cog):
         """
         is_owner = await ctx.bot.is_owner(ctx.author)
         try:
-            if obj := ctx.bot.get_cog(thing):
+            if thing.startswith("/") and (obj := ctx.bot.tree.get_command(thing[1:])):
+                return await self.format_and_send(ctx, obj, is_owner=is_owner)
+            elif obj := ctx.bot.get_cog(thing):
                 return await self.format_and_send(ctx, type(obj), is_owner=is_owner)
             elif obj := ctx.bot.get_command(thing):
                 return await self.format_and_send(ctx, obj, is_owner=is_owner)
@@ -234,15 +246,24 @@ class RTFS(commands.Cog):
             return await ctx.send(
                 f"The source code for `{thing}` has no license, so I cannot show it here."
             )
-        dev = ctx.bot.get_cog("Dev")
+        dev: Optional[Dev] = ctx.bot.get_cog("Dev")
         if not is_owner or not dev:
             raise commands.UserFeedbackCheckFailure(
                 f"I couldn't find any cog or command named `{thing}`."
             )
-        thing = dev.cleanup_code(thing)
+        thing = cleanup_code(thing)
         env = dev.get_environment(ctx)
+        env["getattr_static"] = inspect.getattr_static
         try:
-            obj = eval(thing, env)
+            tree = ast.parse(thing, "<rtfs>", "eval")
+            if isinstance(tree.body, ast.Attribute) and isinstance(tree.body.ctx, ast.Load):
+                tree.body = ast.Call(
+                    func=ast.Name(id="getattr_static", ctx=ast.Load()),
+                    args=[tree.body.value, ast.Constant(value=tree.body.attr)],
+                    keywords=[],
+                )
+                tree = ast.fix_missing_locations(tree)
+            obj = eval(compile(tree, "<rtfs>", "eval"), env)
         except NameError:
             return await ctx.send(f"I couldn't find any cog, command, or object named `{thing}`.")
         except Exception as e:

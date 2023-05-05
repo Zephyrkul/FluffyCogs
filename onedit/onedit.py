@@ -19,18 +19,27 @@ class OnEdit(commands.Cog):
         self.config.register_global(timeout=5)
         self.timeout: Optional[float] = None
 
-    async def edit_process_commands(self, message: discord.Message):
+    async def edit_process_commands(self, before: discord.Message, after: discord.Message):
         """Same as Red's method (Red.process_commands), but dont dispatch message_without_command."""
-        if not message.author.bot:
-            ctx: commands.Context = await self.bot.get_context(message)
+        ctx: Optional[commands.Context]
+        if not after.author.bot:
+            ctx = await self.bot.get_context(after)
+            assert ctx
             await self.bot.invoke(ctx)
             if ctx.valid is False:
                 # My Act and Phen's Tags use on_command_error, and thus aren't needed in this list.
                 for allowed_name in ("Alias", "CustomCommands", "CCRoles"):
-                    if listener := getattr(
-                        self.bot.get_cog(allowed_name), "on_message_without_command", None
-                    ):
-                        asyncio.ensure_future(listener(message))
+                    cog = self.bot.get_cog(allowed_name)
+                    if not cog:
+                        continue
+                    for name, listener in cog.get_listeners():
+                        if name != "on_message_without_command":
+                            continue
+                        asyncio.ensure_future(listener(after))
+        else:
+            ctx = None
+        if ctx is None or ctx.valid is False:
+            self.bot.dispatch("message_edit_without_command", before, after)
 
     @commands.command()
     @checks.is_owner()
@@ -59,4 +68,4 @@ class OnEdit(commands.Cog):
         if (after.edited_at - after.created_at).total_seconds() > self.timeout:
             return
         await i18n.set_contextual_locales_from_guild(self.bot, after.guild)
-        await self.edit_process_commands(after)
+        await self.edit_process_commands(before, after)
