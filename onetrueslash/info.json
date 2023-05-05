@@ -6,6 +6,7 @@
     "name": "OneTrueSlash",
     "short": "Add the one and only slash command you will ever need to your bot!",
     "description": "Add the one and only slash command you will ever need to your bot!",
+    "min_bot_version": "3.5.0",
     "tags": [
         "slash",
         "dpy2",
@@ -14,6 +15,5 @@
     "requirements": [
         "rapidfuzz"
     ],
-    "hidden": true,
     "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
 }

@@ -6,6 +6,7 @@
     "name": "AntiGifV",
     "short": "Automatically suppress any GifV embeds. Useful if your system cannot handle the anticrashvid cog.",
     "description": "Automatically suppress any GifV embeds. Useful if your system cannot handle the anticrashvid cog.",
+    "min_bot_version": "3.5.0",
     "tags": [
         "moderation",
         "security"

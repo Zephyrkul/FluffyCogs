@@ -6,6 +6,7 @@
     "name": "LogsFrom",
     "short": "Log a specified channel to a markdown file.",
     "description": "Log a specified channel to a markdown file.",
+    "min_bot_version": "3.5.0",
     "tags": [
         "logging",
         "utility"
@@ -15,6 +16,5 @@
         7,
         0
     ],
-    "max_bot_version": "3.5.0.dev0",
     "end_user_data_statement": "This cog enables logging messages for bot owners and admins. The bot itself does not persistently store this data."
 }

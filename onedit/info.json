@@ -6,10 +6,9 @@
     "name": "OnEdit",
     "short": "Allow users to run bot commands with edited messages, with a specified timeout.",
     "description": "Allow users to run bot commands with edited messages, with a specified timeout.",
+    "min_bot_version": "3.5.0",
     "tags": [
         "utility"
     ],
-    "min_bot_version": "3.1.6",
-    "max_bot_version": "3.5.0.dev0",
     "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
 }

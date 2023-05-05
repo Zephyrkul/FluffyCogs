@@ -6,6 +6,7 @@
     "name": "AntiCrashVid",
     "short": "Automatically delete and log malicious videos that attempt to crash Discord clients.",
     "description": "Automatically delete and log malicious videos that attempt to crash Discord clients.",
+    "min_bot_version": "3.5.0",
     "tags": [
         "moderation",
         "security"

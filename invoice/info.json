@@ -7,6 +7,7 @@
     "name": "InVoice",
     "short": "Create and manage microphoneless / nomic text channels for VC users with no microphone.",
     "description": "Create and manage microphoneless / nomic text channels for VC users with no microphone.",
+    "min_bot_version": "3.5.0",
     "requirements": [
         "git+https://github.com/zephyrkul/proxyembed"
     ],
@@ -14,6 +15,5 @@
         "voice",
         "utility"
     ],
-    "max_bot_version": "3.5.0.dev0",
     "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
 }

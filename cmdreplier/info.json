@@ -5,11 +5,10 @@
     "install_msg": "This extension has no commands. Loading enables the functionality globally, and unloading disables it.\nNot all commands will respect this setting.",
     "name": "CMDReplier",
     "short": "Let command responses reply to the same message the command message replies to.",
-    "min_bot_version": "3.4.8",
     "description": "Let command responses reply to the same message the command message replies to.",
+    "min_bot_version": "3.5.0",
     "tags": [
         "utility"
     ],
-    "max_bot_version": "3.5.0.dev0",
     "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
 }

@@ -5,6 +5,7 @@
     "install_msg": "Usage: `[p]help NationStates`.",
     "name": "NationStates",
     "short": "Access information from NationStates.net.",
+    "min_bot_version": "3.5.0",
     "requirements": [
         "sans",
         "git+https://github.com/zephyrkul/proxyembed"
@@ -13,6 +14,5 @@
     "tags": [
         "utility"
     ],
-    "max_bot_version": "3.5.0.dev0",
     "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
 }

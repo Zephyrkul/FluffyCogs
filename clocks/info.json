@@ -6,10 +6,10 @@
     "name": "Clocks",
     "short": "Track FitD projects with clocks.",
     "description": "Track projects with clocks. Mainly used for Forged in the Dark tabletop RPGs.",
+    "min_bot_version": "3.5.0",
     "tags": [
         "utility"
     ],
     "hidden": false,
-    "max_bot_version": "3.5.0.dev0",
     "end_user_data_statement": "This cog stores data provided via command by users for the express purpose of redisplaying. Users may remove this data via data request or via command."
 }

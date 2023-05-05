@@ -5,9 +5,9 @@
     ],
     "install_msg": "Usage: `[p]help rift`",
     "name": "Rift",
-    "min_bot_version": "3.4.6",
     "short": "Allows cross-server communication through Red",
     "description": "Communicate with other servers through Red! Works to and from DMs as well.",
+    "min_bot_version": "3.5.0",
     "tags": [
         "cross-server",
         "communication",
@@ -15,6 +15,5 @@
         "trolling",
         "impersonation"
     ],
-    "max_bot_version": "3.5.0.dev0",
     "end_user_data_statement": "This cog does not persistently store any data or metadata about users. This cog does store user IDs necessary for anti-abuse measures, i.e. blocklists."
 }
