@@ -633,7 +633,7 @@ class Rift(commands.Cog):
                     append = True
             embeds[0].add_field(
                 name=self.xbytes(attachment.size),
-                value=f"[{attachment.filename}]({url})",
+                value=f"[\N{PAPERCLIP}{attachment.filename}]({url})",
                 inline=True,
             )
         return embeds
@@ -763,21 +763,23 @@ class Rift(commands.Cog):
             filt: Optional["Filter"] = self.bot.get_cog("Filter")  # type: ignore
             if filt and await filt.filter_hits(content, channel):
                 raise RiftError(_("Your message was filtered."))
-        embed: Optional[discord.Embed]
+        embed: Optional[List[discord.Embed]]
         if await self.bot.embed_requested(
             getattr(channel, "recipient", channel), command=self.rift  # type: ignore
         ):
-            embed = discord.Embed(
-                colour=oga.colour or await self.bot.get_embed_color(channel), url=jump_url
-            )
+            embed = [
+                discord.Embed(
+                    colour=oga.colour or await self.bot.get_embed_color(channel), url=jump_url
+                )
+            ]
             ogg: Optional[discord.Guild]
             if ogg := getattr(oga, "guild", None):
                 assert isinstance(oga, discord.Member)
                 if oga.top_role != ogg.default_role:
-                    embed.title = filter_invites(f"{oga.top_role} in {ogg}")
+                    embed[0].title = filter_invites(f"{oga.top_role} in {ogg}")
                 else:
-                    embed.title = filter_invites(f"in {ogg}")
-            embed.set_author(
+                    embed[0].title = filter_invites(f"in {ogg}")
+            embed[0].set_author(
                 name=filter_invites(str(author)),
                 icon_url=oga.display_avatar.replace(size=32).url,
             )
@@ -786,7 +788,7 @@ class Rift(commands.Cog):
             embed = None
         if attachments and author_perms.attach_files:
             if embed:
-                embed = self.get_embed(attachments, embed=embed)
+                embed = self.get_embeds(attachments, embed=embed[0])
             else:
                 if content:
                     content = f"{content}\n\n{_('Attachments:')}\n"
@@ -804,7 +806,7 @@ class Rift(commands.Cog):
                 allowed_mentions = discord.AllowedMentions.all()
             else:
                 allowed_mentions = discord.AllowedMentions(users=True)
-        return {"allowed_mentions": allowed_mentions, "embed": embed, "content": content}
+        return {"allowed_mentions": allowed_mentions, "embeds": embed, "content": content}
 
     async def try_or_remove(self, coro: Awaitable[T], channel: UnionChannel) -> T:
         guild: Optional[discord.Guild] = getattr(channel, "guild", None)
