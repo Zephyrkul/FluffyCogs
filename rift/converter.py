@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import operator
 from typing import List
 
 import discord
@@ -45,8 +46,7 @@ class Limited(discord.abc.Messageable):
     def __repr__(self) -> str:
         return f"{self.__class__.__qualname__}(author={self.author!r}, channel={self.channel!r})"
 
-    def _get_channel(self):
-        return self.channel._get_channel()
+    _get_channel = property(operator.attrgetter("channel._get_channel"))  # type: ignore
 
 
 class DiscordConverter(commands.Converter):

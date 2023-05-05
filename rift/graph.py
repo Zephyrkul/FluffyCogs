@@ -2,6 +2,7 @@ from itertools import chain
 from typing import (
     TYPE_CHECKING,
     ClassVar,
+    Dict,
     Generator,
     Generic,
     Hashable,
@@ -86,5 +87,5 @@ class GraphMixin(_Base[T]):
         return cls((k, cls._set(v)) for k, v in json.items())
 
 
-class SimpleGraph(GraphMixin[T], dict):
+class SimpleGraph(GraphMixin[T], Dict[T, Set[T]]):
     _set = set
