@@ -2,7 +2,7 @@
     "author": [
         "Zephyrkul (Zephyrkul#1089)"
     ],
-    "install_msg": "Thanks for loading OneTrueSlash! Your one and only slash command will show in all servers your bot has applications.commands permission for within an hour after syncing.\nNote that you will have to sync the associated command on your own.\nThis cog has no commands beyond the one true slash command.\n**This cog is not yet complete.** No warranty is provided for any damage this cog may cause.",
+    "install_msg": "Thanks for loading OneTrueSlash! Your one and only slash command will show in all servers your bot has applications.commands permission for within an hour after syncing.\nNote that you will have to sync the associated command on your own, using `[p]slash sync`.\nThis cog has no commands beyond the one true slash command.\n**This cog is not yet complete.** No warranty is provided for any damage this cog may cause.",
     "name": "OneTrueSlash",
     "short": "Add the one and only slash command you will ever need to your bot!",
     "description": "Add the one and only slash command you will ever need to your bot!",
