@@ -1,5 +1,4 @@
 import asyncio
-import bisect
 import heapq
 import re
 import time
@@ -201,7 +200,7 @@ class NationStates(commands.Cog):
 
     @staticmethod
     def _illion(num: float):
-        illion = ("million", "billion", "trillion", "quadrillion")
+        illion = ("million", "billion", "trillion", "quadrillion", "quintillion")
         num = float(num)
         index = 0
         while num >= 1000:
@@ -213,7 +212,7 @@ class NationStates(commands.Cog):
     def _is_zday(snowflake: discord.abc.Snowflake):
         epoch = discord.utils.snowflake_time(snowflake.id)
         month, day = epoch.month, epoch.day
-        return (month == 10 and day >= 29) or (month == 11 and day <= 6)
+        return (month == 10 and day >= 28) or (month == 11 and day <= 10)
 
     # __________ LISTENERS __________
 
@@ -261,7 +260,7 @@ class NationStates(commands.Cog):
         """Retrieves general info about a specified NationStates nation"""
         try:
             root = await self._get_as_xml(
-                "census category dbid "
+                "banner census category dbid "
                 "demonym2plural flag founded freedom "
                 "fullname influence lastlogin "
                 "name population region wa zombie",
@@ -297,10 +296,7 @@ class NationStates(commands.Cog):
         embed = ProxyEmbed(
             title=self._find_text_and_assert(root, "FULLNAME"),
             url="https://www.nationstates.net/nation={}".format(root.get("id")),
-            description="[{}](https://www.nationstates.net/region={})"
-            " | {} {} | Founded {}".format(
-                self._find_text_and_assert(root, "REGION"),
-                "_".join(self._find_text_and_assert(root, "REGION").lower().split()),
+            description="{} {} | Founded {}".format(
                 self._illion(self._find_text_and_assert(root, "POPULATION", int)),
                 self._find_text_and_assert(root, "DEMONYM2PLURAL"),
                 founded,
@@ -310,8 +306,18 @@ class NationStates(commands.Cog):
             ),
             colour=0x8BBC21 if is_zday else await ctx.embed_colour(),
         )
-        embed.set_author(name="NationStates", url="https://www.nationstates.net/")
+        region = self._find_text_and_assert(root, "REGION")
+        embed.set_author(
+            name=region,
+            url=f"https://www.nationstates.net/region={region.lower().replace(' ', '_')}",
+        )
         embed.set_thumbnail(url=self._find_text_and_assert(root, "FLAG"))
+        banner = self._find_text_and_assert(root, "BANNER")
+        if banner.startswith(n_id, 8):
+            # only custom banners
+            embed.set_image(
+                url=f"https://www.nationstates.net/images/banners/{self._find_text_and_assert(root, 'BANNER')}.jpg"
+            )
         embed.add_field(
             name=self._find_text_and_assert(root, "CATEGORY"),
             value="{}\t|\t{}\t|\t{}".format(
@@ -364,8 +370,8 @@ class NationStates(commands.Cog):
         """Retrieves general info about a specified NationStates region"""
         try:
             root = await self._get_as_xml(
-                "delegate delegateauth delegatevotes flag founded founder "
-                "governor lastupdate name numnations officers power tags zombie",
+                "bannerby bannerurl delegate delegateauth delegatevotes flag founded "
+                "founder governor lastupdate name numnations officers power tags zombie",
                 region=region,
             )
         except sans.NotFound:
@@ -375,7 +381,7 @@ class NationStates(commands.Cog):
             embed.set_author(name="NationStates", url="https://www.nationstates.net/")
             return await embed.send_to(ctx)
         if self._find_text_and_assert(root, "DELEGATE") == "0":
-            delvalue = "\u200b"
+            delvalue = "None."
         else:
             endo = self._find_text_and_assert(root, "DELEGATEVOTES", int) - 1
             if endo == 1:
@@ -388,9 +394,9 @@ class NationStates(commands.Cog):
                 endo,
             )
         if "X" in self._find_text_and_assert(root, "DELEGATEAUTH"):
-            delheader = "Delegate"
+            delheader = "WA Delegate"
         else:
-            delheader = "Delegate (Non-Executive)"
+            delheader = "WA Delegate (non-executive)"
         tags = {t.text for t in root.iterfind("TAGS/TAG")}
         # Note: This logic will mark TRR as "Sinker", not "Catcher"
         # The reason for this can be found here: https://forum.nationstates.net/viewtopic.php?f=15&t=533753
@@ -405,20 +411,6 @@ class NationStates(commands.Cog):
         if founded == "0":
             founded = "in Antiquity"
         execvalue = []
-        founder = self._find_text_and_assert(root, "FOUNDER")
-        if founder != "0":
-            if "Founderless" in tags:
-                url = "https://www.nationstates.net/page=boneyard?nation="
-            else:
-                url = "https://www.nationstates.net/nation="
-            execvalue.append(
-                "Founder: [{}]({}{}){}".format(
-                    founder.replace("_", " ").title(),
-                    url,
-                    founder,
-                    " (Ceased to Exist)" if ("Founderless" in tags) else "",
-                )
-            )
         governor = self._find_text_and_assert(root, "GOVERNOR")
         if governor != "0":
             if major_tag == "Governorless":
@@ -472,10 +464,23 @@ class NationStates(commands.Cog):
             ),
             colour=0x000001 if fash else 0x8BBC21 if is_zday else await ctx.embed_colour(),
         )
-        embed.set_author(name="NationStates", url="https://www.nationstates.net/")
+        founder = self._find_text_and_assert(root, "FOUNDER")
+        if founder == "0":
+            embed.set_author(name="NationStates", url="https://www.nationstates.net/")
+        else:
+            if "Founderless" in tags:
+                url = f"https://www.nationstates.net/page=boneyard?nation={founder}"
+            else:
+                url = f"https://www.nationstates.net/nation={founder}"
+            embed.set_author(name=founder.replace("_", " ").title(), url=url)
         flag = root.find("FLAG").text  # type: ignore
         if flag:
             embed.set_thumbnail(url=flag)
+        if self._find_text_and_assert(root, "BANNERBY") != "0":
+            # only custom banners
+            embed.set_image(
+                url=f"https://www.nationstates.net{self._find_text_and_assert(root, 'BANNERURL')}"
+            )
         embed.add_field(name=delheader, value=delvalue, inline=True)
         embed.add_field(
             name=major_tag,
@@ -553,25 +558,26 @@ class NationStates(commands.Cog):
             value=box(self._find_text_and_assert(root, "MARKET_VALUE"), lang="swift"),
             inline=False,
         )
-        sellers: List[Tuple[float, str]] = []
-        buyers: List[Tuple[float, str]] = []
-        for market in root.find("MARKETS"):
+        sellers: List[Tuple[float, int, str]] = []
+        buyers: List[Tuple[float, int, str]] = []
+        for market in root.iterfind("MARKETS/MARKET"):
+            # TIMESTAMP is used as a tiebreaker
             if self._find_text_and_assert(market, "TYPE") == "bid":
                 # negative price to reverse sorting
-                bisect.insort(
-                    buyers,
+                buyers.append(
                     (
                         -self._find_text_and_assert(market, "PRICE", float),
+                        self._find_text_and_assert(market, "TIMESTAMP", int),
                         self._find_text_and_assert(market, "NATION").replace("_", " ").title(),
-                    ),
+                    )
                 )
             elif self._find_text_and_assert(market, "TYPE") == "ask":
-                bisect.insort(
-                    sellers,
+                sellers.append(
                     (
                         self._find_text_and_assert(market, "PRICE", float),
+                        self._find_text_and_assert(market, "TIMESTAMP", int),
                         self._find_text_and_assert(market, "NATION").replace("_", " ").title(),
-                    ),
+                    )
                 )
         if not any((buyers, sellers)):
             return await embed.send_to(ctx)
@@ -589,8 +595,8 @@ class NationStates(commands.Cog):
                 )
                 continue
             tarr = [
-                f"{-j[0]:.02f}\xa0{j[1]}" if is_buyers else f"{j[1]}\xa0{j[0]:.02f}"
-                for j in arr[:max_listed]
+                f"{-price:.02f}\xa0{nation}" if is_buyers else f"{nation}\xa0{price:.02f}"
+                for price, _timestamp, nation in heapq.nlargest(max_listed, arr)
             ]
             if len(arr) > max_listed:
                 num = len(arr) - max_listed
@@ -707,10 +713,10 @@ class NationStates(commands.Cog):
         root = root.find("RESOLUTION")
         assert root
         img = {
-            "Commendation": "https://i.imgur.com/peX3xUf.png",
-            "Condemnation": "https://i.imgur.com/IK3itYt.png",
-            "Liberation": "https://i.imgur.com/O7jOkyr.png",
-            "Injunction": "https://i.imgur.com/5Tq1yfa.png",
+            "Commendation": "https://cdn.discordapp.com/attachments/734752928346406944/1108130168733704373/commend.png",
+            "Condemnation": "https://cdn.discordapp.com/attachments/734752928346406944/1108130169169920130/condemn.png",
+            "Liberation": "https://cdn.discordapp.com/attachments/734752928346406944/1108130167848714300/liberate.png",
+            "Injunction": "https://cdn.discordapp.com/attachments/734752928346406944/1108130169601921134/injunct.png",
             "Declaration": "https://www.nationstates.net/images/sc.jpg",
         }.get(
             self._find_text_and_assert(root, "CATEGORY"), "https://nationstates.net/images/ga.jpg"
@@ -751,26 +757,11 @@ class NationStates(commands.Cog):
             timestamp=datetime.fromtimestamp(impl, timezone.utc),
             colour=await ctx.embed_colour(),
         )
-        try:
-            authroot = await self._get_as_xml(
-                "fullname flag", nation=self._find_text_and_assert(root, "PROPOSED_BY")
-            )
-        except sans.NotFound:
-            embed.set_author(
-                name=self._find_text_and_assert(root, "PROPOSED_BY").replace("_", " ").title(),
-                url="https://www.nationstates.net/page=boneyard?nation={}".format(
-                    self._find_text_and_assert(root, "PROPOSED_BY")
-                ),
-                icon_url="http://i.imgur.com/Pp1zO19.png",
-            )
-        else:
-            embed.set_author(
-                name=self._find_text_and_assert(authroot, "FULLNAME"),
-                url="https://www.nationstates.net/nation={}".format(
-                    self._find_text_and_assert(root, "PROPOSED_BY")
-                ),
-                icon_url=self._find_text_and_assert(authroot, "FLAG"),
-            )
+        proposed_by = self._find_text_and_assert(root, "PROPOSED_BY")
+        embed.set_author(
+            name=proposed_by.replace("_", " ").title(),
+            url=f"https://www.nationstates.net/nation={proposed_by}",
+        )
         embed.set_thumbnail(url=img)
         if option & WA.DELEGATE:
             for_del_votes = heapq.nlargest(
@@ -845,7 +836,6 @@ class NationStates(commands.Cog):
                 ),
                 inline=False,
             )
-        # I can only blame my own buggy code for the following
         repealed_by = root.find("REPEALED_BY")
         if repealed_by is not None:
             embed.add_field(
@@ -865,6 +855,15 @@ class NationStates(commands.Cog):
                     self._find_text_and_assert(root, "NAME")[8:-1], repeals, "2" if is_sc else "1"
                 ),
                 inline=False,
+            )
+        coauthors = [e.text for e in root.iterfind("COAUTHOR/N") if e.text]
+        if coauthors:
+            embed.add_field(
+                name="Co-author" if len(coauthors) == 1 else "Co-authors",
+                value=", ".join(
+                    f"[{author.replace('_', ' ').title()}](https://www.nationstates.net/nation={author})"
+                    for author in coauthors
+                ),
             )
         embed.set_footer(text="Passed" if resolution_id else "Voting Started")
         await embed.send_to(ctx)
@@ -964,7 +963,7 @@ class NationStates(commands.Cog):
         await ctx.send(
             "{} has {:.0f} influence".format(
                 self._find_text_and_assert(root, "FULLNAME"),
-                self._find_text_and_assert(root, ".//SCALE[@id='65']/SCORE", float),
+                self._find_text_and_assert(root, "CENSUS/SCALE[@id='65']/SCORE", float),
             )
         )
 
@@ -989,7 +988,7 @@ class NationStates(commands.Cog):
                 f"No nation is not endorsing {self._find_text_and_assert(nation_root, 'FULLNAME')}."
             )
         endos = "\n".join(
-            f"[{' '.join(endo.split('_')).title()}](https://www.nationstates.net/{endo})"
+            f"[{endo.replace(' ', '_').title()}](https://www.nationstates.net/{endo})"
             for endo in final
         )
         pages = pagify(endos, page_length=1024, shorten_by=0)
@@ -1026,7 +1025,7 @@ class NationStates(commands.Cog):
         await ctx.send(
             "{:.0f} nations are not endorsing {}".format(
                 self._find_text_and_assert(region_root, "NUMUNNATIONS", int)
-                - self._find_text_and_assert(nation_root, ".//SCALE[@id='66']/SCORE", float),
+                - self._find_text_and_assert(nation_root, "CENSUS/SCALE[@id='66']/SCORE", float),
                 self._find_text_and_assert(nation_root, "FULLNAME"),
             )
         )

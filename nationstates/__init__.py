@@ -16,7 +16,7 @@ except ImportError as e:
 
 
 async def setup(bot: Red):
-    if import_failed or version.parse(sans.__version__) < version.parse("1.0.0b2"):
+    if import_failed or version.parse(sans.__version__) < version.parse("1.0.0"):
         raise CogLoadError(
             "The sans library is out of date or not installed.\n"
             "Run this command to update it: [p]pipinstall sans\n"

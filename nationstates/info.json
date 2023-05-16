@@ -7,7 +7,7 @@
     "short": "Access information from NationStates.net.",
     "min_bot_version": "3.5.0",
     "requirements": [
-        "sans>=1.0.0b2",
+        "sans",
         "git+https://github.com/zephyrkul/proxyembed"
     ],
     "description": "Access information from NationStates.net.",
