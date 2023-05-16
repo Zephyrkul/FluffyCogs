@@ -600,7 +600,7 @@ class Rift(commands.Cog):
             if use_image and single:
                 embed.add_field(
                     name=self.xbytes(attachment.size),
-                    value=f"[{attachment.filename}]({attachment.url})",
+                    value=f"[\N{PAPERCLIP}`{attachment.filename}`]({attachment.url})",
                     inline=True,
                 )
         return embed
@@ -633,7 +633,7 @@ class Rift(commands.Cog):
                     append = True
             embeds[0].add_field(
                 name=self.xbytes(attachment.size),
-                value=f"[\N{PAPERCLIP}{attachment.filename}]({url})",
+                value=f"[\N{PAPERCLIP}`{attachment.filename}`]({url})",
                 inline=True,
             )
         return embeds
