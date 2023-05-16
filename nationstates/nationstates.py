@@ -1,17 +1,17 @@
 import asyncio
 import bisect
 import heapq
-import operator
 import re
 import time
 from datetime import datetime
 from enum import Flag, auto
-from functools import partial, reduce
+from functools import reduce
 from html import unescape
 from io import BytesIO
-from itertools import islice
+from itertools import chain, islice
 from operator import or_
 from typing import (
+    Callable,
     Dict,
     Generator,
     Generic,
@@ -20,22 +20,20 @@ from typing import (
     Literal,
     Optional,
     Tuple,
-    Type,
     TypeVar,
     Union,
+    get_args,
 )
+from xml.etree import ElementTree as etree
 
 import discord
+import httpx
+import sans
 from proxyembed import ProxyEmbed
-from redbot.core import Config, checks, commands, version_info as red_version
+from redbot.core import Config, commands, version_info as red_version
 from redbot.core.bot import Red
 from redbot.core.utils.chat_formatting import box, escape, humanize_list, pagify
 from redbot.core.utils.menus import DEFAULT_CONTROLS, close_menu, menu
-from sans.api import Api
-
-# pylint: disable=E0611
-from sans.errors import HTTPException, NotFound
-from sans.utils import pretty_string
 
 _T = TypeVar("_T")
 
@@ -110,21 +108,15 @@ LINK_RE = re.compile(
     r'(?i)["<]?\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b[">]?'
 )
 WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
-ZDAY_START = 1635627600
-T = TypeVar("T", bound=Options)
 
 
-class Link(str, Generic[T]):
+class Link(str, Generic[_T]):
     @classmethod
-    def __class_getitem__(cls, item: Type[T]):
-        return partial(cls.link_extract, expected=item.__name__)
-
-    @staticmethod
-    def link_extract(link: str, *, expected: str):
+    async def convert(cls, ctx, link: str):
         match = LINK_RE.match(link)
         if not match:
             return "_".join(link.strip('"<>').casefold().split())
-        if (match.group(1) or "nation").casefold() == expected.casefold():
+        if (match.group(1) or "nation").casefold() == get_args(cls)[0].__name__.casefold():
             return "_".join(match.group(2).casefold().split())
         raise commands.BadArgument()
 
@@ -142,14 +134,14 @@ class NationStates(commands.Cog):
 
     def __init__(self, bot: Red):
         super().__init__()
-        Api.loop = bot.loop
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_global(agent=None)
-        self.db_cache: Dict[str, Dict[Literal["dbid"], int]] = {}
+        self.db_cache: Dict[str, Dict[Literal["dbid"], str]] = {}
         self.config.init_custom("NATION", 1)
         self.config.register_custom("NATION", dbid=None)
         self.cog_ready = asyncio.Event()
+        self.client = sans.AsyncClient()
         asyncio.create_task(self.initialize())
 
     async def initialize(self):
@@ -158,38 +150,57 @@ class NationStates(commands.Cog):
             await self.bot.wait_until_red_ready()
             if not self.bot.owner_ids:
                 # always False but forces owner_ids to be filled
-                await self.bot.is_owner(discord.Object(id=None))
+                await self.bot.is_owner(discord.Object(id=0))  # type: ignore
             owner_ids = self.bot.owner_ids
             # only make the user_info request if necessary
             agent = humanize_list(
-                [str(self.bot.get_user(id) or await self.bot.fetch_user(id)) for id in owner_ids]
+                [str(self.bot.get_user(id) or await self.bot.fetch_user(id)) for id in owner_ids]  # type: ignore
             )
-        Api.agent = f"{agent} Red-DiscordBot/{red_version}"
+        sans.set_agent(f"{agent} Red-DiscordBot/{red_version}", _force=True)  # type: ignore
         self.db_cache = await self.config.custom("NATION").all()
         self.cog_ready.set()
 
-    async def cog_before_invoke(self, ctx):
+    async def cog_unload(self):
+        await self.client.aclose()
+
+    async def cog_check(self, ctx: commands.Context):
         # this will also cause `[p]agent` to be blocked but this is intended
         if ctx.cog is not self:
-            return
+            return True
+        when = sans._state.lock.deferred
+        if when:
+            raise commands.CommandOnCooldown(
+                commands.Cooldown(50, 30), when - time.monotonic(), commands.BucketType.default
+            )
+        await ctx.defer()
         await self.cog_ready.wait()
-        xra = Api.xra
-        if xra:
-            raise commands.CommandOnCooldown(None, time.time() - xra)
+        return True
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         original = getattr(error, "original", None)
         if original:
-            if isinstance(original, asyncio.TimeoutError):
-                return ctx.send("Request timed out.")
-            if isinstance(original, HTTPException):
-                return ctx.send(f"{original.status}: {original.message}")
-        return await ctx.bot.on_command_error(ctx, error, unhandled_by_cog=True)
+            if isinstance(original, httpx.TimeoutException):
+                return await ctx.send("Request timed out.")
+            if isinstance(original, sans.HTTPStatusError):
+                return await ctx.send(f"{original.response.status_code}: {''.join(original.args)}")
+        return await ctx.bot.on_command_error(ctx, error, unhandled_by_cog=True)  # type: ignore
 
     # __________ UTILS __________
 
+    async def _get_as_xml(self, *args: str, **kwargs: str):
+        request = sans.World(*args, **kwargs)
+        response = await self.client.get(request)
+        response.raise_for_status()
+        return response.xml
+
     @staticmethod
-    def _illion(num):
+    def _find_text_and_assert(
+        root: etree.Element, find: str, as_: Callable[[str], _T] = str
+    ) -> _T:
+        return as_(root.find(find).text)  # type: ignore
+
+    @staticmethod
+    def _illion(num: float):
         illion = ("million", "billion", "trillion", "quadrillion")
         num = float(num)
         index = 0
@@ -199,10 +210,10 @@ class NationStates(commands.Cog):
         return "{} {}".format(round(num, 3), illion[index])
 
     @staticmethod
-    def _is_zday(snowflake: discord.abc.Snowflake, *, dev: bool = False):
-        epoch = snowflake.created_at.timestamp()
-        start, end = ZDAY_START - 259200 * dev, ZDAY_START + 723600
-        return start <= epoch < end
+    def _is_zday(snowflake: discord.abc.Snowflake):
+        epoch = discord.utils.snowflake_time(snowflake.id)
+        month, day = epoch.month, epoch.day
+        return (month == 10 and day >= 29) or (month == 11 and day <= 6)
 
     # __________ LISTENERS __________
 
@@ -210,13 +221,11 @@ class NationStates(commands.Cog):
     async def on_message_without_command(self, message: discord.Message):
         if message.author.bot:
             return
-        if not await self.bot.message_eligible_as_command(
-            message
-        ) or await self.bot.cog_disabled_in_guild(self, message.guild):
-            return
         await self.cog_ready.wait()
-        ctx = await self.bot.get_context(message)
+        ctx: commands.Context = await self.bot.get_context(message)
         if ctx.valid:
+            return
+        if not await self.wa.can_run(ctx):
             return
         index = ["un", "ga", "sc"]
         for match in WA_RE.finditer(message.content):
@@ -228,14 +237,13 @@ class NationStates(commands.Cog):
                 )
                 continue
             ctx.invoked_with = match.group(1).lower()
-            if await self.wa.can_run(ctx):
-                await ctx.invoke(self.wa, int(res_id), WA.NONE)
+            await ctx.invoke(self.wa, int(res_id), WA.NONE)
 
     # __________ STANDARD __________
 
-    @commands.command(cooldown_after_parsing=True)
+    @commands.command(cooldown_after_parsing=True)  # type: ignore
     @commands.cooldown(2, 3600)
-    @checks.is_owner()
+    @commands.is_owner()
     async def agent(self, ctx: commands.Context, *, agent: str):
         """
         Sets the user agent.
@@ -243,86 +251,97 @@ class NationStates(commands.Cog):
         Recommendations: https://www.nationstates.net/pages/api.html#terms
         Defaults to your username#hash
         """
-        Api.agent = f"{agent} Red-DiscordBot/{red_version}"
+        full_agent = f"{agent} Red-DiscordBot/{red_version}"
+        sans.set_agent(full_agent, _force=True)  # type: ignore
         await self.config.agent.set(agent)
-        await ctx.send(f"Agent set: {Api.agent}")
+        await ctx.send(f"Agent set: {full_agent}")
 
-    @commands.command()
+    @commands.hybrid_command()
     async def nation(self, ctx: commands.Context, *, nation: Link[Nation]):
         """Retrieves general info about a specified NationStates nation"""
-        api: Api = Api(
-            "census category dbid",
-            "demonym2plural flag founded freedom",
-            "fullname influence lastlogin motto",
-            "name population region wa zombie",
-            nation=nation,
-            mode="score",
-            scale="65 66",
-        )
         try:
-            root = await api
-        except NotFound:
+            root = await self._get_as_xml(
+                "census category dbid "
+                "demonym2plural flag founded freedom "
+                "fullname influence lastlogin "
+                "name population region wa zombie",
+                nation=nation,
+                mode="score",
+                scale="65 66",
+            )
+        except sans.NotFound:
             embed = ProxyEmbed(
                 title=nation.replace("_", " ").title(),
-                url="https://www.nationstates.net/page=" "boneyard?nation={}".format(nation),
+                url=f"https://www.nationstates.net/page=boneyard?nation={nation}",
                 description="This nation does not exist.",
             )
             embed.set_author(name="NationStates", url="https://www.nationstates.net/")
             embed.set_thumbnail(url="http://i.imgur.com/Pp1zO19.png")
             return await embed.send_to(ctx)
         n_id = root.get("id")
+        assert n_id is not None
         if n_id not in self.db_cache:
-            self.db_cache[n_id] = {"dbid": root.DBID.pyval}
-            await self.config.custom("NATION", n_id).dbid.set(root.DBID.pyval)
-        endo = root.find("CENSUS/SCALE[@id='66']/SCORE").pyval
+            self.db_cache[n_id] = {"dbid": self._find_text_and_assert(root, "DBID")}
+            await self.config.custom("NATION", n_id).dbid.set(
+                self._find_text_and_assert(root, "DBID")
+            )
+        endo = self._find_text_and_assert(root, "CENSUS/SCALE[@id='66']/SCORE", float)
         if endo == 1:
             endo = "{:.0f} endorsement".format(endo)
         else:
             endo = "{:.0f} endorsements".format(endo)
-        founded = root.FOUNDED.pyval or "in Antiquity"
-        is_zday = self._is_zday(ctx.message, dev=ctx.author.id == 215640856839979008)
+        founded = self._find_text_and_assert(root, "FOUNDED")
+        if founded == "0":
+            founded = "in Antiquity"
+        is_zday = self._is_zday(ctx.message)
         embed = ProxyEmbed(
-            title=root.FULLNAME.text,
+            title=self._find_text_and_assert(root, "FULLNAME"),
             url="https://www.nationstates.net/nation={}".format(root.get("id")),
             description="[{}](https://www.nationstates.net/region={})"
             " | {} {} | Founded {}".format(
-                root.REGION.text,
-                "_".join(root.REGION.text.lower().split()),
-                self._illion(root.POPULATION.pyval),
-                root["DEMONYM2PLURAL"].text,
+                self._find_text_and_assert(root, "REGION"),
+                "_".join(self._find_text_and_assert(root, "REGION").lower().split()),
+                self._illion(self._find_text_and_assert(root, "POPULATION", int)),
+                self._find_text_and_assert(root, "DEMONYM2PLURAL"),
                 founded,
             ),
-            timestamp=datetime.utcfromtimestamp(root.LASTLOGIN.pyval),
+            timestamp=datetime.utcfromtimestamp(
+                self._find_text_and_assert(root, "LASTLOGIN", int)
+            ),
             colour=0x8BBC21 if is_zday else await ctx.embed_colour(),
         )
         embed.set_author(name="NationStates", url="https://www.nationstates.net/")
-        embed.set_thumbnail(url=root.FLAG.text)
+        embed.set_thumbnail(url=self._find_text_and_assert(root, "FLAG"))
         embed.add_field(
-            name=root.CATEGORY.text,
+            name=self._find_text_and_assert(root, "CATEGORY"),
             value="{}\t|\t{}\t|\t{}".format(
-                root.find("FREEDOM/CIVILRIGHTS"),
-                root.find("FREEDOM/ECONOMY"),
-                root.find("FREEDOM/POLITICALFREEDOM"),
+                self._find_text_and_assert(root, "FREEDOM/CIVILRIGHTS"),
+                self._find_text_and_assert(root, "FREEDOM/ECONOMY"),
+                self._find_text_and_assert(root, "FREEDOM/POLITICALFREEDOM"),
             ),
             inline=False,
         )
         embed.add_field(
-            name=root.UNSTATUS.text,
+            name=self._find_text_and_assert(root, "UNSTATUS"),
             value="{} | {:.0f} influence ({})".format(
-                endo, root.find("CENSUS/SCALE[@id='65']/SCORE").pyval, root.INFLUENCE.text
+                endo,
+                float(self._find_text_and_assert(root, "CENSUS/SCALE[@id='65']/SCORE")),
+                self._find_text_and_assert(root, "INFLUENCE"),
             ),
             inline=False,
         )
         if is_zday:
             embed.add_field(
                 name="{}{}".format(
-                    (root.ZOMBIE.ZACTION.text or "No Action").title(),
-                    " (Unintended)" if root.ZOMBIE.ZACTIONINTENDED.text else "",
+                    (self._find_text_and_assert(root, "ZOMBIE/ZACTION") or "No Action").title(),
+                    " (Unintended)"
+                    if self._find_text_and_assert(root, "ZOMBIE/ZACTIONINTENDED")
+                    else "",
                 ),
                 value="Survivors: {} | Zombies: {} | Dead: {}".format(
-                    self._illion(root.ZOMBIE.SURVIVORS),
-                    self._illion(root.ZOMBIE.ZOMBIES),
-                    self._illion(root.ZOMBIE.DEAD),
+                    self._illion(self._find_text_and_assert(root, "ZOMBIE/SURVIVORS", int)),
+                    self._illion(self._find_text_and_assert(root, "ZOMBIE/ZOMBIES", int)),
+                    self._illion(self._find_text_and_assert(root, "ZOMBIE/DEAD", int)),
                 ),
                 inline=False,
             )
@@ -331,93 +350,145 @@ class NationStates(commands.Cog):
             value=(
                 "[{0}'s Deck](https://www.nationstates.net/page=deck/nation={1})\t|"
                 "\t[{0}'s Card](https://www.nationstates.net/page=deck/card={2})".format(
-                    root.NAME.text, n_id, root.DBID.text
+                    self._find_text_and_assert(root, "NAME"),
+                    n_id,
+                    self._find_text_and_assert(root, "DBID"),
                 )
             ),
         )
         embed.set_footer(text="Last Active")
         await embed.send_to(ctx)
 
-    @commands.command()
+    @commands.hybrid_command()
     async def region(self, ctx: commands.Context, *, region: Link[Region]):
         """Retrieves general info about a specified NationStates region"""
-        api: Api = Api(
-            "delegate delegateauth delegatevotes flag founded founder founderauth lastupdate name numnations power tags zombie",
-            region=region,
-        )
         try:
-            root = await api
-        except NotFound:
+            root = await self._get_as_xml(
+                "delegate delegateauth delegatevotes flag founded founder "
+                "governor lastupdate name numnations officers power tags zombie",
+                region=region,
+            )
+        except sans.NotFound:
             embed = ProxyEmbed(
                 title=region.replace("_", " ").title(), description="This region does not exist."
             )
             embed.set_author(name="NationStates", url="https://www.nationstates.net/")
             return await embed.send_to(ctx)
-        if root.DELEGATE.text == "0":
-            delvalue = "No Delegate"
+        if self._find_text_and_assert(root, "DELEGATE") == "0":
+            delvalue = "\u200b"
         else:
-            endo = root.DELEGATEVOTES.pyval - 1
+            endo = self._find_text_and_assert(root, "DELEGATEVOTES", int) - 1
             if endo == 1:
                 endo = "{:.0f} endorsement".format(endo)
             else:
                 endo = "{:.0f} endorsements".format(endo)
             delvalue = "[{}](https://www.nationstates.net/nation={}) | {}".format(
-                root.DELEGATE.text.replace("_", " ").title(), root.DELEGATE.text, endo
+                self._find_text_and_assert(root, "DELEGATE").replace("_", " ").title(),
+                self._find_text_and_assert(root, "DELEGATE"),
+                endo,
             )
-        if "X" in root.DELEGATEAUTH.text:
+        if "X" in self._find_text_and_assert(root, "DELEGATEAUTH"):
             delheader = "Delegate"
         else:
             delheader = "Delegate (Non-Executive)"
         tags = {t.text for t in root.iterfind("TAGS/TAG")}
-        founderless = "Founderless" in tags
-        founded = "in Antiquity" if root.FOUNDED.pyval == 0 else root.FOUNDED.pyval
-        if root.FOUNDER.text == "0":
-            foundervalue = "No Founder"
-        else:
-            if founderless:
+        # Note: This logic will mark TRR as "Sinker", not "Catcher"
+        # The reason for this can be found here: https://forum.nationstates.net/viewtopic.php?f=15&t=533753
+        # TODO: Change TRR's classification once the "Catcher" tag is renamed
+        major_tag = next(
+            filter(
+                tags.__contains__, ("Frontier", "Feeder", "Restorer", "Sinker", "Governorless")
+            ),
+            "Stronghold",
+        )
+        founded = self._find_text_and_assert(root, "FOUNDED")
+        if founded == "0":
+            founded = "in Antiquity"
+        execvalue = []
+        founder = self._find_text_and_assert(root, "FOUNDER")
+        if founder != "0":
+            if "Founderless" in tags:
                 url = "https://www.nationstates.net/page=boneyard?nation="
             else:
                 url = "https://www.nationstates.net/nation="
-            foundervalue = "[{}]({}{}){}".format(
-                root.FOUNDER.text.replace("_", " ").title(),
-                url,
-                root.FOUNDER.text,
-                " (Ceased to Exist)" if founderless else "",
+            execvalue.append(
+                "Founder: [{}]({}{}){}".format(
+                    founder.replace("_", " ").title(),
+                    url,
+                    founder,
+                    " (Ceased to Exist)" if ("Founderless" in tags) else "",
+                )
             )
-        founderheader = "Founderless" if founderless else "Founder"
-        if not root.FOUNDERAUTH.text or "X" not in root.FOUNDERAUTH.text:
-            founderheader += " (Non-Executive)"
+        governor = self._find_text_and_assert(root, "GOVERNOR")
+        if governor != "0":
+            if major_tag == "Governorless":
+                url = "https://www.nationstates.net/page=boneyard?nation="
+            else:
+                url = "https://www.nationstates.net/nation="
+            execvalue.append(
+                "Governor: [{}]({}{}){}".format(
+                    governor.replace("_", " ").title(),
+                    url,
+                    governor,
+                    " (Ceased to Exist)" if (major_tag == "Governorless") else "",
+                )
+            )
+        officers = root.find("OFFICERS")
+        assert officers is not None
+        for officer in officers:
+            if "S" in self._find_text_and_assert(officer, "AUTHORITY"):
+                successor = self._find_text_and_assert(officer, "NATION")
+                execvalue.append(
+                    "Successor: [{}](https://www.nationstates.net/nation={})".format(
+                        successor.replace("_", " ").title(), successor
+                    )
+                )
         fash = "Fascist" in tags and "Anti-Fascist" not in tags  # why do people hoard tags...
-        name = "{}{}".format("\N{LOCK} " if "Password" in tags else "", root.NAME.text)
+        name = "{}{}".format(
+            "\N{LOCK} " if "Password" in tags else "", self._find_text_and_assert(root, "NAME")
+        )
         warning = (
             "\n**```css\n\N{HEAVY EXCLAMATION MARK SYMBOL} Region Tagged as Fascist \N{HEAVY EXCLAMATION MARK SYMBOL}\n```**"
             if fash
             else ""
         )
 
-        description = "[{} nations](https://www.nationstates.net/region={}/page=list_nations) | Founded {} | Power: {}{}".format(
-            root.NUMNATIONS.pyval, root.get("id"), founded, root.POWER.text, warning
+        numnations = self._find_text_and_assert(root, "NUMNATIONS", int)
+        description = "[{} nation{}](https://www.nationstates.net/region={}/page=list_nations) | Founded {} | Power: {}{}".format(
+            numnations,
+            "" if numnations == 1 else "s",
+            root.get("id"),
+            founded,
+            self._find_text_and_assert(root, "POWER"),
+            warning,
         )
-        is_zday = self._is_zday(ctx.message, dev=ctx.author.id == 215640856839979008)
+        is_zday = self._is_zday(ctx.message)
         embed = ProxyEmbed(
             title=name,
             url="https://www.nationstates.net/region={}".format(root.get("id")),
             description=description,
-            timestamp=datetime.utcfromtimestamp(root.LASTUPDATE.pyval),
+            timestamp=datetime.utcfromtimestamp(
+                self._find_text_and_assert(root, "LASTUPDATE", int)
+            ),
             colour=0x000001 if fash else 0x8BBC21 if is_zday else await ctx.embed_colour(),
         )
         embed.set_author(name="NationStates", url="https://www.nationstates.net/")
-        if root.FLAG.text:
-            embed.set_thumbnail(url=root.FLAG.text)
-        embed.add_field(name=founderheader, value=foundervalue, inline=False)
-        embed.add_field(name=delheader, value=delvalue, inline=False)
+        flag = root.find("FLAG").text  # type: ignore
+        if flag:
+            embed.set_thumbnail(url=flag)
+        embed.add_field(name=delheader, value=delvalue, inline=True)
+        embed.add_field(
+            name=major_tag,
+            value="\n".join(execvalue) if execvalue else "\u200b",
+            inline=True,
+        )
         if is_zday:
             embed.add_field(
                 name="Zombies",
                 value="Survivors: {} | Zombies: {} | Dead: {}".format(
-                    self._illion(root.ZOMBIE.SURVIVORS),
-                    self._illion(root.ZOMBIE.ZOMBIES),
-                    self._illion(root.ZOMBIE.DEAD),
+                    self._illion(self._find_text_and_assert(root, "ZOMBIE/SURVIVORS", int)),
+                    self._illion(self._find_text_and_assert(root, "ZOMBIE/ZOMBIES", int)),
+                    self._illion(self._find_text_and_assert(root, "ZOMBIE/DEAD", int)),
                 ),
                 inline=False,
             )
@@ -447,55 +518,60 @@ class NationStates(commands.Cog):
         if season is not None and nation is None:
             season, nation = 3, season
         if isinstance(nation, str) and nation not in self.db_cache:
-            api = Api("dbid", nation=nation)
             try:
-                root = await api
-            except NotFound:
+                root = await self._get_as_xml("dbid", nation=nation)
+            except sans.NotFound:
                 return await ctx.send(
                     f"Nation {nation!r} does not exist. "
                     "Please provide its card ID instead, and I'll remember it for next time."
                 )
-            n_id, nation = root.get("id"), root.DBID.pyval
+            n_id, nation = root.get("id"), self._find_text_and_assert(root, "DBID")
             self.db_cache[n_id] = {"dbid": nation}
             await self.config.custom("NATION", n_id).dbid.set(nation)
         else:
             n_id, nation = None, self.db_cache.get(nation, {}).get("dbid", nation)
-        assert isinstance(nation, int), repr(nation)
-        api = Api("card info markets", cardid=nation, season=season)
-        root = await api
-        if not root.countchildren():
+        root = await self._get_as_xml("card info markets", cardid=nation, season=season)
+        if not len(root):
             if n_id:
                 return await ctx.send(f"No such S{season} card for nation {n_id!r}.")
             return await ctx.send(f"No such S{season} card for ID {nation!r}.")
-        n_id = root.NAME.text.casefold().replace(" ", "_")
+        n_id = self._find_text_and_assert(root, "NAME").casefold().replace(" ", "_")
         if n_id not in self.db_cache:
             self.db_cache[n_id] = {"dbid": nation}
             await self.config.custom("NATION", n_id).dbid.set(nation)
         embed = ProxyEmbed(
-            title=f"The {root.TYPE.text} of {root.NAME.text}",
+            title=f"The {self._find_text_and_assert(root, 'TYPE')} of {self._find_text_and_assert(root, 'NAME')}",
             url=f"https://www.nationstates.net/page=deck/card={nation}/season={season}",
-            colour=CARD_COLORS.get(root.CATEGORY.text, 0),
+            colour=CARD_COLORS.get(self._find_text_and_assert(root, "CATEGORY"), 0),
         )
-        embed.set_author(name=root.CATEGORY.text.title())
+        embed.set_author(name=self._find_text_and_assert(root, "CATEGORY").title())
         embed.set_thumbnail(
-            url=f"https://www.nationstates.net/images/cards/s{season}/{root.FLAG.text}"
+            url=f"https://www.nationstates.net/images/cards/s{season}/{self._find_text_and_assert(root, 'FLAG')}"
         )
         embed.add_field(
             name="Market Value (estimated)",
-            value=box(root.MARKET_VALUE.text, lang="swift"),
+            value=box(self._find_text_and_assert(root, "MARKET_VALUE"), lang="swift"),
             inline=False,
         )
-        sellers: List[Tuple[int, str]] = []
-        buyers: List[Tuple[int, str]] = []
-        for market in root.MARKETS.iterchildren():
-            if market.TYPE.text == "bid":
+        sellers: List[Tuple[float, str]] = []
+        buyers: List[Tuple[float, str]] = []
+        for market in root.find("MARKETS"):
+            if self._find_text_and_assert(market, "TYPE") == "bid":
                 # negative price to reverse sorting
                 bisect.insort(
-                    buyers, (-market.PRICE.pyval, market.NATION.text.replace("_", " ").title())
+                    buyers,
+                    (
+                        -self._find_text_and_assert(market, "PRICE", float),
+                        self._find_text_and_assert(market, "NATION").replace("_", " ").title(),
+                    ),
                 )
-            elif market.TYPE.text == "ask":
+            elif self._find_text_and_assert(market, "TYPE") == "ask":
                 bisect.insort(
-                    sellers, (market.PRICE.pyval, market.NATION.text.replace("_", " ").title())
+                    sellers,
+                    (
+                        self._find_text_and_assert(market, "PRICE", float),
+                        self._find_text_and_assert(market, "NATION").replace("_", " ").title(),
+                    ),
                 )
         if not any((buyers, sellers)):
             return await embed.send_to(ctx)
@@ -542,30 +618,35 @@ class NationStates(commands.Cog):
         """Retrieves general info about the specified nation's deck."""
         is_id = isinstance(nation, int)
         if is_id:
-            api = Api("cards info", nationid=nation)
+            root = await self._get_as_xml("cards info", nationid=str(nation))
         else:
-            api = Api("cards info", nationname=nation)
-        root = await api
-        if not root.INFO.countchildren():
+            root = await self._get_as_xml("cards info", nationname=nation)
+        if not len(root.find("INFO")):
             if is_id:
                 return await ctx.send(f"No such deck for ID {nation}.")
             return await ctx.send(f"No such deck for nation {nation!r}.")
-        n_id = root.INFO.NAME.text
+        n_id = self._find_text_and_assert(root, "INFO/NAME")
         if n_id not in self.db_cache:
-            self.db_cache[n_id] = {"dbid": root.INFO.ID.pyval}
-            await self.config.custom("NATION", n_id).dbid.set(root.INFO.ID.pyval)
+            self.db_cache[n_id] = {"dbid": self._find_text_and_assert(root, "INFO/ID")}
+            await self.config.custom("NATION", n_id).dbid.set(
+                self._find_text_and_assert(root, "INFO/ID")
+            )
         embed = ProxyEmbed(
             title=n_id.replace("_", " ").title(),
             url=f"https://www.nationstates.net/page=deck/nation={n_id}",
-            description=f"{root.INFO.NUM_CARDS.text} cards",
+            description=f"{self._find_text_and_assert(root, 'INFO/NUM_CARDS')} cards",
             colour=await ctx.embed_colour(),
-            timestamp=datetime.utcfromtimestamp(root.INFO.LAST_VALUED.pyval),
+            timestamp=datetime.utcfromtimestamp(
+                self._find_text_and_assert(root, "INFO/LAST_VALUED", int)
+            ),
         )
-        embed.add_field(name="Bank", value=root.INFO.BANK.text)
+        embed.add_field(name="Bank", value=self._find_text_and_assert(root, "INFO/BANK"))
         embed.add_field(
             name="Deck Value",
-            value=f"[{root.INFO.DECK_VALUE.text}](https://www.nationstates.net/nation={n_id}/detail=trend/censusid=86)"
-            f"\nRanked #{root.INFO.RANK.text} worldwide, #{root.INFO.REGION_RANK.text} regionally.",
+            value=f"[{self._find_text_and_assert(root, 'INFO/DECK_VALUE')}]"
+            f"(https://www.nationstates.net/nation={n_id}/detail=trend/censusid=86)"
+            f"\nRanked #{self._find_text_and_assert(root, 'INFO/RANK')} worldwide, "
+            f"#{self._find_text_and_assert(root, 'INFO/REGION_RANK')} regionally.",
             inline=False,
         )
         embed.set_footer(text="Last Valued")
@@ -600,10 +681,10 @@ class NationStates(commands.Cog):
             request["id"] = str(resolution_id)
         else:
             shards.append("lastresolution")
-        root = await Api(request, q=shards)
-        if not root.RESOLUTION.countchildren():
+        root = await self._get_as_xml(*shards, **request)
+        if not len(root.find("RESOLUTION")):
             out = (
-                unescape(root.LASTRESOLUTION.text)
+                unescape(self._find_text_and_assert(root, "LASTRESOLUTION"))
                 .replace("<strong>", "**")
                 .replace("</strong>", "**")
             )
@@ -623,15 +704,21 @@ class NationStates(commands.Cog):
                 url="https://www.nationstates.net/images/{}.jpg".format("sc" if is_sc else "ga")
             )
             return await embed.send_to(ctx)
-        root = root.RESOLUTION
+        root = root.find("RESOLUTION")
+        assert root
         img = {
-            "Commendation": "images/commend.png",
-            "Condemnation": "images/condemn.png",
-            "Liberation": "images/liberate.png",
-        }.get(root.CATEGORY.text, "images/ga.jpg")
+            "Commendation": "https://i.imgur.com/peX3xUf.png",
+            "Condemnation": "https://i.imgur.com/IK3itYt.png",
+            "Liberation": "https://i.imgur.com/O7jOkyr.png",
+            "Injunction": "https://i.imgur.com/5Tq1yfa.png",
+            "Declaration": "https://www.nationstates.net/images/sc.jpg",
+        }.get(
+            self._find_text_and_assert(root, "CATEGORY"), "https://nationstates.net/images/ga.jpg"
+        )
         if option & WA.TEXT:
             description = "**Category: {}**\n\n{}".format(
-                root.CATEGORY.text, escape(root.DESC.text, formatting=True)
+                self._find_text_and_assert(root, "CATEGORY"),
+                escape(self._find_text_and_assert(root, "DESC"), formatting=True),
             )
             short = next(
                 pagify(
@@ -645,14 +732,16 @@ class NationStates(commands.Cog):
             if len(short) < len(description):
                 description = short + "\N{HORIZONTAL ELLIPSIS}"
         else:
-            description = "Category: {}".format(root.CATEGORY.text)
+            description = "Category: {}".format(self._find_text_and_assert(root, "CATEGORY"))
         if resolution_id:
-            impl = root.IMPLEMENTED.pyval
+            impl = self._find_text_and_assert(root, "IMPLEMENTED", int)
         else:
             # mobile embeds can't handle the FUTURE
-            impl = root.PROMOTED.pyval  # + (4 * 24 * 60 * 60)  # 4 Days
+            impl = self._find_text_and_assert(
+                root, "PROMOTED", int
+            )  # + (4 * 24 * 60 * 60)  # 4 Days
         embed = ProxyEmbed(
-            title=root.NAME.text,
+            title=self._find_text_and_assert(root, "NAME"),
             url="https://www.nationstates.net/page={}".format("sc" if is_sc else "ga")
             if not resolution_id
             else "https://www.nationstates.net/page=WA_past_resolution/id={}/council={}".format(
@@ -663,37 +752,45 @@ class NationStates(commands.Cog):
             colour=await ctx.embed_colour(),
         )
         try:
-            authroot = await Api("fullname flag", nation=root.PROPOSED_BY.text)
-        except NotFound:
+            authroot = await self._get_as_xml(
+                "fullname flag", nation=self._find_text_and_assert(root, "PROPOSED_BY")
+            )
+        except sans.NotFound:
             embed.set_author(
-                name=root.PROPOSED_BY.text.replace("_", " ").title(),
+                name=self._find_text_and_assert(root, "PROPOSED_BY").replace("_", " ").title(),
                 url="https://www.nationstates.net/page=boneyard?nation={}".format(
-                    root.PROPOSED_BY.text
+                    self._find_text_and_assert(root, "PROPOSED_BY")
                 ),
                 icon_url="http://i.imgur.com/Pp1zO19.png",
             )
         else:
             embed.set_author(
-                name=authroot.FULLNAME.text,
-                url="https://www.nationstates.net/nation={}".format(root.PROPOSED_BY.text),
-                icon_url=authroot.FLAG.text,
+                name=self._find_text_and_assert(authroot, "FULLNAME"),
+                url="https://www.nationstates.net/nation={}".format(
+                    self._find_text_and_assert(root, "PROPOSED_BY")
+                ),
+                icon_url=self._find_text_and_assert(authroot, "FLAG"),
             )
-        embed.set_thumbnail(url="https://www.nationstates.net/{}".format(img))
+        embed.set_thumbnail(url=img)
         if option & WA.DELEGATE:
             for_del_votes = heapq.nlargest(
-                10, root.iterfind("DELVOTES_FOR/DELEGATE"), key=operator.attrgetter("VOTES.pyval")
+                10,
+                root.iterfind("DELVOTES_FOR/DELEGATE"),
+                key=lambda el: self._find_text_and_assert(el, "VOTES", int),
             )
             against_del_votes = heapq.nlargest(
                 10,
                 root.iterfind("DELVOTES_AGAINST/DELEGATE"),
-                key=operator.attrgetter("VOTES.pyval"),
+                key=lambda el: self._find_text_and_assert(el, "VOTES", int),
             )
             if for_del_votes:
                 embed.add_field(
                     name="Top Delegates For",
                     value="\t|\t".join(
                         "[{}](https://www.nationstates.net/nation={}) ({})".format(
-                            e.NATION.text.replace("_", " ").title(), e.NATION.text, e.VOTES.text
+                            self._find_text_and_assert(e, "NATION").replace("_", " ").title(),
+                            self._find_text_and_assert(e, "NATION"),
+                            self._find_text_and_assert(e, "VOTES"),
                         )
                         for e in for_del_votes
                     ),
@@ -704,7 +801,9 @@ class NationStates(commands.Cog):
                     name="Top Delegates Against",
                     value="\t|\t".join(
                         "[{}](https://www.nationstates.net/nation={}) ({})".format(
-                            e.NATION.text.replace("_", " ").title(), e.NATION.text, e.VOTES.text
+                            self._find_text_and_assert(e, "NATION").replace("_", " ").title(),
+                            self._find_text_and_assert(e, "NATION"),
+                            self._find_text_and_assert(e, "VOTES"),
                         )
                         for e in against_del_votes
                     ),
@@ -713,30 +812,36 @@ class NationStates(commands.Cog):
         if option & WA.VOTE:
             percent = (
                 100
-                * root.TOTAL_VOTES_FOR.pyval
-                / (root.TOTAL_VOTES_FOR.pyval + root.TOTAL_VOTES_AGAINST.pyval)
+                * self._find_text_and_assert(root, "TOTAL_VOTES_FOR", int)
+                / (
+                    self._find_text_and_assert(root, "TOTAL_VOTES_FOR", int)
+                    + self._find_text_and_assert(root, "TOTAL_VOTES_AGAINST", int)
+                )
             )
             embed.add_field(
                 name="Total Votes",
                 value="For {}\t{:◄<13}\t{} Against".format(
-                    root.TOTAL_VOTES_FOR.pyval,
+                    self._find_text_and_assert(root, "TOTAL_VOTES_FOR"),
                     "►" * int(round(percent / 10)) + str(int(round(percent))) + "%",
-                    root.TOTAL_VOTES_AGAINST.pyval,
+                    self._find_text_and_assert(root, "TOTAL_VOTES_AGAINST"),
                 ),
                 inline=False,
             )
         if option & WA.NATION:
             percent = (
                 100
-                * root.TOTAL_NATIONS_FOR.pyval
-                / (root.TOTAL_NATIONS_FOR.pyval + root.TOTAL_NATIONS_AGAINST.pyval)
+                * self._find_text_and_assert(root, "TOTAL_NATIONS_FOR", int)
+                / (
+                    self._find_text_and_assert(root, "TOTAL_NATIONS_FOR", int)
+                    + self._find_text_and_assert(root, "TOTAL_NATIONS_AGAINST", int)
+                )
             )
             embed.add_field(
                 name="Total Nations",
                 value="For {}\t{:◄<13}\t{} Against".format(
-                    root.TOTAL_NATIONS_FOR.pyval,
+                    self._find_text_and_assert(root, "TOTAL_NATIONS_FOR"),
                     "►" * int(round(percent / 10)) + str(int(round(percent))) + "%",
-                    root.TOTAL_NATIONS_AGAINST.pyval,
+                    self._find_text_and_assert(root, "TOTAL_NATIONS_AGAINST"),
                 ),
                 inline=False,
             )
@@ -746,7 +851,9 @@ class NationStates(commands.Cog):
             embed.add_field(
                 name="Repealed By",
                 value='[Repeal "{}"](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})'.format(
-                    root.NAME.text, root.REPEALED_BY.text, "2" if is_sc else "1"
+                    self._find_text_and_assert(root, "NAME"),
+                    self._find_text_and_assert(root, "REPEALED_BY"),
+                    "2" if is_sc else "1",
                 ),
                 inline=False,
             )
@@ -755,7 +862,7 @@ class NationStates(commands.Cog):
             embed.add_field(
                 name="Repeals",
                 value="[{}](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})".format(
-                    root.NAME.text[8:-1], repeals, "2" if is_sc else "1"
+                    self._find_text_and_assert(root, "NAME")[8:-1], repeals, "2" if is_sc else "1"
                 ),
                 inline=False,
             )
@@ -780,34 +887,42 @@ class NationStates(commands.Cog):
             return await ctx.send_help()
         request: dict = {}
         key = "q"
-        for i, shard in enumerate(shards):
+        ishards = iter(shards)
+        for shard in ishards:
             if shard.startswith("--"):
                 if key != "q":
                     return await ctx.send("No value provided for key {!r}".format(key))
                 key = shard[2:]
             elif shard.startswith("*"):
-                request.setdefault(key, []).append(" ".join((shard[1:], *shards[i + 1 :])).strip())
+                # consume the rest
+                request.setdefault(key, []).append(" ".join(chain([shard[1:]], ishards)).strip())
                 key = "q"
-                break
             else:
                 request.setdefault(key, []).append(shard)
                 key = "q"
         if key != "q":
             return await ctx.send("No value provided for key {!r}".format(key))
-        root = await Api(**request)
-        await ctx.send_interactive(pagify(pretty_string(root), shorten_by=11), "xml")
+        root = await self._get_as_xml(**{k: " ".join(v) for k, v in request.items()})
+        sans.indent(root)
+        await ctx.send_interactive(
+            pagify(etree.tostring(root, encoding="unicode"), shorten_by=11), "xml"
+        )
 
     # __________ ENDORSE __________
 
-    @commands.command()
+    @commands.hybrid_command()
     async def ne(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Endorsing (NE) the specified WA nation"""
-        root = await Api("endorsements flag fullname wa", nation=wa_nation)
-        if root.UNSTATUS.text.lower() == "non-member":
-            return await ctx.send(f"{root.FULLNAME.text} is not a WA member.")
-        if not root.ENDORSEMENTS.text:
-            return await ctx.send(f"{root.FULLNAME.text} has no endorsements.")
-        final = root.ENDORSEMENTS.text.split(",")
+        root = await self._get_as_xml("endorsements flag fullname wa", nation=wa_nation)
+        if self._find_text_and_assert(root, "UNSTATUS").lower() == "non-member":
+            return await ctx.send(
+                f"{self._find_text_and_assert(root, 'FULLNAME')} is not a WA member."
+            )
+        if not self._find_text_and_assert(root, "ENDORSEMENTS"):
+            return await ctx.send(
+                f"{self._find_text_and_assert(root, 'FULLNAME')} has no endorsements."
+            )
+        final = self._find_text_and_assert(root, "ENDORSEMENTS").split(",")
         endos = "\n".join(
             f"[{' '.join(endo.split('_')).title()}](https://www.nationstates.net/{endo})"
             for endo in final
@@ -816,49 +931,63 @@ class NationStates(commands.Cog):
         embeds: List[discord.Embed] = []
         for batch in batched(pages, 3):
             embed = discord.Embed(
-                description=f"Nations endorsing [{root.FULLNAME.text}](https://www.nationstates.net/{root.get('id')})",
+                description=f"Nations endorsing [{self._find_text_and_assert(root, 'FULLNAME')}](https://www.nationstates.net/{root.get('id')})",
                 color=await ctx.embed_color(),
             )
-            embed.set_thumbnail(url=root.FLAG.text)
+            embed.set_thumbnail(url=self._find_text_and_assert(root, "FLAG"))
             for endo in batch:
                 embed.add_field(name="\u200b", value=endo, inline=True)
             embeds.append(embed)
         await menu(ctx, embeds, controls(final, paged=len(embeds) > 1), timeout=180)
 
-    @commands.command()
+    @commands.hybrid_command()
     async def nec(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Endorsing [Count] (NEC) the specified WA nation"""
-        root = await Api("census fullname wa", nation=wa_nation, scale="66", mode="score")
-        if root.UNSTATUS.text.lower() == "non-member":
-            return await ctx.send(f"{root.FULLNAME.text} is not a WA member.")
+        root = await self._get_as_xml(
+            "census fullname wa", nation=wa_nation, scale="66", mode="score"
+        )
+        if self._find_text_and_assert(root, "UNSTATUS").lower() == "non-member":
+            return await ctx.send(
+                f"{self._find_text_and_assert(root, 'FULLNAME')} is not a WA member."
+            )
         await ctx.send(
             "{:.0f} nations are endorsing {}".format(
-                root.find(".//SCALE[@id='66']/SCORE").pyval, root.FULLNAME.text
+                self._find_text_and_assert(root, "CENSUS/SCALE[@id='66']/SCORE", float),
+                self._find_text_and_assert(root, "FULLNAME"),
             )
         )
 
-    @commands.command()
+    @commands.hybrid_command()
     async def spdr(self, ctx: commands.Context, *, nation: str):
         """Soft Power Disbursement Rating (SPDR, aka numerical Influence) of the specified nation"""
-        root = await Api("census fullname", nation=nation, scale="65", mode="score")
+        root = await self._get_as_xml("census fullname", nation=nation, scale="65", mode="score")
         await ctx.send(
             "{} has {:.0f} influence".format(
-                root.FULLNAME.text, root.find(".//SCALE[@id='65']/SCORE").pyval
+                self._find_text_and_assert(root, "FULLNAME"),
+                self._find_text_and_assert(root, ".//SCALE[@id='65']/SCORE", float),
             )
         )
 
-    @commands.command()
+    @commands.hybrid_command()
     async def nne(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Not Endorsing (NNE) the specified WA nation"""
-        nation_root = await Api("endorsements flag fullname region wa", nation=wa_nation)
-        if nation_root.UNSTATUS.text.lower() == "non-member":
-            return await ctx.send(f"{nation_root.FULLNAME.text} is not a WA member.")
-        region_root = await Api("wanations", region=nation_root.REGION.text)
-        final = set((region_root.UNNATIONS.text or "").split(",")).difference(
-            (nation_root.ENDORSEMENTS.text or "").split(",")
+        nation_root = await self._get_as_xml(
+            "endorsements flag fullname region wa", nation=wa_nation
         )
+        if self._find_text_and_assert(nation_root, "UNSTATUS").lower() == "non-member":
+            return await ctx.send(
+                f"{self._find_text_and_assert(nation_root, 'FULLNAME')} is not a WA member."
+            )
+        region_root = await self._get_as_xml(
+            "wanations", region=self._find_text_and_assert(nation_root, "REGION")
+        )
+        final = set(
+            (self._find_text_and_assert(region_root, "UNNATIONS") or "").split(",")
+        ).difference((self._find_text_and_assert(nation_root, "ENDORSEMENTS") or "").split(","))
         if not final:
-            return await ctx.send(f"No nation is not endorsing {nation_root.FULLNAME.text}.")
+            return await ctx.send(
+                f"No nation is not endorsing {self._find_text_and_assert(nation_root, 'FULLNAME')}."
+            )
         endos = "\n".join(
             f"[{' '.join(endo.split('_')).title()}](https://www.nationstates.net/{endo})"
             for endo in final
@@ -867,10 +996,10 @@ class NationStates(commands.Cog):
         embeds: List[discord.Embed] = []
         for batch in batched(pages, 3):
             embed = discord.Embed(
-                description=f"Nations not endorsing [{nation_root.FULLNAME.text}](https://www.nationstates.net/{nation_root.get('id')})",
+                description=f"Nations not endorsing [{self._find_text_and_assert(nation_root, 'FULLNAME')}](https://www.nationstates.net/{nation_root.get('id')})",
                 color=await ctx.embed_color(),
             )
-            embed.set_thumbnail(url=nation_root.FLAG.text)
+            embed.set_thumbnail(url=self._find_text_and_assert(nation_root, "FLAG"))
             for endo in batch:
                 embed.add_field(name="\u200b", value=endo, inline=True)
             embeds.append(embed)
@@ -881,19 +1010,23 @@ class NationStates(commands.Cog):
             timeout=180,
         )
 
-    @commands.command()
+    @commands.hybrid_command()
     async def nnec(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Not Endorsing [Count] (NNEC) the specified WA nation"""
-        nation_root = await Api(
+        nation_root = await self._get_as_xml(
             "census fullname region wa", nation=wa_nation, scale="66", mode="score"
         )
-        if nation_root.UNSTATUS.text.lower() == "non-member":
-            return await ctx.send(f"{nation_root.NAME.text} is not a WA member.")
-        region_root = await Api("numwanations", region=nation_root.REGION.text)
+        if self._find_text_and_assert(nation_root, "UNSTATUS").lower() == "non-member":
+            return await ctx.send(
+                f"{self._find_text_and_assert(nation_root, 'NAME')} is not a WA member."
+            )
+        region_root = await self._get_as_xml(
+            "numwanations", region=self._find_text_and_assert(nation_root, "REGION")
+        )
         await ctx.send(
             "{:.0f} nations are not endorsing {}".format(
-                region_root.NUMUNNATIONS.pyval
-                - nation_root.find(".//SCALE[@id='66']/SCORE").pyval,
-                nation_root.FULLNAME.text,
+                self._find_text_and_assert(region_root, "NUMUNNATIONS", int)
+                - self._find_text_and_assert(nation_root, ".//SCALE[@id='66']/SCORE", float),
+                self._find_text_and_assert(nation_root, "FULLNAME"),
             )
         )

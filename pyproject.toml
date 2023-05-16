@@ -14,5 +14,5 @@
     line-length = 99
 
 [tool.ruff.isort]
-    combine_as_imports = true
-    extra_standard_library = ['typing_extensions']
+    combine-as-imports = true
+    extra-standard-library = ['typing_extensions']
