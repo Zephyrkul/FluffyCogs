@@ -3,7 +3,7 @@ import bisect
 import heapq
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Flag, auto
 from functools import reduce
 from html import unescape
@@ -305,8 +305,8 @@ class NationStates(commands.Cog):
                 self._find_text_and_assert(root, "DEMONYM2PLURAL"),
                 founded,
             ),
-            timestamp=datetime.utcfromtimestamp(
-                self._find_text_and_assert(root, "LASTLOGIN", int)
+            timestamp=datetime.fromtimestamp(
+                self._find_text_and_assert(root, "LASTLOGIN", int), timezone.utc
             ),
             colour=0x8BBC21 if is_zday else await ctx.embed_colour(),
         )
@@ -467,8 +467,8 @@ class NationStates(commands.Cog):
             title=name,
             url="https://www.nationstates.net/region={}".format(root.get("id")),
             description=description,
-            timestamp=datetime.utcfromtimestamp(
-                self._find_text_and_assert(root, "LASTUPDATE", int)
+            timestamp=datetime.fromtimestamp(
+                self._find_text_and_assert(root, "LASTUPDATE", int), timezone.utc
             ),
             colour=0x000001 if fash else 0x8BBC21 if is_zday else await ctx.embed_colour(),
         )
@@ -636,8 +636,8 @@ class NationStates(commands.Cog):
             url=f"https://www.nationstates.net/page=deck/nation={n_id}",
             description=f"{self._find_text_and_assert(root, 'INFO/NUM_CARDS')} cards",
             colour=await ctx.embed_colour(),
-            timestamp=datetime.utcfromtimestamp(
-                self._find_text_and_assert(root, "INFO/LAST_VALUED", int)
+            timestamp=datetime.fromtimestamp(
+                self._find_text_and_assert(root, "INFO/LAST_VALUED", int), timezone.utc
             ),
         )
         embed.add_field(name="Bank", value=self._find_text_and_assert(root, "INFO/BANK"))
@@ -748,7 +748,7 @@ class NationStates(commands.Cog):
                 resolution_id, "2" if is_sc else "1"
             ),
             description=description,
-            timestamp=datetime.utcfromtimestamp(impl),
+            timestamp=datetime.fromtimestamp(impl, timezone.utc),
             colour=await ctx.embed_colour(),
         )
         try:
