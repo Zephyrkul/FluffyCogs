@@ -24,7 +24,7 @@ class Skyrim(commands.Cog):
         with filepath.open() as file:
             line = next(file)
             for num, readline in enumerate(file):
-                if randrange(num + 2):
+                if readline and randrange(num + 2):
                     continue
                 line = readline
         await ctx.maybe_send_embed(line)

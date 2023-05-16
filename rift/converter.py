@@ -71,10 +71,10 @@ class DiscordConverter(commands.Converter):
         predicate = MessagePredicate.valid_int(ctx=ctx)
         try:
             await ctx.bot.wait_for("message", check=predicate, timeout=30)
-        except asyncio.TimeoutError as te:
+        except asyncio.TimeoutError:
             m = _("No destination selected.")
             await ctx.send(m)
-            raise commands.BadArgument(m)
+            raise commands.BadArgument(m) from None
         result = predicate.result
         try:
             return results[result]

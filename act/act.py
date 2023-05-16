@@ -10,7 +10,7 @@ import inflection
 from redbot.core import Config, bot, commands, i18n
 from redbot.core.utils.chat_formatting import italics
 
-from .helpers import *
+from .helpers import CONJ, LY_VERBS, NOLY_ADV, SOFT_VERBS
 
 fmt_re = re.compile(r"{(?:0|user)(?:\.([^\{]+))?}")
 cmd_re = re.compile(r"[a-zA-Z_]+")
@@ -140,7 +140,7 @@ class Act(commands.Cog):
                 "media_filter": "minimal",
                 "contentfilter": "off" if getattr(ctx.channel, "nsfw", False) else "low",
                 "ar_range": "wide",
-                "limit": 20,
+                "limit": "20",
                 "locale": i18n.get_locale(),
             },
         ) as response:

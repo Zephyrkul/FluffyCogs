@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
     _H = TypeVar("_H", bound=Hashable)
 
-    def deduplicate_iterables(*iterables: Iterable[_H]) -> List[_H]:
+    def deduplicate_iterables(*iterables: Iterable[_H]) -> List[_H]:  # noqa: F811
         ...
 
 else:
@@ -124,9 +124,9 @@ async def purge_ids(
             else:
                 return
     else:
-        for partial in snowflakes:
+        for partial_message in snowflakes:
             try:
-                await partial.delete()
+                await partial_message.delete()
             except discord.Forbidden:
                 return
             except discord.HTTPException:
@@ -448,7 +448,7 @@ class Rift(commands.Cog):
         except KeyError:
             raise commands.BadArgument(
                 _("Invalid scope. Scope must be author, channel, guild, server, or global.")
-            )
+            ) from None
 
         if not scoped and not await ctx.bot.is_owner(ctx.author):
             raise commands.CheckFailure()
@@ -660,7 +660,8 @@ class Rift(commands.Cog):
 
     @staticmethod
     def xbytes(b):
-        for suffix in ("", "K", "M"):
+        suffix = ""
+        for suffix in ("", "K", "M"):  # noqa: B007
             if b <= 900:
                 break
             b /= 1024.0

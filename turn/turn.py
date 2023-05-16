@@ -136,11 +136,11 @@ class Turn(commands.Cog):
     @gamecheck(False)
     async def load(self, ctx, *, name: standstr):
         """Load a previously saved turn set."""
-        l = await self.config.guild(ctx.guild).get_raw("games", name)
-        l[0] = collections.deque(map(ctx.guild.get_member, l[0]))
+        loaded = await self.config.guild(ctx.guild).get_raw("games", name)
+        loaded[0] = collections.deque(map(ctx.guild.get_member, loaded[0]))
         gc = ctx.guild.get_channel
-        l[1], l[2] = gc(l[1]), gc(l[2])
-        g = Game(*l)
+        loaded[1], loaded[2] = gc(loaded[1]), gc(loaded[2])
+        g = Game(*loaded)
         self.games[ctx.guild] = g
         await ctx.send("Queue: " + ", ".join(map(str, self.get(ctx).queue)))
 

@@ -1,4 +1,3 @@
-import itertools
 import math
 
 ch = "\u2500\u2572\u2502\u2571 "

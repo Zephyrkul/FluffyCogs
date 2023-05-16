@@ -11,7 +11,7 @@ _ = Translator("Theme", __file__)
 
 
 def theme_strip(argument):
-    return [t.strip().strip('"<>"') for t in argument.split(",")]
+    return [t.strip().strip('"<>"') for t in argument.split(",")]  # noqa: B005
 
 
 @cog_i18n(_)

@@ -1,7 +1,6 @@
 import asyncio
 import collections
 import io
-import itertools
 from copy import copy
 from dataclasses import dataclass
 from datetime import datetime

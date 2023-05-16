@@ -1,10 +1,7 @@
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Any, Generator, Optional
+from typing import Any, Generator, Optional
 
 from redbot.core import commands
-
-if TYPE_CHECKING:
-    from .context import InterContext
 
 try:
     import regex as re

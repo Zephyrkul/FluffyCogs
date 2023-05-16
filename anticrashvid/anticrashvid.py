@@ -85,8 +85,8 @@ class AntiCrashVid(commands.Cog):
                 current_hashes.clear()
             with open(bundled_data_path(self) / "known_hashes", "rb") as file:
                 while chunk := file.read(b85_digest_size):
-                    assert len(chunk) == b85_digest_size
-                    current_hashes[b85decode(chunk).hex()] = value
+                    if len(chunk) == b85_digest_size:
+                        current_hashes[b85decode(chunk).hex()] = value
 
     @commands.command(hidden=True)
     @commands.is_owner()
