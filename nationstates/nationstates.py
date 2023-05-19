@@ -31,7 +31,7 @@ import sans
 from proxyembed import ProxyEmbed
 from redbot.core import Config, commands, version_info as red_version
 from redbot.core.bot import Red
-from redbot.core.utils.chat_formatting import box, escape, humanize_list, pagify
+from redbot.core.utils.chat_formatting import box, escape, pagify
 from redbot.core.utils.menus import DEFAULT_CONTROLS, close_menu, menu
 
 _T = TypeVar("_T")
@@ -145,17 +145,8 @@ class NationStates(commands.Cog):
 
     async def initialize(self):
         agent = await self.config.agent()
-        if not agent:
-            await self.bot.wait_until_red_ready()
-            if not self.bot.owner_ids:
-                # always False but forces owner_ids to be filled
-                await self.bot.is_owner(discord.Object(id=0))  # type: ignore
-            owner_ids = self.bot.owner_ids
-            # only make the user_info request if necessary
-            agent = humanize_list(
-                [str(self.bot.get_user(id) or await self.bot.fetch_user(id)) for id in owner_ids]  # type: ignore
-            )
-        sans.set_agent(f"{agent} Red-DiscordBot/{red_version}", _force=True)  # type: ignore
+        if agent:
+            sans.set_agent(f"{agent} Red-DiscordBot/{red_version}", _force=True)  # type: ignore
         self.db_cache = await self.config.custom("NATION").all()
         self.cog_ready.set()
 
@@ -180,8 +171,17 @@ class NationStates(commands.Cog):
         if original:
             if isinstance(original, httpx.TimeoutException):
                 return await ctx.send("Request timed out.")
-            if isinstance(original, sans.HTTPStatusError):
-                return await ctx.send(f"{original.response.status_code}: {''.join(original.args)}")
+            elif isinstance(original, sans.HTTPStatusError):
+                return await ctx.send(
+                    f"{original.response.status_code}: {' '.join(original.args)}"
+                )
+            elif isinstance(original, sans.AgentNotSetError):
+                return await ctx.send(
+                    f"User agent has not yet been set. Set it with `{ctx.clean_prefix}agent`.\n"
+                    "```The API Terms of Use require your script to supply a useful UserAgent string, "
+                    "so we can contact you in the event of problems. Please give your script a UserAgent "
+                    "that includes your contact details, such as an email, URL, or nation name.```"
+                )
         return await ctx.bot.on_command_error(ctx, error, unhandled_by_cog=True)  # type: ignore
 
     # __________ UTILS __________
@@ -248,7 +248,6 @@ class NationStates(commands.Cog):
         Sets the user agent.
 
         Recommendations: https://www.nationstates.net/pages/api.html#terms
-        Defaults to your username#hash
         """
         full_agent = f"{agent} Red-DiscordBot/{red_version}"
         sans.set_agent(full_agent, _force=True)  # type: ignore
@@ -436,9 +435,6 @@ class NationStates(commands.Cog):
                     )
                 )
         fash = "Fascist" in tags and "Anti-Fascist" not in tags  # why do people hoard tags...
-        name = "{}{}".format(
-            "\N{LOCK} " if "Password" in tags else "", self._find_text_and_assert(root, "NAME")
-        )
         warning = (
             "\n**```css\n\N{HEAVY EXCLAMATION MARK SYMBOL} Region Tagged as Fascist \N{HEAVY EXCLAMATION MARK SYMBOL}\n```**"
             if fash
@@ -446,7 +442,12 @@ class NationStates(commands.Cog):
         )
 
         numnations = self._find_text_and_assert(root, "NUMNATIONS", int)
-        description = "[{} nation{}](https://www.nationstates.net/region={}/page=list_nations) | Founded {} | Power: {}{}".format(
+        description = "{}[{} nation{}](https://www.nationstates.net/region={}/page=list_nations) | Founded {} | Power: {}{}".format(
+            "[`\N{CLOSED LOCK WITH KEY}`]"
+            "(https://forum.nationstates.net/viewtopic.php?p=21269325#p21269325 "
+            "'Password required to enter region') "
+            if "Password" in tags
+            else "",
             numnations,
             "" if numnations == 1 else "s",
             root.get("id"),
@@ -456,7 +457,7 @@ class NationStates(commands.Cog):
         )
         is_zday = self._is_zday(ctx.message)
         embed = ProxyEmbed(
-            title=name,
+            title=self._find_text_and_assert(root, "NAME"),
             url="https://www.nationstates.net/region={}".format(root.get("id")),
             description=description,
             timestamp=datetime.fromtimestamp(
