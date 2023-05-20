@@ -1,4 +1,3 @@
-import asyncio
 import heapq
 import re
 import time
@@ -130,25 +129,22 @@ class NationStates(commands.Cog):
         pass  # No data to delete
 
     # __________ INIT __________
+    db_cache: Dict[str, Dict[Literal["dbid"], str]]
 
     def __init__(self, bot: Red):
         super().__init__()
         self.bot = bot
+        self.client = sans.AsyncClient()
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
         self.config.register_global(agent=None)
-        self.db_cache: Dict[str, Dict[Literal["dbid"], str]] = {}
         self.config.init_custom("NATION", 1)
         self.config.register_custom("NATION", dbid=None)
-        self.cog_ready = asyncio.Event()
-        self.client = sans.AsyncClient()
-        asyncio.create_task(self.initialize())
 
-    async def initialize(self):
+    async def cog_load(self):
         agent = await self.config.agent()
         if agent:
             sans.set_agent(f"{agent} Red-DiscordBot/{red_version}", _force=True)  # type: ignore
         self.db_cache = await self.config.custom("NATION").all()
-        self.cog_ready.set()
 
     async def cog_unload(self):
         await self.client.aclose()
@@ -163,7 +159,6 @@ class NationStates(commands.Cog):
                 commands.Cooldown(50, 30), when - time.monotonic(), commands.BucketType.default
             )
         await ctx.defer()
-        await self.cog_ready.wait()
         return True
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
@@ -220,7 +215,6 @@ class NationStates(commands.Cog):
     async def on_message_without_command(self, message: discord.Message):
         if message.author.bot:
             return
-        await self.cog_ready.wait()
         ctx: commands.Context = await self.bot.get_context(message)
         if ctx.valid:
             return
