@@ -363,8 +363,8 @@ class NationStates(commands.Cog):
         """Retrieves general info about a specified NationStates region"""
         try:
             root = await self._get_as_xml(
-                "bannerby bannerurl delegate delegateauth delegatevotes flag founded "
-                "founder governor lastupdate name numnations officers power tags zombie",
+                "bannerby bannerurl delegate delegateauth delegatevotes flag founded founder "
+                "governor lastupdate name numnations numwanations officers power tags zombie",
                 region=region,
             )
         except sans.NotFound:
@@ -434,25 +434,34 @@ class NationStates(commands.Cog):
             if fash
             else ""
         )
-
+        if "Password" in tags:
+            passicon = (
+                "[`\N{CLOSED LOCK WITH KEY}`]"
+                "(https://forum.nationstates.net/viewtopic.php?p=21269325#p21269325 "
+                "'Password required to enter region') "
+            )
+        else:
+            passicon = ""
+        rid = root.get("id")
         numnations = self._find_text_and_assert(root, "NUMNATIONS", int)
-        description = "{}[{} nation{}](https://www.nationstates.net/region={}/page=list_nations) | Founded {} | Power: {}{}".format(
-            "[`\N{CLOSED LOCK WITH KEY}`]"
-            "(https://forum.nationstates.net/viewtopic.php?p=21269325#p21269325 "
-            "'Password required to enter region') "
-            if "Password" in tags
-            else "",
+        numwanations = self._find_text_and_assert(root, "NUMUNNATIONS", int)
+        description = "{}[{} nation{}](https://www.nationstates.net/region={}/page=list_nations) | Founded {}\n[{} WA nation{}](https://www.nationstates.net/region={}/page=list_nations?censusid=66) ({:.0f}%) | Power: {}{}".format(
+            passicon,
             numnations,
             "" if numnations == 1 else "s",
-            root.get("id"),
+            rid,
             founded,
+            numwanations,
+            "" if numwanations == 1 else "s",
+            rid,
+            100 * numwanations / numnations if numnations else 0,
             self._find_text_and_assert(root, "POWER"),
             warning,
         )
         is_zday = self._is_zday(ctx.message)
         embed = ProxyEmbed(
             title=self._find_text_and_assert(root, "NAME"),
-            url="https://www.nationstates.net/region={}".format(root.get("id")),
+            url="https://www.nationstates.net/region={}".format(rid),
             description=description,
             timestamp=datetime.fromtimestamp(
                 self._find_text_and_assert(root, "LASTUPDATE", int), timezone.utc
