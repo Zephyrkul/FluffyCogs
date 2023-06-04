@@ -153,7 +153,7 @@ class NationStates(commands.Cog):
         # this will also cause `[p]agent` to be blocked but this is intended
         if ctx.cog is not self:
             return True
-        when = sans._state.lock.deferred or 0
+        when = sans.RateLimiter._lock.deferred or 0
         if when > 1:
             assert when
             raise commands.CommandOnCooldown(
