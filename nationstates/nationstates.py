@@ -1,6 +1,6 @@
+import asyncio
 import heapq
 import re
-import time
 from datetime import datetime, timezone
 from enum import Flag, auto
 from functools import reduce
@@ -153,12 +153,15 @@ class NationStates(commands.Cog):
         # this will also cause `[p]agent` to be blocked but this is intended
         if ctx.cog is not self:
             return True
-        when = sans._state.lock.deferred
-        if when:
+        when = sans._state.lock.deferred or 0
+        if when > 1:
+            assert when
             raise commands.CommandOnCooldown(
-                commands.Cooldown(50, 30), when - time.monotonic(), commands.BucketType.default
+                commands.Cooldown(50, 30), when, commands.BucketType.default
             )
-        await ctx.defer()
+        if ctx.interaction and not ctx.interaction.response.is_done():
+            await ctx.defer()
+        await asyncio.sleep(max(when, 0))
         return True
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
@@ -216,8 +219,6 @@ class NationStates(commands.Cog):
         if message.author.bot:
             return
         ctx: commands.Context = await self.bot.get_context(message)
-        if ctx.valid:
-            return
         if not await self.wa.can_run(ctx):
             return
         index = ["un", "ga", "sc"]
