@@ -58,14 +58,14 @@ class Settings(TypedDict):
 
 
 class SettingsConverter(commands.FlagConverter, case_insensitive=True, delimiter=" "):
-    role: discord.Role = discord.utils.MISSING
-    channel: discord.TextChannel = discord.utils.MISSING
-    dynamic: bool = discord.utils.MISSING
-    dynamic_name: str = discord.utils.MISSING
-    mute: bool = discord.utils.MISSING
-    deaf: bool = discord.utils.MISSING
-    self_deaf: bool = discord.utils.MISSING
-    suppress: bool = discord.utils.MISSING
+    role: Optional[discord.Role] = None
+    channel: Optional[discord.TextChannel] = None
+    dynamic: Optional[bool] = None
+    dynamic_name: Optional[str] = None
+    mute: Optional[bool] = None
+    deaf: Optional[bool] = None
+    self_deaf: Optional[bool] = None
+    suppress: Optional[bool] = None
 
 
 assert set(SettingsConverter.__annotations__) == set(Settings.__annotations__)
@@ -253,9 +253,7 @@ class InVoice(commands.Cog):
         """
         scoped = scope or ctx.guild
         config = self.config.channel(scope) if scope else self.config.guild(ctx.guild)
-        decomposed = {
-            k: getattr(v, "id", v) for k, v in settings if v is not discord.utils.MISSING
-        }
+        decomposed = {k: getattr(v, "id", v) for k, v in settings if v is not None}
         self.cache[scoped.id].update(decomposed)  # type: ignore
         async with config.all() as conf:
             assert isinstance(conf, dict)
