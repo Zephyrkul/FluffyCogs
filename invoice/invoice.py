@@ -5,10 +5,10 @@ import itertools
 import logging
 import operator
 import re
-from dataclasses import dataclass, fields
 from datetime import timedelta
 from functools import partial
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     ChainMap,
@@ -33,11 +33,17 @@ from redbot.core.bot import Red
 from redbot.core.utils.antispam import AntiSpam
 from redbot.core.utils.chat_formatting import humanize_list
 
-from .converter import AsCFIdentifier, DataclassConverter, asdict_shallow
-
 LOG: Final = logging.getLogger("red.fluffy.invoice")
 GuildVoice = Union[discord.VoiceChannel, discord.StageChannel]
 GuildVoiceTypes: Final = (discord.VoiceChannel, discord.StageChannel)
+
+
+if TYPE_CHECKING:
+    AsCFIdentifier = str
+else:
+
+    def AsCFIdentifier(argument: str) -> str:
+        return re.sub(r"\W+|^(?=\d)", "_", argument.casefold())
 
 
 class Settings(TypedDict):
@@ -51,21 +57,18 @@ class Settings(TypedDict):
     suppress: Optional[bool]
 
 
-@dataclass
-class SettingsConverter(DataclassConverter):
-    __total__ = False
-
-    role: discord.Role
-    channel: discord.TextChannel
-    dynamic: bool
-    dynamic_name: str
-    mute: bool
-    deaf: bool
-    self_deaf: bool
-    suppress: bool
+class SettingsConverter(commands.FlagConverter, case_insensitive=True, delimiter=" "):
+    role: discord.Role = discord.utils.MISSING
+    channel: discord.TextChannel = discord.utils.MISSING
+    dynamic: bool = discord.utils.MISSING
+    dynamic_name: str = discord.utils.MISSING
+    mute: bool = discord.utils.MISSING
+    deaf: bool = discord.utils.MISSING
+    self_deaf: bool = discord.utils.MISSING
+    suppress: bool = discord.utils.MISSING
 
 
-assert {f.name for f in fields(SettingsConverter)} == set(Settings.__annotations__)
+assert set(SettingsConverter.__annotations__) == set(Settings.__annotations__)
 
 Cache = DefaultDict[int, Settings]
 _KT = TypeVar("_KT")
@@ -79,10 +82,10 @@ def _filter_none(d: Mapping[_KT, Optional[_VT]]) -> Dict[_KT, _VT]:
 
 def _filter_value(d, filterer: Callable[[Any], bool] = operator.itemgetter(1)) -> dict:
     try:
-        items = d.items()  # type: ignore
+        items = d.items()
     except AttributeError:
         items = d
-    return dict(filter(filterer, items))  # type: ignore
+    return dict(filter(filterer, items))
 
 
 class Chain(ChainMap[str, Any]):
@@ -251,9 +254,7 @@ class InVoice(commands.Cog):
         scoped = scope or ctx.guild
         config = self.config.channel(scope) if scope else self.config.guild(ctx.guild)
         decomposed = {
-            k: getattr(v, "id", v)
-            for k, v in asdict_shallow(settings).items()
-            if v is not settings.MISSING
+            k: getattr(v, "id", v) for k, v in settings if v is not discord.utils.MISSING
         }
         self.cache[scoped.id].update(decomposed)  # type: ignore
         async with config.all() as conf:
@@ -435,7 +436,7 @@ class InVoice(commands.Cog):
             return
         LOG.debug("on_voice_state_update(%s, %s, %s)", m, b, a)
         await self.cog_ready.wait()
-        role_set: Set[int] = set(m._roles)  # type: ignore
+        role_set: Set[int] = set(m._roles)
         channel_updates: Dict[int, Optional[discord.PermissionOverwrite]] = {}
         if b.channel != a.channel and b.channel:
             self._remove_before(b, role_set, channel_updates)
@@ -528,7 +529,7 @@ class InVoice(commands.Cog):
         guild = m.guild
         stamp = False
         role_set.discard(guild.id)
-        if role_set.symmetric_difference(m._roles):  # type: ignore
+        if role_set.symmetric_difference(m._roles):
             try:
                 await m.edit(roles=[discord.Object(id) for id in role_set])
             except discord.Forbidden:
