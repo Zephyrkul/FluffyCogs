@@ -5,8 +5,8 @@
     ],
     "install_msg": "Usage: `[p]help InVoice`",
     "name": "InVoice",
-    "short": "Create and manage microphoneless / nomic text channels for VC users with no microphone.",
-    "description": "Create and manage microphoneless / nomic text channels for VC users with no microphone.",
+    "short": "Create and manage roles and text channels for VC users. Useful for nomic / microphoneless setups.",
+    "description": "Create and manage roles and text channels for VC users. Useful for nomic / microphoneless setups.",
     "min_bot_version": "3.5.0",
     "requirements": [
         "git+https://github.com/zephyrkul/proxyembed"
