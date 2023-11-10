@@ -27,9 +27,11 @@ from xml.etree import ElementTree as etree
 import discord
 import httpx
 import sans
+from babel.dates import format_date
 from proxyembed import ProxyEmbed
 from redbot.core import Config, commands, version_info as red_version
 from redbot.core.bot import Red
+from redbot.core.i18n import get_babel_locale
 from redbot.core.utils.chat_formatting import box, escape, pagify
 from redbot.core.utils.menus import DEFAULT_CONTROLS, close_menu, menu
 
@@ -364,9 +366,12 @@ class NationStates(commands.Cog):
         """Retrieves general info about a specified NationStates region"""
         try:
             root = await self._get_as_xml(
-                "bannerby bannerurl delegate delegateauth delegatevotes flag founded founder "
-                "governor lastupdate name numnations numwanations officers power tags zombie",
+                "bannerby bannerurl census delegate delegateauth delegatevotes "
+                "flag founded foundedtime founder governor lastupdate name "
+                "numnations numwanations officers power tags zombie",
                 region=region,
+                mode="score",
+                scale="65",
             )
         except sans.NotFound:
             embed = ProxyEmbed(
@@ -402,8 +407,20 @@ class NationStates(commands.Cog):
             "Stronghold",
         )
         founded = self._find_text_and_assert(root, "FOUNDED")
+        foundedtime = datetime.fromtimestamp(
+            self._find_text_and_assert(root, "FOUNDEDTIME", int), timezone.utc
+        )
         if founded == "0":
             founded = "in Antiquity"
+        else:
+            foundedtime = format_date(
+                datetime.fromtimestamp(
+                    self._find_text_and_assert(root, "FOUNDEDTIME", int), timezone.utc
+                ),
+                "medium",
+                get_babel_locale(),
+            )
+            founded = f"{founded} ({foundedtime})"
         execvalue = []
         governor = self._find_text_and_assert(root, "GOVERNOR")
         if governor != "0":
@@ -446,7 +463,7 @@ class NationStates(commands.Cog):
         rid = root.get("id")
         numnations = self._find_text_and_assert(root, "NUMNATIONS", int)
         numwanations = self._find_text_and_assert(root, "NUMUNNATIONS", int)
-        description = "{}[{} nation{}](https://www.nationstates.net/region={}/page=list_nations) | Founded {}\n[{} WA nation{}](https://www.nationstates.net/region={}/page=list_nations?censusid=66) ({:.0f}%) | Power: {}{}".format(
+        description = "{}[{} nation{}](https://www.nationstates.net/region={}/page=list_nations) | Founded {}\n[{} WA nation{}](https://www.nationstates.net/region={}/page=list_nations?censusid=66 'Total SPDR: {}') ({:.0f}%) | Power: {}{}".format(
             passicon,
             numnations,
             "" if numnations == 1 else "s",
@@ -455,6 +472,8 @@ class NationStates(commands.Cog):
             numwanations,
             "" if numwanations == 1 else "s",
             rid,
+            # Region Score for Census #65 is an average, so multiply it to get total influence
+            self._find_text_and_assert(root, "CENSUS/SCALE[@id='65']/SCORE", float) * numnations,
             100 * numwanations / numnations if numnations else 0,
             self._find_text_and_assert(root, "POWER"),
             warning,
