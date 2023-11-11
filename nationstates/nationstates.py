@@ -2,7 +2,7 @@ import asyncio
 import heapq
 import re
 from datetime import datetime, timezone
-from enum import Flag, auto
+from enum import IntFlag, auto
 from functools import reduce
 from html import unescape
 from io import BytesIO
@@ -62,7 +62,7 @@ def controls(data: Iterable[str], *, paged: bool):
     return {"\N{CROSS MARK}": close_menu, "\N{FLOPPY DISK}": save}
 
 
-class Options(Flag):
+class Options(IntFlag):
     @classmethod
     async def convert(cls, ctx, argument: str) -> "Options":
         argument = argument.upper().rstrip("S")
@@ -876,7 +876,9 @@ class NationStates(commands.Cog):
             embed.add_field(
                 name="Repeals",
                 value="[{}](https://www.nationstates.net/page=WA_past_resolution/id={}/council={})".format(
-                    self._find_text_and_assert(root, "NAME")[8:-1], repeals, "2" if is_sc else "1"
+                    self._find_text_and_assert(root, "NAME")[8:-1],
+                    repeals.text,
+                    "2" if is_sc else "1",
                 ),
                 inline=False,
             )
