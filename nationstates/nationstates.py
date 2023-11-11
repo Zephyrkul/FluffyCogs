@@ -2,13 +2,14 @@ import asyncio
 import heapq
 import re
 from datetime import datetime, timezone
-from enum import IntFlag, auto
+from enum import Flag, auto
 from functools import reduce
 from html import unescape
 from io import BytesIO
 from itertools import chain, islice
 from operator import or_
 from typing import (
+    TYPE_CHECKING,
     Callable,
     Dict,
     Generator,
@@ -23,6 +24,9 @@ from typing import (
     get_args,
 )
 from xml.etree import ElementTree as etree
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 import discord
 import httpx
@@ -62,34 +66,35 @@ def controls(data: Iterable[str], *, paged: bool):
     return {"\N{CROSS MARK}": close_menu, "\N{FLOPPY DISK}": save}
 
 
-class Options(IntFlag):
+class Options(Flag):
     @classmethod
     async def convert(cls, ctx, argument: str) -> "Options":
         argument = argument.upper().rstrip("S")
+        if argument == "ALL":
+            return ~cls(0)
         try:
             return cls[argument]
         except KeyError as ke:
             raise commands.BadArgument() from ke
 
     @classmethod
-    def collapse(cls, *args: "Options", default: Union["Options", int] = 0):
+    def collapse(cls: "type[Self]", *args: "Self", default: Union["Self", int] = 0):
         if not args:
             return cls(default)
         return cls(reduce(or_, args))
 
 
 class Nation(Options):
-    ALL = -1
     NONE = 0
+    # TODO: Add options for [p]nation
 
 
 class Region(Options):
-    ALL = -1
     NONE = 0
+    # TODO: Add options for [p]region
 
 
 class WA(Options):
-    ALL = -1
     NONE = 0
     TEXT = auto()
     VOTE = auto()
