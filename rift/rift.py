@@ -331,7 +331,9 @@ class Rift(commands.Cog):
             if notify:
                 asyncio.ensure_future(
                     rift.send(
-                        _("{} has opened a rift to here from {}.").format(ctx.author, ctx.channel)
+                        _("{} has opened a rift to here from {}.").format(
+                            ctx.author.global_name, ctx.channel
+                        )
                     )
                 )
         await ctx.send(
@@ -374,7 +376,9 @@ class Rift(commands.Cog):
             if notify:
                 asyncio.ensure_future(
                     rift.send(
-                        _("{} has linked a rift to here from {}.").format(ctx.author, ctx.channel)
+                        _("{} has linked a rift to here from {}.").format(
+                            ctx.author.global_name, ctx.channel
+                        )
                     )
                 )
         await ctx.send(
@@ -565,20 +569,20 @@ class Rift(commands.Cog):
                 continue
             if source in unique:
                 if notify:
-                    asyncio.ensure_future(dest.send(fmt.format(closer=closer, source=source)))
+                    asyncio.ensure_future(
+                        dest.send(fmt.format(closer=closer.global_name, source=source))
+                    )
                 num_closed += 1
             elif dest in unique:
                 if notify:
-                    asyncio.ensure_future(source.send(fmt.format(closer=closer, source=dest)))
+                    asyncio.ensure_future(
+                        source.send(fmt.format(closer=closer.global_name, source=dest))
+                    )
                 num_closed += 1
             processed.add((source, dest))
 
         self.rifts.remove_vertices(*unique)
         return num_closed
-
-    @staticmethod
-    def is_image_url(url: str) -> bool:
-        return url.lower().endswith(("png", "jpeg", "jpg", "gif", "webp"))
 
     def get_embed(
         self, attachments: List[discord.Attachment], **kwargs
@@ -591,18 +595,20 @@ class Rift(commands.Cog):
             embed = kwargs["embed"]
         except KeyError:
             embed = discord.Embed(**kwargs)
-        single = len(attachments) == 1
         use_image = True
         for attachment in attachments:
-            if use_image and self.is_image_url(attachment.url):
+            if (
+                use_image
+                and attachment.content_type
+                and attachment.content_type.startswith("image/")
+            ):
                 embed.set_image(url=attachment.url)
                 use_image = False
-            if use_image and single:
-                embed.add_field(
-                    name=self.xbytes(attachment.size),
-                    value=f"[\N{PAPERCLIP}`{attachment.filename}`]({attachment.url})",
-                    inline=True,
-                )
+            embed.add_field(
+                name=self.xbytes(attachment.size),
+                value=f"[\N{PAPERCLIP}`{attachment.filename}`]({attachment.url})",
+                inline=True,
+            )
         return embed
 
     def get_embeds(self, attachments: List[discord.Attachment], **kwargs) -> List[discord.Embed]:
@@ -622,7 +628,7 @@ class Rift(commands.Cog):
         append = False
         for attachment in attachments:
             url = attachment.url
-            if self.is_image_url(url):
+            if attachment.content_type and attachment.content_type.startswith("image/"):
                 if append:
                     embed = discord.Embed(url=embeds[0].url)
                     embed.set_image(url=url)
@@ -795,7 +801,10 @@ class Rift(commands.Cog):
                     content = f"{content}\n\n{_('Attachments:')}\n"
                 else:
                     content = _("Attachments:")
-                content += "\n".join(f"({self.xbytes(a.size)}) {a.url}" for a in attachments)
+                content += "\n".join(
+                    f"[\N{PAPERCLIP}`{a.filename}`](<{a.url}>) ({self.xbytes(a.size)})"
+                    for a in attachments
+                )
         if not content and not embed:
             raise RiftError(_("Nothing to send."))
         if is_owner:
