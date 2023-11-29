@@ -181,11 +181,15 @@ class NationStates(commands.Cog):
                     f"{original.response.status_code}: {' '.join(original.args)}"
                 )
             elif isinstance(original, sans.AgentNotSetError):
+                if await ctx.bot.is_owner(ctx.author):
+                    return await ctx.send(
+                        f"User agent has not yet been set. Set it with `{ctx.clean_prefix}agent`.\n"
+                        "```The API Terms of Use require your script to supply a useful UserAgent string, "
+                        "so we can contact you in the event of problems. Please give your script a UserAgent "
+                        "that includes your contact details, such as an email, URL, or nation name.```"
+                    )
                 return await ctx.send(
-                    f"User agent has not yet been set. Set it with `{ctx.clean_prefix}agent`.\n"
-                    "```The API Terms of Use require your script to supply a useful UserAgent string, "
-                    "so we can contact you in the event of problems. Please give your script a UserAgent "
-                    "that includes your contact details, such as an email, URL, or nation name.```"
+                    "User agent has not yet been set. Please contact my owner to set it."
                 )
         return await ctx.bot.on_command_error(ctx, error, unhandled_by_cog=True)  # type: ignore
 
