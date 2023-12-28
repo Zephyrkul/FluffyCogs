@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from io import BytesIO
 from itertools import starmap
@@ -920,5 +920,5 @@ class Rift(commands.Cog):
                 if partial_message := self._partial(*ids):
                     to_delete.setdefault(partial_message.channel, []).append(partial_message.id)
         await asyncio.gather(
-            *starmap(partial(purge_ids, now=datetime.utcnow()), to_delete.items())
+            *starmap(partial(purge_ids, now=datetime.now(timezone.utc)), to_delete.items())
         )
