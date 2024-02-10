@@ -160,24 +160,18 @@ class InVoice(commands.Cog):
             partial(AntiSpam, self.intervals)
         )
         self.dynamic_ready: Final[Dict[int, asyncio.Event]] = {}
-        self.cog_ready: Final = asyncio.Event()
-        asyncio.create_task(self.initialize())
 
-    async def initialize(self):
+    async def cog_load(self):
         self.cache.update(await self.config.all_guilds())
         # Default channels before discord removed them shared their IDs with their guild,
         # which would theoretically cause a key conflict here. However,
         # default channels are text channels and these are everything but.
         self.cache.update(await self.config.all_channels())
-        self.cog_ready.set()
 
     @staticmethod
     def _defaults() -> Settings:
         # using __annotations__ directly here since we don't need to eval the annotations
         return cast(Settings, dict.fromkeys(Settings.__annotations__.keys(), None))
-
-    async def cog_before_invoke(self, ctx: commands.Context) -> None:
-        await self.cog_ready.wait()
 
     @commands.group()
     @commands.guild_only()
@@ -310,7 +304,6 @@ class InVoice(commands.Cog):
             return
         if await self.bot.cog_disabled_in_guild(self, guild):
             return
-        await self.cog_ready.wait()
         chain = Chain.from_scope(vc, self.cache)
         if not chain["dynamic"]:
             return
@@ -406,7 +399,6 @@ class InVoice(commands.Cog):
         if not isinstance(vc, GuildVoiceTypes):
             return
         guild = vc.guild
-        await self.cog_ready.wait()
         await self.config.channel(vc).clear()
         chain = Chain.from_scope(vc, self.cache)
         try:
@@ -433,7 +425,6 @@ class InVoice(commands.Cog):
         if await self.bot.cog_disabled_in_guild(self, m.guild):
             return
         LOG.debug("on_voice_state_update(%s, %s, %s)", m, b, a)
-        await self.cog_ready.wait()
         role_set: Set[int] = set(m._roles)
         channel_updates: Dict[int, Optional[discord.PermissionOverwrite]] = {}
         if b.channel != a.channel and b.channel:
