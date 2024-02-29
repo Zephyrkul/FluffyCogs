@@ -31,11 +31,9 @@ if TYPE_CHECKING:
 import discord
 import httpx
 import sans
-from babel.dates import format_date
 from proxyembed import ProxyEmbed
 from redbot.core import Config, commands, version_info as red_version
 from redbot.core.bot import Red
-from redbot.core.i18n import get_babel_locale
 from redbot.core.utils.chat_formatting import box, escape, pagify
 from redbot.core.utils.menus import DEFAULT_CONTROLS, close_menu, menu
 
@@ -266,7 +264,7 @@ class NationStates(commands.Cog):
         try:
             root = await self._get_as_xml(
                 "banner census category dbid "
-                "demonym2plural flag founded freedom "
+                "demonym2plural flag founded foundedtime freedom "
                 "fullname influence lastlogin "
                 "name population region wa zombie",
                 nation=nation,
@@ -297,6 +295,9 @@ class NationStates(commands.Cog):
         founded = self._find_text_and_assert(root, "FOUNDED")
         if founded == "0":
             founded = "in Antiquity"
+        else:
+            foundedtime = self._find_text_and_assert(root, "FOUNDEDTIME", int)
+            founded = f"{founded} (<t:{foundedtime}:D>)"
         is_zday = self._is_zday(ctx.message)
         embed = ProxyEmbed(
             title=self._find_text_and_assert(root, "FULLNAME"),
@@ -424,14 +425,8 @@ class NationStates(commands.Cog):
         if founded == "0":
             founded = "in Antiquity"
         else:
-            foundedtime = format_date(
-                datetime.fromtimestamp(
-                    self._find_text_and_assert(root, "FOUNDEDTIME", int), timezone.utc
-                ),
-                "medium",
-                get_babel_locale(),
-            )
-            founded = f"{founded} ({foundedtime})"
+            foundedtime = self._find_text_and_assert(root, "FOUNDEDTIME", int)
+            founded = f"{founded} (<t:{foundedtime}:D>)"
         execvalue = []
         governor = self._find_text_and_assert(root, "GOVERNOR")
         if governor != "0":
