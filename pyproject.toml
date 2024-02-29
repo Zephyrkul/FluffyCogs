@@ -8,11 +8,13 @@
     reportUnnecessaryTypeIgnoreComment = true
 
 [tool.ruff]
-    select = ['E', 'F', 'B', 'Q', 'I', 'W']
-    ignore = ['E501']
     target-version = 'py38'
     line-length = 99
 
-[tool.ruff.isort]
+[tool.ruff.lint]
+    select = ['E', 'F', 'B', 'Q', 'I', 'W']
+    ignore = ['E501']
+
+[tool.ruff.lint.isort]
     combine-as-imports = true
     extra-standard-library = ['typing_extensions']
