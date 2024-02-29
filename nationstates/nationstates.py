@@ -409,9 +409,6 @@ class NationStates(commands.Cog):
         else:
             delheader = "WA Delegate (non-executive)"
         tags = {t.text for t in root.iterfind("TAGS/TAG")}
-        # Note: This logic will mark TRR as "Sinker", not "Catcher"
-        # The reason for this can be found here: https://forum.nationstates.net/viewtopic.php?f=15&t=533753
-        # TODO: Change TRR's classification once the "Catcher" tag is renamed
         major_tag = next(
             filter(
                 tags.__contains__, ("Frontier", "Feeder", "Restorer", "Sinker", "Governorless")
