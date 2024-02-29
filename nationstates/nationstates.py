@@ -345,9 +345,11 @@ class NationStates(commands.Cog):
             embed.add_field(
                 name="{}{}".format(
                     (self._find_text_and_assert(root, "ZOMBIE/ZACTION") or "No Action").title(),
-                    " (Unintended)"
-                    if self._find_text_and_assert(root, "ZOMBIE/ZACTIONINTENDED")
-                    else "",
+                    (
+                        " (Unintended)"
+                        if self._find_text_and_assert(root, "ZOMBIE/ZACTIONINTENDED")
+                        else ""
+                    ),
                 ),
                 value="Survivors: {} | Zombies: {} | Dead: {}".format(
                     self._illion(self._find_text_and_assert(root, "ZOMBIE/SURVIVORS", int)),
@@ -746,10 +748,10 @@ class NationStates(commands.Cog):
         root = root.find("RESOLUTION")
         assert root
         img = {
-            "Commendation": "https://cdn.discordapp.com/attachments/734752928346406944/1108130168733704373/commend.png",
-            "Condemnation": "https://cdn.discordapp.com/attachments/734752928346406944/1108130169169920130/condemn.png",
-            "Liberation": "https://cdn.discordapp.com/attachments/734752928346406944/1108130167848714300/liberate.png",
-            "Injunction": "https://cdn.discordapp.com/attachments/734752928346406944/1108130169601921134/injunct.png",
+            "Commendation": "https://i.imgur.com/7o5kURo.png",
+            "Condemnation": "https://i.imgur.com/BSknIMf.png",
+            "Liberation": "https://i.imgur.com/Gdo2EH9.png",
+            "Injunction": "https://i.imgur.com/4YSBcP7.png",
             "Declaration": "https://www.nationstates.net/images/sc.jpg",
         }.get(
             self._find_text_and_assert(root, "CATEGORY"), "https://nationstates.net/images/ga.jpg"
@@ -781,10 +783,12 @@ class NationStates(commands.Cog):
             )  # + (4 * 24 * 60 * 60)  # 4 Days
         embed = ProxyEmbed(
             title=self._find_text_and_assert(root, "NAME"),
-            url="https://www.nationstates.net/page={}".format("sc" if is_sc else "ga")
-            if not resolution_id
-            else "https://www.nationstates.net/page=WA_past_resolution/id={}/council={}".format(
-                resolution_id, "2" if is_sc else "1"
+            url=(
+                "https://www.nationstates.net/page={}".format("sc" if is_sc else "ga")
+                if not resolution_id
+                else "https://www.nationstates.net/page=WA_past_resolution/id={}/council={}".format(
+                    resolution_id, "2" if is_sc else "1"
+                )
             ),
             description=description,
             timestamp=datetime.fromtimestamp(impl, timezone.utc),
