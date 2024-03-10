@@ -42,7 +42,9 @@ async def onetrueslash(
     error = None
     if command == "help":
         ctx._deferring = True
-        ctx.interaction = interaction
+        # Moving ctx._interaction can cause check errors with some hybrid commands
+        # see https://github.com/Zephyrkul/FluffyCogs/issues/75 for details
+        # ctx.interaction = interaction
         await interaction.response.defer(ephemeral=True)
         actual = None
         if arguments:
