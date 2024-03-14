@@ -53,9 +53,6 @@ class AntiCrashVid(commands.Cog):
         self.config = Config.get_conf(self, identifier=2113674295, force_registration=True)
         self.config.init_custom(HASHES, 1)
         self.config.register_custom(HASHES, unsafe=None)
-        self.case_ready = asyncio.Event()
-        asyncio.ensure_future(self.initialize())
-        asyncio.ensure_future(self.preload_hashes())
 
     async def red_delete_data_for_user(self, *, requester, user_id):
         pass
@@ -63,7 +60,7 @@ class AntiCrashVid(commands.Cog):
     async def red_get_data_for_user(self, *, user_id):
         return {}
 
-    async def initialize(self):
+    async def cog_load(self) -> None:
         try:
             await modlog.register_casetype(
                 name="malicious_video",
@@ -73,20 +70,23 @@ class AntiCrashVid(commands.Cog):
             )
         except RuntimeError:
             pass
-        self.case_ready.set()
+        await self.preload_hashes()
 
     async def preload_hashes(self, *, clear_past_hashes=False):
-        # b85 uses 5 ASCII chars to represent 4 bytes of data
-        b85_digest_size = math.ceil(hashlib.sha512().digest_size / 4) * 5
-        value = {"unsafe": True}
         async with self.config.custom(HASHES).all() as current_hashes:
             assert isinstance(current_hashes, dict)
             if clear_past_hashes:
                 current_hashes.clear()
-            with open(bundled_data_path(self) / "known_hashes", "rb") as file:
-                while chunk := file.read(b85_digest_size):
-                    if len(chunk) == b85_digest_size:
-                        current_hashes[b85decode(chunk).hex()] = value
+            await to_thread(self._insert_hashes, current_hashes)
+
+    def _insert_hashes(self, hashes: dict):
+        # b85 uses 5 ASCII chars to represent 4 bytes of data
+        b85_digest_size = math.ceil(hashlib.sha512().digest_size / 4) * 5
+        value = {"unsafe": True}
+        with open(bundled_data_path(self) / "known_hashes", "rb") as file:
+            while chunk := file.read(b85_digest_size):
+                if len(chunk) == b85_digest_size:
+                    hashes[b85decode(chunk).hex()] = value
 
     @commands.command(hidden=True)
     @commands.is_owner()
@@ -175,7 +175,6 @@ class AntiCrashVid(commands.Cog):
         except discord.HTTPException:
             pass
         try:
-            await self.case_ready.wait()
             await modlog.create_case(
                 bot=self.bot,
                 guild=message.guild,
@@ -185,9 +184,9 @@ class AntiCrashVid(commands.Cog):
                 user=message.author,
                 moderator=message.guild.me,
                 channel=message.channel,
-                reason=message.jump_url
-                if not message_deleted
-                else "Offending message was deleted.",
+                reason=(
+                    message.jump_url if not message_deleted else "Offending message was deleted."
+                ),
             )
         except Exception:
             pass
