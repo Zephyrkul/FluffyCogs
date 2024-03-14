@@ -1,5 +1,3 @@
-import asyncio
-
 import discord
 from redbot.core import commands
 from redbot.core.bot import Red
@@ -8,7 +6,6 @@ from redbot.core.bot import Red
 class AntiGifV(commands.Cog):
     def __init__(self, bot: Red):
         self.bot = bot
-        asyncio.ensure_future(self.initialize())
 
     async def red_delete_data_for_user(self, *, requester, user_id):
         pass
@@ -16,7 +13,7 @@ class AntiGifV(commands.Cog):
     async def red_get_data_for_user(self, *, user_id):
         return {}
 
-    async def initialize(self):
+    async def cog_load(self):
         # this is probably very dumb
         await self.bot._disabled_cog_cache.default_disable(self.qualified_name)
 
