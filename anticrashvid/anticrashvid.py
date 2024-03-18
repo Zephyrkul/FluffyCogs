@@ -185,9 +185,9 @@ class AntiCrashVid(commands.Cog):
                 user=message.author,
                 moderator=message.guild.me,
                 channel=message.channel,
-                reason=message.jump_url
-                if not message_deleted
-                else "Offending message was deleted.",
+                reason=(
+                    message.jump_url if not message_deleted else "Offending message was deleted."
+                ),
             )
         except Exception:
             pass
