@@ -57,13 +57,11 @@ UnionChannel = Union[discord.DMChannel, discord.TextChannel]
 
 
 @overload
-async def can_close(ctx: commands.Context) -> bool:
-    ...
+async def can_close(ctx: commands.Context) -> bool: ...
 
 
 @overload
-async def can_close(ctx: discord.Message, bot: Red) -> bool:
-    ...
+async def can_close(ctx: discord.Message, bot: Red) -> bool: ...
 
 
 async def can_close(ctx: Union[commands.Context, discord.Message], bot: Red = None):
