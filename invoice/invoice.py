@@ -123,11 +123,11 @@ class Chain(ChainMap[str, Any]):
 
 
 class InVoice(commands.Cog):
-    intervals = [
+    intervals = (
         (timedelta(seconds=5), 3),
         (timedelta(minutes=1), 5),
         (timedelta(hours=1), 30),
-    ]
+    )
 
     async def red_get_data_for_user(self, *, user_id):
         return {}  # No data to get
