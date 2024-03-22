@@ -35,7 +35,7 @@ class OnEdit(commands.Cog):
                     for name, listener in cog.get_listeners():
                         if name != "on_message_without_command":
                             continue
-                        asyncio.ensure_future(listener(after))
+                        asyncio.ensure_future(listener(after))  # noqa: RUF006
         else:
             ctx = None
         if ctx is None or ctx.valid is False:
