@@ -1,10 +1,13 @@
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, Generator, Optional
 
+# discord.ext.commands.GroupMixin has easier typehints to work with
+from discord.ext.commands import GroupMixin
 from redbot.core import commands
 
 if TYPE_CHECKING:
-    from .context import InterContext  # noqa: F401
+    from .context import InterContext
+
 
 try:
     import regex as re
@@ -23,11 +26,12 @@ def valid_app_name(name: str) -> str:
 
 
 class Thinking:
-    def __init__(self, *, ephemeral: bool = False):
+    def __init__(self, ctx: "InterContext", *, ephemeral: bool = False):
+        self.ctx = ctx
         self.ephemeral = ephemeral
 
     def __await__(self) -> Generator[Any, Any, None]:
-        ctx = contexts.get()
+        ctx = self.ctx
         interaction = ctx._interaction
         if not ctx._deferring and not interaction.response.is_done():
             # yield from is necessary here to force this function to be a generator
@@ -43,12 +47,10 @@ class Thinking:
 
 
 def walk_aliases(
-    group: commands.GroupMixin, /, *, parent: Optional[str] = "", show_hidden: bool = False
+    group: GroupMixin[Any], /, *, parent: Optional[str] = "", show_hidden: bool = False
 ) -> Generator[str, None, None]:
-    name: str
-    command: commands.Command
     for name, command in group.all_commands.items():
-        if name == "help":
+        if command.qualified_name == "help":
             continue
         if not command.enabled or (not show_hidden and command.hidden):
             continue

@@ -19,7 +19,7 @@ async def setup(bot: Red) -> None:
     bot.before_invoke(before_hook)
     bot.add_listener(on_user_update)
     bot.add_dev_env_value("interaction", lambda ctx: getattr(ctx, "interaction", None))
-    asyncio.create_task(_setup(bot))
+    asyncio.create_task(_setup(bot))  # noqa: RUF006
 
 
 async def _setup(bot: Red):

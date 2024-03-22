@@ -30,7 +30,7 @@ class InterMessage(discord.Message):
     __slots__ = ()
 
     @classmethod
-    def from_interaction(cls, interaction: discord.Interaction, prefix: str) -> "InterMessage":
+    def _from_interaction(cls, interaction: discord.Interaction, prefix: str) -> "InterMessage":
         assert interaction.data
         self = InterMessage.__new__(InterMessage)
 
@@ -54,25 +54,36 @@ class InterMessage(discord.Message):
         self.activity = None
         self.stickers = []
         self.components = []
-        self.guild = interaction.guild
+        self.role_subscription = None
+        self.application_id = None
+        self.position = None
 
-        if not interaction.guild_id:
-            channel = self.channel = discord.DMChannel.__new__(discord.DMChannel)
-            channel._state = interaction._state
-            channel.recipient = interaction.user
-            channel.me = interaction.client.user
-            channel.id = interaction.channel_id
-        else:
-            self.channel = copy(interaction.channel)
-
+        if not interaction.channel:
+            raise RuntimeError("Interaction channel is missing, maybe a Discord bug")
+        self.channel = copy(interaction.channel)  # type: ignore
         self.channel.__class__ = type(
             InterChannel.__name__, (InterChannel, self.channel.__class__), {"__slots__": ()}
         )
-        self.recreate_from_interaction(interaction, prefix)
 
+        guild = self.guild = interaction.guild or self.channel.guild
+        if guild and not guild.me:
+            # forcibly populate guild.me
+            guild._add_member(
+                discord.Member(
+                    data={
+                        "roles": [],
+                        "user": interaction.client.user._to_minimal_user_json(),
+                        "flags": 0,
+                    },
+                    guild=guild,
+                    state=interaction._state,
+                )
+            )
+
+        self._recreate_from_interaction(interaction, prefix)
         return self
 
-    def recreate_from_interaction(self, interaction: discord.Interaction, prefix: str):
+    def _recreate_from_interaction(self, interaction: discord.Interaction, prefix: str):
         assert interaction.data and interaction.client.user
 
         self.content = f"{prefix}{interaction.namespace.command}"
@@ -83,33 +94,17 @@ class InterMessage(discord.Message):
         else:
             self.attachments = []
 
-        state = self._state
-        if interaction.guild_id:
-            guild = interaction.guild or discord.Object(interaction.guild_id)
-        else:
-            guild = None
-        self.mentions = []
         resolved = interaction.data.get("resolved", {})
-        members = resolved.get("members", {})
-        for user_id, user_data in resolved.get("users", {}).items():
-            try:
-                member_data = members[user_id]
-            except KeyError:
-                if not guild:
-                    uid = int(user_id)
-                    if uid == interaction.user.id:
-                        self.mentions.append(interaction.user)
-                    elif uid == interaction.client.user.id:
-                        self.mentions.append(interaction.client.user)  # type: ignore
-            else:
-                member_data["user"] = user_data
-                self.mentions.append(
-                    discord.Member(
-                        data=member_data,
-                        guild=guild,  # type: ignore
-                        state=state,
-                    )
-                )
+        if self.guild:
+            self.mentions = [
+                discord.Member(data=user_data, guild=self.guild, state=self._state)
+                for user_data in resolved.get("members", {}).values()
+            ]
+        else:
+            self.mentions = [
+                discord.User(data=user_data, state=self._state)
+                for user_data in resolved.get("users", {}).values()
+            ]
 
     def to_reference(self, *, fail_if_not_exists: bool = True):
         return None
@@ -120,5 +115,5 @@ class InterMessage(discord.Message):
     async def reply(self, *args, **kwargs):
         return await self.channel.send(*args, **kwargs)
 
-    async def edit(self, *args, **kwargs):
-        return self
+    def edit(self, *args, **kwargs):
+        return asyncio.sleep(0, self)

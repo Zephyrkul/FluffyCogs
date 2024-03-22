@@ -1,3 +1,4 @@
+import inspect
 import types
 from copy import copy
 from typing import Optional, Type, Union
@@ -7,16 +8,20 @@ from discord.ext.commands.view import StringView
 from redbot.core import commands
 from redbot.core.bot import Red
 
-from .channel import InterChannel
 from .message import InterMessage
 from .utils import Thinking, contexts
 
+INCOMPATABLE_PARAMETERS_DISCARD = tuple(
+    k
+    for k in inspect.signature(discord.abc.Messageable.send).parameters
+    if k not in inspect.signature(discord.Webhook.send).parameters
+)
 
-class InterContext(InterChannel, commands.Context):
+
+class InterContext(commands.Context):
     _deferring: bool = False
     _ticked: Optional[str] = None
-    _first_response: int = 0
-    _interaction: discord.Interaction
+    _interaction: discord.Interaction[Red]
     message: InterMessage
 
     @classmethod
@@ -25,24 +30,23 @@ class InterContext(InterChannel, commands.Context):
         if not isinstance(default, type) or default in cls.__mro__:
             return cls
         try:
-            return types.new_class(cls.__name__, (cls, default))  # type: ignore
+            return types.new_class(cls.__name__, (cls, default))
         except Exception:
             return cls
 
     @classmethod
     async def from_interaction(
         cls: Type["InterContext"],
-        interaction: discord.Interaction,
+        interaction: discord.Interaction[Red],
         *,
         recreate_message: bool = False,
     ) -> "InterContext":
-        assert isinstance(interaction.client, Red)
         prefix = f"</{interaction.data['name']}:{interaction.data['id']}> command:"
         try:
             self = contexts.get()
             if recreate_message:
                 assert self.prefix is not None
-                self.message.recreate_from_interaction(interaction, prefix)
+                self.message._recreate_from_interaction(interaction, prefix)
                 view = self.view = StringView(self.message.content)
                 view.skip_string(self.prefix)
                 invoker = view.get_word()
@@ -51,7 +55,7 @@ class InterContext(InterChannel, commands.Context):
             return self
         except LookupError:
             pass
-        message = InterMessage.from_interaction(interaction, prefix)
+        message = InterMessage._from_interaction(interaction, prefix)
         view = StringView(message.content)
         view.skip_string(prefix)
         invoker = view.get_word()
@@ -63,7 +67,7 @@ class InterContext(InterChannel, commands.Context):
             invoked_with=invoker,
             command=interaction.client.all_commands.get(invoker),
         )
-        # delay setting self.interaction to make d.py parse commands the old way
+        # don't set self.interaction so make d.py parses commands the old way
         self._interaction = interaction
         interaction._baton = self
         contexts.set(self)
@@ -85,8 +89,23 @@ class InterContext(InterChannel, commands.Context):
         self._ticked = f"{reaction} {message}" if message else str(reaction)
         return False
 
+    async def send(self, *args, **kwargs):
+        interaction = self._interaction
+        if interaction.is_expired():
+            assert interaction.channel
+            return await interaction.channel.send(*args, **kwargs)  # type: ignore
+        await self.typing(ephemeral=True)
+        self._deferring = False
+        delete_after = kwargs.pop("delete_after", None)
+        for key in INCOMPATABLE_PARAMETERS_DISCARD:
+            kwargs.pop(key, None)
+        m = await interaction.followup.send(*args, **kwargs)
+        if delete_after:
+            await m.delete(delay=delete_after)
+        return m
+
     def typing(self, *, ephemeral: bool = False) -> Thinking:
-        return Thinking(ephemeral=ephemeral)
+        return Thinking(self, ephemeral=ephemeral)
 
     async def defer(self, *, ephemeral: bool = False) -> None:
         await self._interaction.response.defer(ephemeral=ephemeral)
@@ -104,18 +123,41 @@ class InterContext(InterChannel, commands.Context):
             command.usage = f"arguments:{signature}"
         return await super().send_help(command)
 
+    def _apply_implicit_permissions(
+        self, user: discord.abc.User, base: discord.Permissions
+    ) -> discord.Permissions:
+        if base.administrator or (self.guild and self.guild.owner_id == user.id):
+            return discord.Permissions.all()
+
+        base = copy(base)
+        if not base.send_messages:
+            base.send_tts_messages = False
+            base.mention_everyone = False
+            base.embed_links = False
+            base.attach_files = False
+
+        if not base.read_messages:
+            base &= ~discord.Permissions.all_channel()
+
+        channel_type = self.channel.type
+        if channel_type in (discord.ChannelType.voice, discord.ChannelType.stage_voice):
+            if not base.connect:
+                denied = discord.Permissions.voice()
+                denied.update(manage_channels=True, manage_roles=True)
+                base &= ~denied
+        else:
+            base &= ~discord.Permissions.voice()
+
+        return base
+
     @discord.utils.cached_property
     def permissions(self):
-        self.interaction, old = self._interaction, self.interaction
-        try:
-            return super().permissions
-        finally:
-            self.interaction = old
+        if self._interaction._permissions == 0:
+            return self.channel.permissions_for(self.author)  # type: ignore
+        return self._apply_implicit_permissions(self.author, self._interaction.permissions)
 
     @discord.utils.cached_property
     def bot_permissions(self):
-        self.interaction, old = self._interaction, self.interaction
-        try:
-            return super().bot_permissions
-        finally:
-            self.interaction = old
+        return self._apply_implicit_permissions(
+            self.me, self._interaction.app_permissions
+        ) | discord.Permissions(send_messages=True, attach_files=True, embed_links=True)
