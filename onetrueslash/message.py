@@ -29,11 +29,15 @@ def neuter_coros(cls: _TT) -> _TT:
 class InterMessage(discord.Message):
     __slots__ = ()
 
+    def __init__(self, **kwargs) -> None:
+        raise RuntimeError
+
     @classmethod
     def _from_interaction(cls, interaction: discord.Interaction, prefix: str) -> "InterMessage":
         assert interaction.data
-        self = InterMessage.__new__(InterMessage)
+        assert interaction.client.user
 
+        self = InterMessage.__new__(InterMessage)
         self._state = interaction._state
         self._edited_timestamp = None
 
@@ -43,7 +47,6 @@ class InterMessage(discord.Message):
         self.embeds = []
         self.role_mentions = []
         self.id = interaction.id
-        self.author = interaction.user
         self.nonce = None
         self.pinned = False
         self.type = discord.MessageType.default
@@ -58,27 +61,37 @@ class InterMessage(discord.Message):
         self.application_id = None
         self.position = None
 
-        if not interaction.channel:
+        channel = interaction.channel
+        if not channel:
             raise RuntimeError("Interaction channel is missing, maybe a Discord bug")
-        self.channel = copy(interaction.channel)  # type: ignore
-        self.channel.__class__ = type(
-            InterChannel.__name__, (InterChannel, self.channel.__class__), {"__slots__": ()}
-        )
 
-        guild = self.guild = interaction.guild or self.channel.guild
-        if guild and not guild.me:
-            # forcibly populate guild.me
-            guild._add_member(
-                discord.Member(
-                    data={
-                        "roles": [],
-                        "user": interaction.client.user._to_minimal_user_json(),
-                        "flags": 0,
-                    },
-                    guild=guild,
-                    state=interaction._state,
-                )
+        self.guild = interaction.guild
+        if interaction.guild_id and not interaction.guild:
+            # act as if this is a DMChannel
+            assert isinstance(interaction.user, discord.Member)
+            self.author = interaction.user._user
+            channel = discord.DMChannel(
+                me=interaction.client.user,
+                state=interaction._state,
+                data={
+                    "id": channel.id,
+                    "name": str(channel),
+                    "type": 1,
+                    "last_message_id": None,
+                    "recipients": [
+                        self.author._to_minimal_user_json(),
+                        interaction.client.user._to_minimal_user_json(),
+                    ],
+                },  # type: ignore
             )
+        else:
+            self.author = interaction.user
+            channel = copy(channel)
+
+        channel.__class__ = type(
+            InterChannel.__name__, (InterChannel, channel.__class__), {"__slots__": ()}
+        )
+        self.channel = channel  # type: ignore
 
         self._recreate_from_interaction(interaction, prefix)
         return self
