@@ -590,18 +590,18 @@ class NationStates(commands.Cog):
         for market in root.iterfind("MARKETS/MARKET"):
             # TIMESTAMP is used as a tiebreaker
             if self._find_text_and_assert(market, "TYPE") == "bid":
-                # negative price to reverse sorting
                 buyers.append(
                     (
-                        -self._find_text_and_assert(market, "PRICE", float),
+                        self._find_text_and_assert(market, "PRICE", float),
                         self._find_text_and_assert(market, "TIMESTAMP", int),
                         self._find_text_and_assert(market, "NATION").replace("_", " ").title(),
                     )
                 )
             elif self._find_text_and_assert(market, "TYPE") == "ask":
+                # negative price to reverse sorting
                 sellers.append(
                     (
-                        self._find_text_and_assert(market, "PRICE", float),
+                        -self._find_text_and_assert(market, "PRICE", float),
                         self._find_text_and_assert(market, "TIMESTAMP", int),
                         self._find_text_and_assert(market, "NATION").replace("_", " ").title(),
                     )
@@ -622,7 +622,7 @@ class NationStates(commands.Cog):
                 )
                 continue
             tarr = [
-                f"{-price:.02f}\xa0{nation}" if is_buyers else f"{nation}\xa0{price:.02f}"
+                f"{price:.02f}\xa0{nation}" if is_buyers else f"{nation}\xa0{-price:.02f}"
                 for price, _timestamp, nation in heapq.nlargest(max_listed, arr)
             ]
             if len(arr) > max_listed:
