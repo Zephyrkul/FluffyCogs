@@ -3,6 +3,7 @@
         "Zephyrkul (Zephyrkul#1089)",
         "Paddo"
     ],
+    "hidden": true,
     "install_msg": "Usage: `[p]help InVoice`",
     "name": "InVoice",
     "short": "Create and manage roles and text channels for VC users. Useful for nomic / microphoneless setups.",
