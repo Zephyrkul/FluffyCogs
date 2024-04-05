@@ -103,6 +103,7 @@ class WA(Options):
 CARD_COLORS = {
     "legendary": 0xFFD700,
     "epic": 0xDB9E1C,
+    "ultra-rare": 0xAC00E6,
     "rare": 0x008EC1,
     "uncommon": 0x00AA4C,
     "common": 0x7E7E7E,
