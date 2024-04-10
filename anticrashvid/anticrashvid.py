@@ -29,6 +29,13 @@ if TYPE_CHECKING:
 else:
     Hex = bytes.fromhex
 
+if os.name == "nt":
+    FFMPEG = "ffmpeg.exe"
+    FFPROBE = "ffprobe.exe"
+else:
+    FFMPEG = "ffmpeg"
+    FFPROBE = "ffprobe"
+
 
 # backport of 3.9's to_thread
 async def to_thread(func: Callable[..., T], /, *args, **kwargs) -> T:
@@ -244,7 +251,7 @@ class AntiCrashVid(commands.Cog):
                 link,
             )
             process = await asyncio.create_subprocess_exec(
-                "ffprobe",
+                FFPROBE,
                 "-v",
                 "error",
                 "-show_entries",
@@ -323,13 +330,13 @@ class AntiCrashVid(commands.Cog):
 
     @staticmethod
     async def get_ffmpeg_probe(*args: str, path: pathlib.Path) -> bytes:
-        process = await asyncio.create_subprocess_exec("ffmpeg", *args, path)
+        process = await asyncio.create_subprocess_exec(FFMPEG, *args, path)
         if code := await process.wait():
             raise RuntimeError(f"Process exited with exit code {code}")
         if not path.exists():
             raise RuntimeError(f"ffmpeg did not create a file at {path}")
         process = await asyncio.create_subprocess_exec(
-            "ffprobe", "-i", path, stderr=asyncio.subprocess.PIPE
+            FFPROBE, "-i", path, stderr=asyncio.subprocess.PIPE
         )
         # only one pipe is used, so accessing it should™️ be safe
         assert process.stderr
