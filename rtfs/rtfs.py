@@ -64,7 +64,7 @@ def _pager(source: str, *, header: Optional[str]):
         if start >= total:
             return
         next = start + per_page
-        page = "".join(lines[round(start) : round(next)]).strip()
+        page = "".join(lines[round(start) : round(next)]).rstrip()
         page_len = len(page)
         if page_len > max_page:
             # degenerate line, fall back to pagify
