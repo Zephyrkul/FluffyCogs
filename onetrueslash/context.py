@@ -153,7 +153,7 @@ class InterContext(commands.Context):
     @discord.utils.cached_property
     def permissions(self):
         if self._interaction._permissions == 0:
-            return self.channel.permissions_for(self.author)  # type: ignore
+            return discord.Permissions._dm_permissions()  # type: ignore
         return self._apply_implicit_permissions(self.author, self._interaction.permissions)
 
     @discord.utils.cached_property
