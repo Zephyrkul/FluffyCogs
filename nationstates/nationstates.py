@@ -613,9 +613,8 @@ class NationStates(commands.Cog):
         max_len = max(len(buyers), len(sellers))
         max_len = min(max_len, max_listed + 1)
         for is_buyers, arr in enumerate((sellers, buyers)):
-            pad = "\n\u200b" * max(0, max_len - len(arr))
             if not arr:
-                embed.add_field(name="Buyers" if is_buyers else "Sellers", value=box(pad))
+                embed.add_field(name="Buyers" if is_buyers else "Sellers", value=box("\u200b"))
                 embed.overwrites.set_field_at(
                     is_buyers + 1,
                     name=embed.fields[is_buyers + 1].name,
@@ -623,7 +622,7 @@ class NationStates(commands.Cog):
                 )
                 continue
             tarr = [
-                f"{price:.02f}\xa0{nation}" if is_buyers else f"{nation}\xa0{-price:.02f}"
+                f"{abs(price):.02f}\xa0{nation}"
                 for price, _timestamp, nation in heapq.nlargest(max_listed, arr)
             ]
             if len(arr) > max_listed:
@@ -631,19 +630,10 @@ class NationStates(commands.Cog):
                 tarr.append(
                     f"+ {num} more {'bid' if is_buyers else 'ask'}{'' if num == 1 else 's'}\N{HORIZONTAL ELLIPSIS}"
                 )
-            raw_text = "\n".join(tarr)
-            if not is_buyers:
-                width = max(map(len, tarr))
-                for i, t in enumerate(tarr):
-                    tarr[i] = t.rjust(width)
-            text = "\n".join(tarr) + pad
-            embed.add_field(
-                name="Buyers" if is_buyers else "Sellers", value=box(text, lang="swift")
-            )
+            text = box("\n".join(tarr), lang="swift")
+            embed.add_field(name="Buyers" if is_buyers else "Sellers", value=text)
             embed.overwrites.set_field_at(
-                is_buyers + 1,
-                name=embed.fields[is_buyers + 1].name,
-                value=box(raw_text, lang="swift"),
+                is_buyers + 1, name=embed.fields[is_buyers + 1].name, value=text
             )
         await embed.send_to(ctx)
 
