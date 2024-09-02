@@ -1,0 +1,14 @@
+{
+    "author": [
+        "Zephyrkul (Zephyrkul#1089)"
+    ],
+    "install_msg": "This cog requires your bot to be installed on your user account.",
+    "short": "Adds a simple Avatar context menu to your user-installed bot.",
+    "description": "Adds a simple Avatar context menu to your user-installed bot.",
+    "min_bot_version": "3.5.10",
+    "tags": [
+        "utility"
+    ],
+    "hidden": false,
+    "end_user_data_statement": "This cog does not persistently store any data or metadata about users."
+}
