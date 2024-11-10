@@ -1,30 +1,45 @@
 import asyncio
-import numbers
-from typing import Generic, Optional, Type, TypeVar, Union
+from typing import Optional, TypedDict, Union, cast
+from typing_extensions import TypeAlias
 
 import discord
-from redbot.core import Config, checks, commands
-from redbot.core.utils.mod import get_audit_reason
+from redbot.core import Config, commands
+from redbot.core.utils.mod import get_audit_reason, is_mod_or_superior
 
-T = TypeVar("T", float, int)
-defaults = dict(channel=None, days=1, uses=0)
-
-
-class Dict(commands.get_dict_converter(*defaults.keys())):
-    pass
+InviteableChannel: TypeAlias = Union[
+    discord.TextChannel, discord.ForumChannel, discord.VoiceChannel, discord.StageChannel
+]  # Categories also have a .create_invite() method, but the API doesn't actually support it
 
 
-class NonNegative(numbers.Real, Generic[T]):
-    @classmethod
-    def __class_getitem__(cls, item: Type[T]):
-        def inner(argument: str):
-            arg: T = item(argument)
-            real = getattr(arg, "real", arg)
-            if real < 0:
-                raise ValueError
-            return real
+class Settings(TypedDict):
+    channel: Optional[int]
+    days: Optional[int]
+    uses: Optional[int]
 
-        return inner
+
+class SettingsConverter(commands.FlagConverter, case_insensitive=True, delimiter=" "):
+    channel: Optional[InviteableChannel] = None
+    days: Optional[commands.Range[int, 0, 7]] = None
+    uses: Optional[commands.Range[int, 0, 100]] = None
+
+
+class InviteSettingsConverter(commands.FlagConverter, case_insensitive=True, delimiter=" "):
+    channel: Optional[InviteableChannel] = None
+    days: Optional[commands.Range[int, 0, 7]] = None
+    uses: Optional[commands.Range[int, 0, 100]] = None
+    amount: Optional[commands.Range[int, 1, 10]] = None
+    reason: Optional[str] = None
+
+
+assert frozenset(SettingsConverter.__annotations__) == frozenset(Settings.__annotations__)
+assert frozenset(InviteSettingsConverter.__annotations__) >= frozenset(Settings.__annotations__)
+
+
+@commands.permissions_check
+def _record_permissions_checked(ctx):
+    """Remember whether permissions was checked, for in-command checks"""
+    ctx.__is_permissions_checked__ = True
+    return True
 
 
 class SecureInv(commands.Cog):
@@ -39,107 +54,81 @@ class SecureInv(commands.Cog):
         self.bot = bot
         self.last_purge = {}
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
-        self.config.register_guild(**defaults)
+        self.config.register_guild(**Settings(channel=None, days=1, uses=0))
 
     @commands.group(invoke_without_command=True)
-    @commands.guild_only()
-    @checks.mod_or_permissions(create_instant_invite=True)
-    async def inv(
-        self,
-        ctx,
-        channel: Optional[Union[discord.TextChannel, discord.VoiceChannel]] = None,
-        days: Optional[NonNegative[float]] = None,
-        uses: Optional[NonNegative[int]] = None,
-        amount: Optional[NonNegative[int]] = None,
-        *,
-        reason: str = None,
-    ):
+    @_record_permissions_checked
+    async def inv(self, ctx: commands.GuildContext, *, settings: InviteSettingsConverter):
         """
-        Create one or several invites with the specified parameters.
+        Create one or several invites with the specified parameters, e.g.
+        [p]inv channel #general days 1 uses 6 amount 3 reason "friend group invites"
 
         For specifying unlimited days or uses, use 0.
 
         Defaults can be set with `[p]inv set`.
         If no defaults are found, channel defaults to the current channel,
-        days defaults to 1, and uses defaults to 0 (infinite).
+        days defaults to 1, uses defaults to 0 (infinite), and amount defaults to 1.
 
         Uses will always be finite if days is infinite.
         """
-        settings = await self.config.guild(ctx.guild).all()
-        if not channel:
-            channel = ctx.guild.get_channel(settings["channel"])
-        channel = channel or ctx.channel
+        defaults = cast(Settings, await self.config.guild(ctx.guild).all())
+        parent = cast(InviteableChannel, getattr(ctx.channel, "parent", ctx.channel))
+        channel = settings.channel
+        if not channel and defaults["channel"]:
+            channel = cast(Optional[InviteableChannel], ctx.guild.get_channel(defaults["channel"]))
+        channel = channel or parent
+
+        # Bot permissions check
         if not channel.permissions_for(ctx.me).create_instant_invite:
             raise commands.BotMissingPermissions(discord.Permissions(create_instant_invite=True))
-        if not channel.permissions_for(ctx.author).create_instant_invite:
+
+        # Author permissions check, taking into account bot-mod and permissions checks as well
+        # Since this depends on the channel argument, a check decorator won't work
+        if not (
+            channel.permissions_for(ctx.author).create_instant_invite
+            or await is_mod_or_superior(ctx.bot, ctx.author)
+            or channel.id == (defaults["channel"] or parent.id)
+            and not hasattr(ctx, "__is_permissions_checked__")
+        ):
             raise commands.MissingPermissions(["create_instant_invite"])
-        if days is None:
-            days = settings["days"]
-        if uses is None:
-            uses = settings["uses"] if days else settings["uses"] or 1
-        generated = [
-            await channel.create_invite(
-                max_age=(days or 0) * 86400,
-                max_uses=uses,
-                temporary=False,
-                unique=True,
-                reason=get_audit_reason(ctx.author, reason=reason),
+
+        days = defaults["days"] if settings.days is None else settings.days
+        uses = defaults["uses"] if settings.uses is None else settings.uses
+        if days == 0:
+            uses = uses or 1  # if days is infinite, limit uses
+        generated = await asyncio.gather(
+            *(
+                channel.create_invite(
+                    max_age=(days or 0) * 86400,
+                    max_uses=uses or 0,
+                    temporary=False,
+                    unique=True,
+                    reason=get_audit_reason(ctx.author, reason=settings.reason),  # type: ignore
+                )
+                for _ in range(settings.amount or 1)
             )
-            for _ in range(amount or 1)
-        ]
+        )
         await ctx.send("\n".join(invite.url for invite in generated), delete_after=120)
 
     @inv.group(name="set", invoke_without_command=True)
-    @checks.admin_or_permissions(manage_guild=True)
+    @commands.admin_or_permissions(manage_guild=True)
     @commands.guild_only()
-    async def _inv_set(self, ctx):
+    async def _inv_set(self, ctx: commands.GuildContext, *, settings: Optional[SettingsConverter]):
         """
-        Configure or view the server's default inv settings.
+        Configure or view the server's default inv settings, e.g.
+        [p]inv set channel #general days 0 uses 1
         """
-        if not ctx.invoked_subcommand:
-            settings = await self.config.guild(ctx.guild).all()
-            await asyncio.gather(
-                ctx.send_help(),
-                ctx.maybe_send_embed(
-                    "\n".join(f"**{k.title()}:** {v}" for k, v in settings.items())
-                ),
+        if settings is None:
+            await ctx.send_help()
+            await ctx.maybe_send_embed(
+                "\n".join(
+                    f"**{k.title()}:** {v}"
+                    for k, v in (await self.config.guild(ctx.guild).all()).items()
+                )
             )
-
-    @_inv_set.command(name="channel")
-    async def _set_channel(
-        self, ctx, *, channel: Union[discord.TextChannel, discord.VoiceChannel] = None
-    ):
-        """
-        Set or clear the default channel an `[p]inv` directs to.
-        """
-        if channel is None:
-            await self.config.guild(ctx.guild).channel.clear()
         else:
-            await self.config.guild(ctx.guild).channel.set(channel.id)
-        await ctx.tick()
-
-    @_inv_set.command(name="days")
-    async def _set_days(self, ctx, *, days: NonNegative[float] = None):
-        """
-        Set or clear the default amount of days an `[p]inv` lasts for.
-
-        Set to 0 for unlimited days.
-        """
-        if days is None:
-            await self.config.guild(ctx.guild).days.clear()
-        else:
-            await self.config.guild(ctx.guild).days.set(days)
-        await ctx.tick()
-
-    @_inv_set.command(name="uses")
-    async def _set_uses(self, ctx, *, uses: NonNegative[int] = None):
-        """
-        Set or clear the default amount of times an `[p]inv` can be used.
-
-        Set to 0 for unlimited uses.
-        """
-        if uses is None:
-            await self.config.guild(ctx.guild).uses.clear()
-        else:
-            await self.config.guild(ctx.guild).uses.set(uses)
-        await ctx.tick()
+            async with self.config.guild(ctx.guild).all() as current_settings:
+                for setting, value in settings:
+                    if value is not None:
+                        current_settings[setting] = value
+            await ctx.tick()
