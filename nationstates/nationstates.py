@@ -262,6 +262,7 @@ class NationStates(commands.Cog):
     @commands.hybrid_command()
     async def nation(self, ctx: commands.Context, *, nation: Link[Nation]):
         """Retrieves general info about a specified NationStates nation"""
+        await ctx.defer()
         try:
             root = await self._get_as_xml(
                 "banner census category dbid "
@@ -377,11 +378,12 @@ class NationStates(commands.Cog):
     @commands.hybrid_command()
     async def region(self, ctx: commands.Context, *, region: Link[Region]):
         """Retrieves general info about a specified NationStates region"""
+        await ctx.defer()
         try:
             root = await self._get_as_xml(
                 "bannerby bannerurl census delegate delegateauth delegatevotes "
-                "flag founded foundedtime founder governor lastupdate name "
-                "numnations numwanations officers power tags zombie",
+                "flag founded foundedtime founder governor governortitle lastupdate "
+                "name numnations numwanations officers power tags zombie",
                 region=region,
                 mode="score",
                 scale="65",
@@ -409,7 +411,7 @@ class NationStates(commands.Cog):
             delheader = "WA Delegate"
         else:
             delheader = "WA Delegate (non-executive)"
-        tags = {t.text for t in root.iterfind("TAGS/TAG")}
+        tags = frozenset(t.text for t in root.iterfind("TAGS/TAG"))
         major_tag = next(
             filter(
                 tags.__contains__, ("Frontier", "Feeder", "Restorer", "Sinker", "Governorless")
@@ -433,7 +435,8 @@ class NationStates(commands.Cog):
             else:
                 url = "https://www.nationstates.net/nation="
             execvalue.append(
-                "Governor: [{}]({}{}){}".format(
+                "**{}**: [{}]({}{}){}".format(
+                    root.find("GOVERNORTITLE").text or "Governor",  # type: ignore
                     governor.replace("_", " ").title(),
                     url,
                     governor,
@@ -934,6 +937,7 @@ class NationStates(commands.Cog):
     @commands.hybrid_command()
     async def ne(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Endorsing (NE) the specified WA nation"""
+        await ctx.defer()
         root = await self._get_as_xml("endorsements flag fullname wa", nation=wa_nation)
         if self._find_text_and_assert(root, "UNSTATUS").lower() == "non-member":
             return await ctx.send(
@@ -964,6 +968,7 @@ class NationStates(commands.Cog):
     @commands.hybrid_command()
     async def nec(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Endorsing [Count] (NEC) the specified WA nation"""
+        await ctx.defer()
         root = await self._get_as_xml(
             "census fullname wa", nation=wa_nation, scale="66", mode="score"
         )
@@ -981,6 +986,7 @@ class NationStates(commands.Cog):
     @commands.hybrid_command()
     async def spdr(self, ctx: commands.Context, *, nation: str):
         """Soft Power Disbursement Rating (SPDR, aka numerical Influence) of the specified nation"""
+        await ctx.defer()
         root = await self._get_as_xml("census fullname", nation=nation, scale="65", mode="score")
         await ctx.send(
             "{} has {:.0f} influence".format(
@@ -992,6 +998,7 @@ class NationStates(commands.Cog):
     @commands.hybrid_command()
     async def nne(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Not Endorsing (NNE) the specified WA nation"""
+        await ctx.defer()
         nation_root = await self._get_as_xml(
             "endorsements flag fullname region wa", nation=wa_nation
         )
@@ -1034,6 +1041,7 @@ class NationStates(commands.Cog):
     @commands.hybrid_command()
     async def nnec(self, ctx: commands.Context, *, wa_nation: str):
         """Nations Not Endorsing [Count] (NNEC) the specified WA nation"""
+        await ctx.defer()
         nation_root = await self._get_as_xml(
             "census fullname region wa", nation=wa_nation, scale="66", mode="score"
         )
