@@ -87,8 +87,10 @@ class SecureInv(commands.Cog):
         if not (
             channel.permissions_for(ctx.author).create_instant_invite
             or await is_mod_or_superior(ctx.bot, ctx.author)
-            or channel.id == (defaults["channel"] or parent.id)
-            and not hasattr(ctx, "__is_permissions_checked__")
+            or (
+                channel.id == (defaults["channel"] or parent.id)
+                and not hasattr(ctx, "__is_permissions_checked__")
+            )
         ):
             raise commands.MissingPermissions(["create_instant_invite"])
 
