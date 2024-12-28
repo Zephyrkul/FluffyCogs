@@ -665,20 +665,20 @@ class NationStates(commands.Cog):
             description=f"{num_cards} cards",
             colour=await ctx.embed_colour(),
         )
+        embed.add_field(name="Bank", value=self._find_text_and_assert(root, "INFO/BANK"))
         if num_cards:
             embed.timestamp = datetime.fromtimestamp(
                 self._find_text_and_assert(root, "INFO/LAST_VALUED", int), timezone.utc
             )
-        embed.add_field(name="Bank", value=self._find_text_and_assert(root, "INFO/BANK"))
-        embed.add_field(
-            name="Deck Value",
-            value=f"[{self._find_text_and_assert(root, 'INFO/DECK_VALUE')}]"
-            f"(https://www.nationstates.net/nation={n_id}/detail=trend/censusid=86)"
-            f"\nRanked #{self._find_text_and_assert(root, 'INFO/RANK')} worldwide, "
-            f"#{self._find_text_and_assert(root, 'INFO/REGION_RANK')} regionally.",
-            inline=False,
-        )
-        embed.set_footer(text="Last Valued")
+            embed.add_field(
+                name="Deck Value",
+                value=f"[{self._find_text_and_assert(root, 'INFO/DECK_VALUE')}]"
+                f"(https://www.nationstates.net/nation={n_id}/detail=trend/censusid=86)"
+                f"\nRanked #{self._find_text_and_assert(root, 'INFO/RANK')} worldwide, "
+                f"#{self._find_text_and_assert(root, 'INFO/REGION_RANK')} regionally.",
+                inline=False,
+            )
+            embed.set_footer(text="Last Valued")
         await embed.send_to(ctx)
 
     # __________ ASSEMBLY __________
