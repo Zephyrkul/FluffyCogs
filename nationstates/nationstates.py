@@ -658,15 +658,17 @@ class NationStates(commands.Cog):
             await self.config.custom("NATION", n_id).dbid.set(
                 self._find_text_and_assert(root, "INFO/ID")
             )
+        num_cards = self._find_text_and_assert(root, "INFO/NUM_CARDS", int)
         embed = ProxyEmbed(
             title=n_id.replace("_", " ").title(),
             url=f"https://www.nationstates.net/page=deck/nation={n_id}",
-            description=f"{self._find_text_and_assert(root, 'INFO/NUM_CARDS')} cards",
+            description=f"{num_cards} cards",
             colour=await ctx.embed_colour(),
-            timestamp=datetime.fromtimestamp(
-                self._find_text_and_assert(root, "INFO/LAST_VALUED", int), timezone.utc
-            ),
         )
+        if num_cards:
+            embed.timestamp = datetime.fromtimestamp(
+                self._find_text_and_assert(root, "INFO/LAST_VALUED", int), timezone.utc
+            )
         embed.add_field(name="Bank", value=self._find_text_and_assert(root, "INFO/BANK"))
         embed.add_field(
             name="Deck Value",
