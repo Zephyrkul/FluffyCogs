@@ -38,6 +38,19 @@ from redbot.core.utils.chat_formatting import box, escape, pagify
 from redbot.core.utils.menus import DEFAULT_CONTROLS, close_menu, menu
 
 _T = TypeVar("_T")
+CARD_SEASON = 4
+CARD_COLORS = {
+    "legendary": 0xFFD700,
+    "epic": 0xDB9E1C,
+    "ultra-rare": 0xAC00E6,
+    "rare": 0x008EC1,
+    "uncommon": 0x00AA4C,
+    "common": 0x7E7E7E,
+}
+LINK_RE = re.compile(
+    r'(?i)["<]?\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b[">]?'
+)
+WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
 
 
 # from https://docs.python.org/3/library/itertools.html#itertools-recipes
@@ -98,20 +111,6 @@ class WA(Options):
     VOTE = auto()
     NATION = auto()
     DELEGATE = auto()
-
-
-CARD_COLORS = {
-    "legendary": 0xFFD700,
-    "epic": 0xDB9E1C,
-    "ultra-rare": 0xAC00E6,
-    "rare": 0x008EC1,
-    "uncommon": 0x00AA4C,
-    "common": 0x7E7E7E,
-}
-LINK_RE = re.compile(
-    r'(?i)["<]?\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b[">]?'
-)
-WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
 
 
 class Link(str, Generic[_T]):
@@ -537,7 +536,7 @@ class NationStates(commands.Cog):
     async def card(
         self,
         ctx: commands.Context,
-        season: Optional[int] = 3,
+        season: Optional[int] = CARD_SEASON,
         *,
         nation: Optional[Union[int, Link[Nation]]] = None,
     ):
