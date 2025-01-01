@@ -78,8 +78,8 @@ def _pager(source: str, *, header: Optional[str]):
     # \u02CB = modifier letter grave accent
     source = source.replace("```", "\u02cb\u02cb\u02cb")
     header = header or ""
-    max_page = 1990 - len(header)
-    if len(source) + 100 < max_page:
+    max_page = 1890 - len(header)
+    if len(source) < max_page:
         # fast path
         yield f"{header}```py\n{source}\n```"
         return
