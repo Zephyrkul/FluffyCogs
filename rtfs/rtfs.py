@@ -1,13 +1,15 @@
 import ast
 import inspect
 import logging
+import sys
+import textwrap
 import traceback
 from functools import partial, partialmethod
 from importlib.metadata import PackageNotFoundError, version
-from itertools import chain, repeat
+from itertools import chain, product
 from math import ceil
 from textwrap import dedent
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import discord
 import redbot
@@ -17,6 +19,20 @@ from redbot.core.dev_commands import cleanup_code
 from redbot.core.utils.chat_formatting import box, pagify
 
 from .pages import Pages
+
+if sys.version_info < (3, 10):
+    from typing import Iterable, Iterator, TypeVar
+
+    _T = TypeVar("_T")
+
+    def pairwise(iterable: Iterable[_T]) -> "Iterator[tuple[_T, _T]]":
+        iterator = iter(iterable)
+        a = next(iterator, ...)
+        for b in iterator:
+            yield a, b
+            a = b
+else:
+    from itertools import pairwise
 
 try:
     import regex as re
@@ -47,37 +63,59 @@ class NoLicense(Exception):
     """
 
 
+def _wrap_with_linereturn(wrapper: textwrap.TextWrapper):
+    def inner(line: str):
+        wrapped = wrapper.wrap(line)
+        if not wrapped:
+            return ["\n"]
+        wrapped[-1] += "\n"
+        return wrapped
+
+    return inner
+
+
 def _pager(source: str, *, header: Optional[str]):
-    header = header or ""
     # \u02CB = modifier letter grave accent
-    lines = source.replace("```", "\u02cb\u02cb\u02cb").splitlines(keepends=True)
-    lines = list(
-        # for longer lines, treat them as multiple lines by padding the list with empty strings
-        chain.from_iterable(chain((line,), repeat("", len(line.rstrip()) // 88)) for line in lines)
-    )
-    total = len(lines)
-    per_page = total / ceil(total / 16)
-    format = f"{header}```py\n%s\n```".__mod__
+    source = source.replace("```", "\u02cb\u02cb\u02cb")
+    header = header or ""
     max_page = 1990 - len(header)
-    start = 0
-    while True:
-        if start >= total:
-            return
-        next = start + per_page
-        page = "".join(lines[round(start) : round(next)]).rstrip()
-        page_len = len(page)
-        if page_len > max_page:
-            # degenerate line, fall back to pagify
-            yield from map(format, pagify(page, page_length=1280))
-        elif page_len > 0:
+    if len(source) + 100 < max_page:
+        # fast path
+        yield f"{header}```py\n{source}\n```"
+        return
+    wrapper = textwrap.TextWrapper(88, tabsize=4)
+    lines: list[str] = list(
+        # split overly long lines to allow for page breaks
+        chain.from_iterable(map(_wrap_with_linereturn(wrapper), source.splitlines()))
+    )
+    total_lines = len(lines)
+    num_pages = ceil((len(source) + 600) / max_page)
+    format = f"{header}```py\n%s\n```".__mod__
+    pages: map[str] = map(
+        lambda t: "".join(lines[slice(*t)]).rstrip(),
+        pairwise(
+            chain(
+                map(
+                    lambda x: round(x / num_pages), range(0, total_lines * num_pages, total_lines)
+                ),
+                (None,),
+            )
+        ),
+    )
+    for page in pages:
+        if len(page) > max_page:
+            # degenerate case
+            yield from map(format, pagify(page, page_length=max_page, shorten_by=0))
+        elif page:
             yield format(page)
-        start = next
 
 
 async def format_and_send(ctx: commands.Context, obj: Any, *, is_owner: bool = False) -> None:
     obj = inspect.unwrap(obj)
-    source: Any = getattr(obj, "__func__", obj)
-    if isinstance(obj, (commands.Command, discord.app_commands.Command)):
+    source: Any
+    if isinstance(
+        obj, (commands.Command, discord.app_commands.Command, discord.app_commands.ContextMenu)
+    ):
         source = obj.callback
         if not inspect.getmodule(source):
             # probably some kind of custom-coded command
@@ -101,6 +139,8 @@ async def format_and_send(ctx: commands.Context, obj: Any, *, is_owner: bool = F
         source = obj.fget
     elif isinstance(obj, (discord.utils.cached_property, discord.utils.CachedSlotProperty)):
         source = obj.function  # type: ignore
+    else:
+        source = getattr(obj, "__func__", obj)
     try:
         lines, line = inspect.getsourcelines(source)
     except TypeError as e:
@@ -127,6 +167,7 @@ async def format_and_send(ctx: commands.Context, obj: Any, *, is_owner: bool = F
     header: str = ""
     if full_module:
         dl: Optional[Downloader] = ctx.bot.get_cog("Downloader")
+        full_module_path = full_module.replace(".", "/")
         if full_module.startswith("discord."):
             is_installed = True
             if discord.__version__[-1].isdigit():
@@ -137,7 +178,7 @@ async def format_and_send(ctx: commands.Context, obj: Any, *, is_owner: bool = F
                 except PackageNotFoundError:
                     dpy_commit = "master"
             dpy_commit = dpy_commit or "master"
-            header = f"https://github.com/Rapptz/discord.py/blob/{dpy_commit}/{full_module.replace('.', '/')}.py{line_suffix}"
+            header = f"https://github.com/Rapptz/discord.py/blob/{dpy_commit}/{full_module_path}.py{line_suffix}"
         elif full_module.startswith("redbot."):
             is_installed = not redbot.version_info.dirty
             if redbot.version_info.dev_release:
@@ -145,7 +186,7 @@ async def format_and_send(ctx: commands.Context, obj: Any, *, is_owner: bool = F
             else:
                 red_commit = redbot.__version__
             if is_installed:
-                header = f"https://github.com/Cog-Creators/Red-DiscordBot/blob/{red_commit}/{full_module.replace('.', '/')}.py{line_suffix}"
+                header = f"https://github.com/Cog-Creators/Red-DiscordBot/blob/{red_commit}/{full_module_path}.py{line_suffix}"
         elif dl:
             is_installed, installable = await dl.is_installed(full_module.split(".")[0])
             if is_installed:
@@ -198,6 +239,28 @@ async def format_and_send(ctx: commands.Context, obj: Any, *, is_owner: bool = F
     ).send_to(ctx)
 
 
+def _find_app_command(
+    tree: discord.app_commands.CommandTree, guild: Optional[discord.Guild], name: str
+) -> Union[
+    discord.app_commands.Command,
+    discord.app_commands.ContextMenu,
+    discord.app_commands.Group,
+    None,
+]:
+    return next(
+        filter(
+            None,
+            (
+                tree.get_command(name, guild=scope, type=command_type)
+                for scope, command_type in product(
+                    (guild, None) if guild else (None,), discord.AppCommandType
+                )
+            ),
+        ),
+        None,
+    )
+
+
 class RTFS(commands.Cog):
     def __init__(self, bot: Red):
         super().__init__()
@@ -221,7 +284,9 @@ class RTFS(commands.Cog):
         """
         is_owner = await ctx.bot.is_owner(ctx.author)
         try:
-            if thing.startswith("/") and (obj := ctx.bot.tree.get_command(thing[1:])):
+            if thing.startswith("/") and (
+                obj := _find_app_command(ctx.bot.tree, ctx.guild, thing[1:])
+            ):
                 return await format_and_send(ctx, obj, is_owner=is_owner)
             elif obj := ctx.bot.get_cog(thing):
                 return await format_and_send(ctx, type(obj), is_owner=is_owner)
