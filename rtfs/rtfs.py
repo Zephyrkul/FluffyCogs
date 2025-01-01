@@ -196,15 +196,7 @@ async def format_and_send(ctx: commands.Context, obj: Any, *, is_owner: bool = F
                 else:
                     if ctx.guild or not is_owner:
                         surl = str(installable.repo.url).lower()
-                        if (
-                            "mikeshardmind/sinbadcogs" in surl
-                            and (installable.repo.branch or "").lower() == "v3"
-                        ):
-                            # Sinbad's license specifically disallows redistribution of code, as per Section 3.
-                            raise Unlicensed(
-                                cite="https://github.com/mikeshardmind/SinbadCogs/blob/v3/LICENSE#L73-L76"
-                            )
-                        elif "aikaterna/gobcog" in surl or "aikaterna/imgwelcome" in surl:
+                        if "aikaterna/gobcog" in surl or "aikaterna/imgwelcome" in surl:
                             raise NoLicense()
                     if match := GIT_AT.match(installable.repo.url):
                         # SSH URL
