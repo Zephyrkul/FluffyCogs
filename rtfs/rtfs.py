@@ -260,7 +260,7 @@ class RTFS(commands.Cog):
 
     async def cog_load(self) -> None:
         self.bot.add_dev_env_value(
-            "rtfs", lambda ctx: partial(format_and_send, ctx=ctx, is_owner=True)
+            "rtfs", lambda ctx: partial(format_and_send, ctx, is_owner=True)
         )
 
     async def cog_unload(self) -> None:
