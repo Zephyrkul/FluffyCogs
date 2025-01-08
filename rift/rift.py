@@ -41,8 +41,7 @@ if TYPE_CHECKING:
 
     _H = TypeVar("_H", bound=Hashable)
 
-    def deduplicate_iterables(*iterables: Iterable[_H]) -> List[_H]:  # noqa: F811
-        ...
+    def deduplicate_iterables(*iterables: Iterable[_H]) -> List[_H]: ...
 
 else:
     from .converter import DiscordConverter as Messageable
@@ -57,13 +56,11 @@ UnionChannel = Union[discord.DMChannel, discord.TextChannel]
 
 
 @overload
-async def can_close(ctx: commands.Context) -> bool:
-    ...
+async def can_close(ctx: commands.Context) -> bool: ...
 
 
 @overload
-async def can_close(ctx: discord.Message, bot: Red) -> bool:
-    ...
+async def can_close(ctx: discord.Message, bot: Red) -> bool: ...
 
 
 async def can_close(ctx: Union[commands.Context, discord.Message], bot: Red = None):
@@ -772,7 +769,8 @@ class Rift(commands.Cog):
                 raise RiftError(_("Your message was filtered."))
         embed: Optional[List[discord.Embed]]
         if await self.bot.embed_requested(
-            getattr(channel, "recipient", channel), command=self.rift  # type: ignore
+            getattr(channel, "recipient", channel),
+            command=self.rift,  # type: ignore
         ):
             embed = [
                 discord.Embed(
