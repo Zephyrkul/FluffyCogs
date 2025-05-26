@@ -8,6 +8,7 @@
     "short": "Allows cross-server communication through Red",
     "description": "Communicate with other servers through Red! Works to and from DMs as well.",
     "min_bot_version": "3.5.0",
+    "hidden": true,
     "tags": [
         "cross-server",
         "communication",
