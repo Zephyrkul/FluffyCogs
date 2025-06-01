@@ -522,7 +522,7 @@ class InVoice(commands.Cog):
             try:
                 await m.edit(roles=[discord.Object(id) for id in role_set])
             except discord.Forbidden:
-                LOG.info("Unable to edit roles for %s in guild %s", m, guild)
+                LOG.warning("Unable to edit roles for %s in guild %s", m, guild)
                 LOG.debug("Before: %s\nAfter: %s", m._roles, role_set)
             stamp = True
         for channel_id, overs in channel_updates.items():
@@ -530,7 +530,7 @@ class InVoice(commands.Cog):
                 try:
                     await channel.set_permissions(m, overwrite=overs)
                 except discord.Forbidden:
-                    LOG.info("Unable to edit channel permissions for %s in guild %s", m, guild)
+                    LOG.warning("Unable to edit channel permissions for %s in guild %s", m, guild)
                 stamp = True
         if stamp:
             self.member_as[(m.guild.id, m.id)].stamp()
