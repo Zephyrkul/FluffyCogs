@@ -121,14 +121,14 @@ class DiscordConverter(commands.Converter):
                 if channel in results:
                     continue
                 if channel == source:
-                    reasons[
-                        channel.mention
-                    ] = "Rifts cannot be opened to the same channel as their source."
+                    reasons[channel.mention] = (
+                        "Rifts cannot be opened to the same channel as their source."
+                    )
                     continue
                 if getattr(channel, "nsfw", False) != is_nsfw:
-                    reasons[
-                        channel.mention
-                    ] = f"Channel {'is not' if is_nsfw else 'is'} nsfw, while this channel {'is' if is_nsfw else 'is not'}."
+                    reasons[channel.mention] = (
+                        f"Channel {'is not' if is_nsfw else 'is'} nsfw, while this channel {'is' if is_nsfw else 'is not'}."
+                    )
                     continue
                 if blacklists[1].get(channel.id, {}).get("blacklisted"):
                     reasons[channel.mention] = "Channel is blocked from receiving rifts."
