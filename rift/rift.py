@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from functools import partial
 from io import BytesIO
 from itertools import starmap
+from operator import attrgetter
 from traceback import walk_tb
 from types import SimpleNamespace
 from typing import (
@@ -41,8 +42,7 @@ if TYPE_CHECKING:
 
     _H = TypeVar("_H", bound=Hashable)
 
-    def deduplicate_iterables(*iterables: Iterable[_H]) -> List[_H]:  # noqa: F811
-        ...
+    def deduplicate_iterables(*iterables: Iterable[_H]) -> List[_H]: ...
 
 else:
     from .converter import DiscordConverter as Messageable
@@ -57,13 +57,11 @@ UnionChannel = Union[discord.DMChannel, discord.TextChannel]
 
 
 @overload
-async def can_close(ctx: commands.Context) -> bool:
-    ...
+async def can_close(ctx: commands.Context) -> bool: ...
 
 
 @overload
-async def can_close(ctx: discord.Message, bot: Red) -> bool:
-    ...
+async def can_close(ctx: discord.Message, bot: Red) -> bool: ...
 
 
 async def can_close(ctx: Union[commands.Context, discord.Message], bot: Red = None):
@@ -476,6 +474,7 @@ class Rift(commands.Cog):
 
         pages: List[discord.Embed] = []
         for i, (source, destination) in enumerate(unique_rifts, 1):
+            # TODO (bugfix): swap source and destination if current channel is destination
             if source in self.rifts.get(destination, ()):
                 delim = "⟷"
             else:
@@ -485,13 +484,12 @@ class Rift(commands.Cog):
             )
             if topic := getattr(destination, "topic", None):
                 embed.description = topic
-            try:
-                members = destination.users
-            except AttributeError:
-                members = destination.members
+            members: list[discord.abc.User] = getattr(destination, "members", [ctx.me, ctx.author])
             # TODO: format and sort members
-            member_str = humanize_list(list(map(str, members)))
-            short_member_str = next(pagify(member_str, delims=[","]))
+            member_str = humanize_list(list(map(attrgetter("display_name"), members)))
+            short_member_str = next(
+                pagify(member_str, delims=[","], page_length=1024, shorten_by=2)
+            )
             if len(member_str) != len(short_member_str):
                 short_member_str += " …"
             embed.add_field(name=f"Connected from {destination}", value=member_str)
@@ -767,12 +765,17 @@ class Rift(commands.Cog):
         both_perms = discord.Permissions(author_perms.value & bot_perms.value)
         if guild and content and not is_owner and not await self.bot.is_automod_immune(author):
             assert isinstance(channel, discord.TextChannel)
-            filt: Optional["Filter"] = self.bot.get_cog("Filter")  # type: ignore
-            if filt and await filt.filter_hits(content, channel):
+            try:
+                filt: Optional["Filter"] = self.bot.get_cog("Filter")  # type: ignore
+                filtered = filt and await filt.filter_hits(channel, content)
+            except Exception:
+                filtered = False
+            if filtered:
                 raise RiftError(_("Your message was filtered."))
         embed: Optional[List[discord.Embed]]
         if await self.bot.embed_requested(
-            getattr(channel, "recipient", channel), command=self.rift  # type: ignore
+            getattr(channel, "recipient", channel),
+            command=self.rift,  # type: ignore
         ):
             embed = [
                 discord.Embed(
@@ -783,15 +786,17 @@ class Rift(commands.Cog):
             if ogg := getattr(oga, "guild", None):
                 assert isinstance(oga, discord.Member)
                 if oga.top_role != ogg.default_role:
-                    embed[0].title = filter_invites(f"{oga.top_role} in {ogg}")
+                    subheader = filter_invites(f"{oga.top_role} in {ogg}")
                 else:
-                    embed[0].title = filter_invites(f"in {ogg}")
+                    subheader = filter_invites(f"in {ogg}")
+                # subheader = f"-# [{subheader}]({jump_url})"
+                embed[0].description = subheader
             embed[0].set_author(
-                name=filter_invites(str(author)),
+                name=filter_invites(author.display_name),
                 icon_url=oga.display_avatar.replace(size=32).url,
             )
         else:
-            content = f"{author}\n{quote(content)}" if content else str(author)
+            content = f"{author}\n{quote(content)}" if content else author.display_name
             embed = None
         if attachments and author_perms.attach_files:
             if embed:
