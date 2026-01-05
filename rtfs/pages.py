@@ -77,7 +77,7 @@ class _IterSource(Generic[_T_co]):
 
 
 class _AsyncIterSource(Generic[_T_co]):
-    __slots__ = ("_cache", "_aiter")
+    __slots__ = ("_aiter", "_cache")
 
     def __init__(self, __seq: AsyncIterable[_T_co]) -> None:
         self._aiter = aiter(__seq)

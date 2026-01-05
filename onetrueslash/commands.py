@@ -120,7 +120,7 @@ async def onetrueslash_command_autocomplete(
         if not command or command in matches:
             continue
         try:
-            if name == "help" and await command.can_run(ctx) or await _filter(command):
+            if (name == "help" and await command.can_run(ctx)) or await _filter(command):
                 if len(name) > 100:
                     name = name[:99] + "\N{HORIZONTAL ELLIPSIS}"
                 matches[command] = name
