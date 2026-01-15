@@ -43,17 +43,9 @@ class Act(commands.Cog):
         super().__init__()
         self.bot = bot
         self.config = Config.get_conf(self, identifier=2_113_674_295, force_registration=True)
-        self.config.register_global(custom={}, tenorkey=None)
+        self.config.register_global(custom={})
         self.config.register_guild(custom={})
         self.try_after = None
-
-    async def initialize(self, bot: bot.Red):
-        # temporary backwards compatibility
-        key = await self.config.tenorkey()
-        if not key:
-            return
-        await bot.set_shared_api_tokens("tenor", api_key=key)
-        await self.config.tenorkey.clear()
 
     @staticmethod
     def repl(target: discord.Member, match: Match[str]) -> str:
@@ -267,21 +259,14 @@ class Act(commands.Cog):
         """
         Sets a Tenor GIF API key to enable reaction gifs with act commands.
 
-        You can obtain a key from here: https://tenor.com/developer/dashboard
+        Due to sunsetting their API, Tenor API keys are no longer available,
+        and the API will no longer return GIFs after 30 Jun, 2026.
         """
         instructions = [
-            "Go to the Tenor developer dashboard: https://tenor.com/developer/dashboard",
-            "Log in or sign up if you haven't already.",
-            "Click `+ Create new app` and fill out the form.",
-            "Copy the key from the app you just created.",
-            "Give the key to Red with this command:\n"
-            f"`{ctx.clean_prefix}set api tenor api_key your_api_key`\n"
-            "Replace `your_api_key` with the key you just got.\n"
-            "Everything else should be the same.\n\n",
-            "You can disable embeds again by using this command:\n"
-            f"`{ctx.clean_prefix}embedset command act off`",
+            "Due to sunsetting their API, Tenor API keys are no longer available.",
+            "The Tenor API will no longer return GIFs after 30 Jun, 2026.",
         ]
-        instructions = [f"**{i}.** {v}" for i, v in enumerate(instructions, 1)]
+        # instructions = [f"**{i}.** {v}" for i, v in enumerate(instructions, 1)]
         await ctx.maybe_send_embed("\n".join(instructions))
 
     @commands.Cog.listener()
