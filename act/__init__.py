@@ -7,6 +7,4 @@ from .act import Act
 
 
 async def setup(bot: Red):
-    act = Act(bot)
-    await act.initialize(bot)
-    await bot.add_cog(act)
+    await bot.add_cog(Act(bot))
