@@ -13,7 +13,7 @@ from .namedlist import NamedList
 
 
 class Game(NamedList):
-    __slots__ = "queue", "destination", "source", "time", "paused", "task"
+    __slots__ = "destination", "paused", "queue", "source", "task", "time"
 
 
 def standstr(argument):
