@@ -50,7 +50,7 @@ CARD_COLORS = {
 LINK_RE = re.compile(
     r'(?i)["<]?\b(?:https?:\/\/)?(?:www\.)?nationstates\.net\/(?:(nation|region)=)?([-\w\s]+)\b[">]?'
 )
-WA_RE = re.compile(r"(?i)\b(UN|GA|SC)R?#(\d+)\b")
+WA_RE = re.compile(r"(?i)\b(GA|SC)R?#(\d+)\b")
 
 
 # from https://docs.python.org/3/library/itertools.html#itertools-recipes
@@ -734,9 +734,13 @@ class NationStates(commands.Cog):
         }.get(
             self._find_text_and_assert(root, "CATEGORY"), "https://nationstates.net/images/ga.jpg"
         )
+        try:
+            forum_url = f"[Forum]({self._find_text_and_assert(root, 'FORUM_TOPIC_URL')})"
+        except AttributeError:
+            forum_url = "*None*"
         if option & WA.TEXT:
-            description = "**Category: {}**\n\n{}".format(
-                self._find_text_and_assert(root, "CATEGORY"),
+            description = "**Debate:** {}\n\n{}".format(
+                forum_url,
                 escape(self._find_text_and_assert(root, "DESC"), formatting=True),
             )
             short = next(
@@ -751,7 +755,7 @@ class NationStates(commands.Cog):
             if len(short) < len(description):
                 description = short + "\N{HORIZONTAL ELLIPSIS}"
         else:
-            description = "Category: {}".format(self._find_text_and_assert(root, "CATEGORY"))
+            description = "**Debate:** {}".format(forum_url)
         if resolution_id:
             impl = self._find_text_and_assert(root, "IMPLEMENTED", int)
         else:
