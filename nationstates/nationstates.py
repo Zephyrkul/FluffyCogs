@@ -725,15 +725,6 @@ class NationStates(commands.Cog):
             return await embed.send_to(ctx)
         root = root.find("RESOLUTION")
         assert root
-        img = {
-            "Commendation": "https://i.imgur.com/7o5kURo.png",
-            "Condemnation": "https://i.imgur.com/BSknIMf.png",
-            "Liberation": "https://i.imgur.com/Gdo2EH9.png",
-            "Injunction": "https://i.imgur.com/4YSBcP7.png",
-            "Declaration": "https://www.nationstates.net/images/sc.jpg",
-        }.get(
-            self._find_text_and_assert(root, "CATEGORY"), "https://nationstates.net/images/ga.jpg"
-        )
         try:
             forum_url = f"[Forum]({self._find_text_and_assert(root, 'FORUM_TOPIC_URL')})"
         except AttributeError:
@@ -781,7 +772,6 @@ class NationStates(commands.Cog):
             name=proposed_by.replace("_", " ").title(),
             url=f"https://www.nationstates.net/nation={proposed_by}",
         )
-        embed.set_thumbnail(url=img)
         if option & WA.DELEGATE:
             for_del_votes = heapq.nlargest(
                 10,
