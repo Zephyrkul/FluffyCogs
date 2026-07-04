@@ -230,15 +230,8 @@ class NationStates(commands.Cog):
         ctx: commands.Context = await self.bot.get_context(message)
         if not await self.wa.can_run(ctx):
             return
-        index = ["un", "ga", "sc"]
         for match in WA_RE.finditer(message.content):
-            council = index.index(match.group(1).lower())
             res_id = match.group(2)
-            if council == 0:
-                await ctx.send(
-                    f"https://www.nationstates.net/page=WA_past_resolution/id={res_id}/un=1"
-                )
-                continue
             ctx.invoked_with = match.group(1).lower()
             await ctx.invoke(self.wa, int(res_id), WA.NONE)
 
@@ -700,7 +693,7 @@ class NationStates(commands.Cog):
             )
         is_sc = ctx.invoked_with == "sc"
         shards = ["resolution"]
-        request = {"wa": "2" if is_sc else "1"}
+        request = {"wa": "2" if is_sc else "3"}
         if option & WA.DELEGATE:
             shards.append("delvotes")
         if resolution_id:
